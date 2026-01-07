@@ -75,7 +75,7 @@ router.get(
 router.post(
   '/unified-invoices',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('userType').isIn(['student', 'teacher', 'driver']).withMessage('User type is required'),
     body('userId').isInt().withMessage('User ID is required'),
@@ -94,7 +94,7 @@ router.post(
 router.put(
   '/unified-invoices/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('amount').optional().isFloat({ gt: 0 }),
@@ -111,7 +111,7 @@ router.put(
 router.delete(
   '/unified-invoices/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   controller.deleteUnifiedInvoice
@@ -138,7 +138,7 @@ router.get(
 router.post(
   '/unified-payments',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('invoiceId').isInt().withMessage('Invoice ID is required'),
     body('amount').isFloat({ gt: 0 }).withMessage('Amount must be greater than 0'),
@@ -247,16 +247,16 @@ router.get('/invoices/:id', authenticate, [param('id').isInt()], validate, contr
 router.post(
   '/invoices',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [body('studentId').isInt(), body('amount').isFloat({ gt: 0 }), body('status').optional().isIn(['pending', 'paid', 'overdue']), body('dueDate').optional().isISO8601()],
   validate,
   controller.createInvoice
 );
 
-router.put('/invoices/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.updateInvoice);
-router.delete('/invoices/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.deleteInvoice);
+router.put('/invoices/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.updateInvoice);
+router.delete('/invoices/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.deleteInvoice);
 
 router.get('/invoices/:id/payments', authenticate, [param('id').isInt()], validate, controller.listPayments);
-router.post('/invoices/:id/payments', authenticate, authorize('admin'), [param('id').isInt(), body('amount').isFloat({ gt: 0 }), body('method').optional().isString()], validate, controller.addPayment);
+router.post('/invoices/:id/payments', authenticate, authorize('admin', 'owner'), [param('id').isInt(), body('amount').isFloat({ gt: 0 }), body('method').optional().isString()], validate, controller.addPayment);
 
 export default router;

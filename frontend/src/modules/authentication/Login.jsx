@@ -196,6 +196,7 @@ function SignIn() {
           <form onSubmit={handleSubmit}>
             <FormControl>
               <FormLabel
+                htmlFor='login-email'
                 display='flex'
                 ms='4px'
                 fontSize='sm'
@@ -205,6 +206,7 @@ function SignIn() {
                 Email or Phone<Text color={brandStars}>*</Text>
               </FormLabel>
               <Input
+                id='login-email'
                 isRequired={true}
                 variant='auth'
                 fontSize='sm'
@@ -218,8 +220,11 @@ function SignIn() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={authLoading}
               />
-              
+            </FormControl>
+
+            <FormControl>
               <FormLabel
+                htmlFor='login-password'
                 ms='4px'
                 fontSize='sm'
                 fontWeight='500'
@@ -229,6 +234,7 @@ function SignIn() {
               </FormLabel>
               <InputGroup size='md'>
                 <Input
+                  id='login-password'
                   isRequired={true}
                   fontSize='sm'
                   placeholder='Enter your password'
@@ -249,69 +255,71 @@ function SignIn() {
                   />
                 </InputRightElement>
               </InputGroup>
-
-              {(isOwnerEmail || ownerStep1Passed) ? (
-                <>
-                  <FormLabel
-                    ms='4px'
-                    fontSize='sm'
-                    fontWeight='500'
-                    color={textColor}
-                    display='flex'>
-                    License Key<Text color={brandStars}>*</Text>
-                  </FormLabel>
-                  <InputGroup size='md' ref={ownerKeyBlockRef}>
-                    <Input
-                      isRequired={ownerStep1Passed}
-                      fontSize='sm'
-                      placeholder='Enter license key'
-                      mb='24px'
-                      size='lg'
-                      type={showOwnerKey ? 'text' : 'password'}
-                      variant='auth'
-                      value={ownerKey}
-                      onChange={(e) => setOwnerKey(e.target.value)}
-                      ref={ownerKeyRef}
-                      disabled={authLoading || !ownerStep1Passed}
-                    />
-                    <InputRightElement display='flex' alignItems='center' mt='4px'>
-                      <Icon
-                        color={textColorSecondary}
-                        _hover={{ cursor: 'pointer' }}
-                        as={showOwnerKey ? RiEyeCloseLine : MdOutlineRemoveRedEye}
-                        onClick={() => setShowOwnerKey(!showOwnerKey)}
-                      />
-                    </InputRightElement>
-                  </InputGroup>
-                </>
-              ) : null}
-              
-              {/* Removed 'Keep me logged in' and 'Forgot password?' from UI */}
-              
-              <Button
-                fontSize='sm'
-                variant='brand'
-                fontWeight='500'
-                w='100%'
-                h='50'
-                mb='24px'
-                type='submit'
-                isLoading={authLoading}
-                isDisabled={authLoading || (setupMode && !isOwnerEmail)}
-                loadingText='Signing in...'>
-                Sign In
-              </Button>
-              <Flex justifyContent='center' mb='24px'>
-                <Text color={textColorSecondary} fontSize='sm'>
-                  Don't have an account?{' '}
-                  <NavLink to='/auth/sign-up'>
-                    <Text as='span' color={brandStars} fontWeight='500'>
-                      Sign up
-                    </Text>
-                  </NavLink>
-                </Text>
-              </Flex>
             </FormControl>
+
+            {(isOwnerEmail || ownerStep1Passed) ? (
+              <FormControl>
+                <FormLabel
+                  htmlFor='login-license-key'
+                  ms='4px'
+                  fontSize='sm'
+                  fontWeight='500'
+                  color={textColor}
+                  display='flex'>
+                  License Key<Text color={brandStars}>*</Text>
+                </FormLabel>
+                <InputGroup size='md' ref={ownerKeyBlockRef}>
+                  <Input
+                    id='login-license-key'
+                    isRequired={ownerStep1Passed}
+                    fontSize='sm'
+                    placeholder='Enter license key'
+                    mb='24px'
+                    size='lg'
+                    type={showOwnerKey ? 'text' : 'password'}
+                    variant='auth'
+                    value={ownerKey}
+                    onChange={(e) => setOwnerKey(e.target.value)}
+                    ref={ownerKeyRef}
+                    disabled={authLoading || !ownerStep1Passed}
+                  />
+                  <InputRightElement display='flex' alignItems='center' mt='4px'>
+                    <Icon
+                      color={textColorSecondary}
+                      _hover={{ cursor: 'pointer' }}
+                      as={showOwnerKey ? RiEyeCloseLine : MdOutlineRemoveRedEye}
+                      onClick={() => setShowOwnerKey(!showOwnerKey)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+              </FormControl>
+            ) : null}
+            
+            {/* Removed 'Keep me logged in' and 'Forgot password?' from UI */}
+            
+            <Button
+              fontSize='sm'
+              variant='brand'
+              fontWeight='500'
+              w='100%'
+              h='50'
+              mb='24px'
+              type='submit'
+              isLoading={authLoading}
+              isDisabled={authLoading || (setupMode && !isOwnerEmail)}
+              loadingText='Signing in...'>
+              Sign In
+            </Button>
+            <Flex justifyContent='center' mb='24px'>
+              <Text color={textColorSecondary} fontSize='sm'>
+                Don't have an account?{' '}
+                <NavLink to='/auth/sign-up'>
+                  <Text as='span' color={brandStars} fontWeight='500'>
+                    Sign up
+                  </Text>
+                </NavLink>
+              </Text>
+            </Flex>
           </form>
           
           <Flex

@@ -900,7 +900,10 @@ SELECT
   'student' AS user_type,
   fo.student_id AS user_id,
   fp.amount,
-  fp.method,
+  CASE 
+    WHEN LOWER(COALESCE(fp.method,'')) IN ('cash','bank','online','cheque','other') THEN LOWER(fp.method)
+    ELSE 'other'
+  END AS method,
   fp.paid_at,
   fp.paid_at AS created_at
 FROM fee_payments fp

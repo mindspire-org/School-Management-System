@@ -30,7 +30,7 @@ async function seed() {
 
     // Seed owner.key_hash in settings using provided licensed key (store only hash)
     {
-      const plainKey = 'a9F3XK2dP7R8MZL5H0eQJ6C4bWmTNYVUsA1kEGi';
+      const plainKey = String(process.env.OWNER_LICENSE_KEY || process.env.LICENSE_KEY || 'a9F3XK2dP7R8MZL5H0eQJ6C4bWmTNYVUsA1kEGi');
       const hash = await bcrypt.hash(plainKey, 10);
       await client.query(
         `INSERT INTO settings (key, value, updated_at)
@@ -38,7 +38,19 @@ async function seed() {
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
         ['owner.key_hash', hash]
       );
-      console.log('Seeded owner.key_hash');
+      await client.query(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ($1,$2,NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        ['licensing.configured', 'true']
+      );
+      await client.query(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ($1,$2,NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        ['licensing.allowed_modules', JSON.stringify(['Dashboard','Settings','Teachers','Students','Parents','Transport'])]
+      );
+      console.log('Seeded owner.key_hash and licensing settings');
     }
 
     // Create demo users if not exists

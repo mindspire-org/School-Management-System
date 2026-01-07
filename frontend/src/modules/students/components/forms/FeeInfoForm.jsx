@@ -126,7 +126,6 @@ function FeeInfoForm() {
             value={feeInfo.academicYear || ''}
             onChange={(e) => handleInputChange('academicYear', e.target.value)}
             placeholder="Select academic year"
-            defaultValue="2024-2025"
           >
             <option value="2024-2025">2024-2025</option>
             <option value="2025-2026">2025-2026</option>

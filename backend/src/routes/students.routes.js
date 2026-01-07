@@ -32,7 +32,7 @@ router.get(
 router.post(
   '/',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('name').isString().notEmpty(),
     body('email').optional().isEmail(),
@@ -56,7 +56,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   studentController.update
@@ -65,7 +65,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   studentController.remove
@@ -89,7 +89,7 @@ router.get(
 router.post(
   '/:id/attendance',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'owner', 'teacher'),
   [
     param('id').isInt(),
     body('date').isISO8601(),
@@ -103,7 +103,7 @@ router.post(
 router.put(
   '/:id/attendance/:attendanceId',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'owner', 'teacher'),
   [param('id').isInt(), param('attendanceId').isInt()],
   validate,
   studentController.updateAttendance
@@ -112,7 +112,7 @@ router.put(
 router.delete(
   '/:id/attendance/:attendanceId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt(), param('attendanceId').isInt()],
   validate,
   studentController.removeAttendance
@@ -139,7 +139,7 @@ router.get(
 router.post(
   '/:id/fees/invoices',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('amount').isFloat({ gt: 0 }),
@@ -153,7 +153,7 @@ router.post(
 router.put(
   '/:id/fees/invoices/:invoiceId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     param('invoiceId').isInt(),
@@ -168,7 +168,7 @@ router.put(
 router.post(
   '/:id/fees/payments',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('invoiceId').isInt(),
@@ -191,7 +191,7 @@ router.get(
 router.put(
   '/:id/transport',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('routeId').optional().isInt({ min: 1 }),

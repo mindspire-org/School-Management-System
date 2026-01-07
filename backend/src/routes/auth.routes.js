@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
+const ownerKeyMin = Number(process.env.OWNER_KEY_MIN_LENGTH || 30);
 
 router.post(
   '/login',
@@ -19,7 +20,7 @@ router.post(
       })
       .withMessage('Provide a valid email or phone number'),
     body('password').isString().isLength({ min: 6 }),
-    body('ownerKey').optional().isString().isLength({ min: 30 })
+    body('ownerKey').optional().isString().isLength({ min: ownerKeyMin })
   ],
   validate,
   authController.login

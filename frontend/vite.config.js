@@ -56,7 +56,7 @@ export default defineConfig({
     open: true, // Open browser on start
     proxy: {
       '/api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:59201',
         changeOrigin: true,
         secure: false,
       },

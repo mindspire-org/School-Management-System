@@ -83,6 +83,7 @@ export default function FeeRecordsPage() {
       await studentsApi.updateInvoice(selectedId, editInv.id, {
         amount: Number(editInv.amount),
         dueDate: editInv.dueDate || null,
+        status: editInv.status || undefined,
       });
       setEditInv(null);
       const payload = await studentsApi.getFees(selectedId);
@@ -111,7 +112,7 @@ export default function FeeRecordsPage() {
     onOpen();
   };
   const openView = (invoice) => setViewInv(invoice);
-  const openEdit = (invoice) => setEditInv({ id: invoice.id, amount: String(invoice.amount), dueDate: invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '' });
+  const openEdit = (invoice) => setEditInv({ id: invoice.id, amount: String(invoice.amount), dueDate: invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : '', status: invoice.status || 'pending' });
   const openChangeStatus = (invoice) => { setStatusInv(invoice); setStatusVal(invoice.status || 'pending'); };
 
   const submitPayment = async () => {
@@ -373,6 +374,15 @@ export default function FeeRecordsPage() {
                 <FormControl>
                   <FormLabel>Due Date</FormLabel>
                   <Input type='date' value={editInv.dueDate || ''} onChange={(e) => setEditInv(v => ({ ...v, dueDate: e.target.value }))} />
+                </FormControl>
+                <FormControl mt={3}>
+                  <FormLabel>Status</FormLabel>
+                  <Select value={editInv.status || 'pending'} onChange={(e) => setEditInv(v => ({ ...v, status: e.target.value }))}>
+                    <option value='pending'>Pending</option>
+                    <option value='in_progress'>In Progress</option>
+                    <option value='paid'>Paid</option>
+                    <option value='overdue'>Overdue</option>
+                  </Select>
                 </FormControl>
               </>
             )}

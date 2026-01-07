@@ -97,7 +97,7 @@ const updateTeacherValidators = [
 router.post(
   '/',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   createTeacherValidators,
   validate,
   teacherController.create
@@ -114,7 +114,7 @@ router.get(
 router.post(
   '/attendance',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('date').isISO8601(),
     body('entries').isArray({ min: 1 }),
@@ -143,7 +143,7 @@ router.get(
 router.post(
   '/payrolls',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('teacherId').isInt({ min: 1 }),
     body('periodMonth').optional().matches(monthPattern),
@@ -171,7 +171,7 @@ router.post(
 router.patch(
   '/payrolls/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('periodMonth').optional().matches(monthPattern),
@@ -201,7 +201,7 @@ router.get(
 router.post(
   '/performance',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('teacherId').isInt({ min: 1 }),
     body('periodType').isString().trim().notEmpty(),
@@ -224,7 +224,7 @@ router.post(
 router.patch(
   '/performance/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('teacherId').optional({ checkFalsy: true }).isInt({ min: 1 }),
@@ -264,7 +264,7 @@ router.get(
 router.post(
   '/subjects',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [body('name').isString().trim().notEmpty(), optionalString('code'), optionalString('department'), optionalString('description')],
   validate,
   teacherController.createSubject
@@ -273,7 +273,7 @@ router.post(
 router.patch(
   '/subjects/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     optionalString('name'),
@@ -288,7 +288,7 @@ router.patch(
 router.delete(
   '/subjects/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   teacherController.removeSubject
@@ -308,7 +308,7 @@ router.get(
 router.post(
   '/subjects/assignments',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('teacherId').isInt({ min: 1 }),
     body('subjectId').isInt({ min: 1 }),
@@ -323,7 +323,7 @@ router.post(
 router.patch(
   '/subjects/assignments/:assignmentId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('assignmentId').isInt(),
     body('teacherId').optional({ checkFalsy: true }).isInt({ min: 1 }),
@@ -339,7 +339,7 @@ router.patch(
 router.delete(
   '/subjects/assignments/:assignmentId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('assignmentId').isInt()],
   validate,
   teacherController.removeSubjectAssignment
@@ -360,7 +360,7 @@ router.get(
 router.post(
   '/schedules',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('teacherId').isInt({ min: 1 }),
     body('dayOfWeek').optional().isString().trim(),
@@ -388,7 +388,7 @@ router.post(
 router.put(
   '/schedules/:scheduleId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('scheduleId').isInt(),
     body('dayOfWeek').optional().isString().trim(),
@@ -410,7 +410,7 @@ router.put(
 router.delete(
   '/schedules/:scheduleId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('scheduleId').isInt()],
   validate,
   teacherController.deleteScheduleSlot
@@ -435,7 +435,7 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt(), ...updateTeacherValidators],
   validate,
   teacherController.update
@@ -444,7 +444,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   teacherController.remove

@@ -6,7 +6,8 @@ import * as authService from './services/auth.service.js';
 loadEnv();
 
 // Use a stable default port for Electron packaging
-const PORT = process.env.PORT || 59201;
+const DEFAULT_PORT = 59201;
+let port = Number(process.env.PORT) || DEFAULT_PORT;
 
 async function boot() {
   // Seed or ensure Owner account exists BEFORE starting server to avoid race
@@ -18,9 +19,27 @@ async function boot() {
   } catch (_) {}
 
   const server = http.createServer(app);
-  server.listen(PORT, () => {
-    console.log(`Backend running on port ${PORT}`);
+  const start = (p) => {
+    port = p;
+    server.listen(port, () => {
+      console.log(`Backend running on port ${port}`);
+    });
+  };
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      if (port !== DEFAULT_PORT) {
+        console.warn(`Port ${port} in use. Falling back to ${DEFAULT_PORT} ...`);
+        start(DEFAULT_PORT);
+      } else {
+        console.error(`Port ${port} is in use and no fallback available. Free the port or set PORT to a free value.`);
+        process.exit(1);
+      }
+    } else {
+      console.error('Server failed to start:', err);
+      process.exit(1);
+    }
   });
+  start(port);
 }
 
 boot();

@@ -5,7 +5,8 @@ export const authenticate = (req, res, next) => {
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'dev_jwt_secret';
+    const payload = jwt.verify(token, secret);
     req.user = payload;
     return next();
   } catch (e) {

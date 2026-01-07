@@ -7,11 +7,7 @@ loadEnv();
 const { Client } = pg;
 
 function parseDatabaseUrl() {
-  const urlStr = process.env.DATABASE_URL;
-  if (!urlStr) {
-    console.error('DATABASE_URL is not set in environment. Please set it in backend/.env');
-    process.exit(1);
-  }
+  const urlStr = process.env.DATABASE_URL || 'postgres://postgres:12345@localhost:5432/postgres';
   const u = new URL(urlStr);
   const dbName = (u.pathname || '').replace(/^\//, '') || 'postgres';
   const host = u.hostname || 'localhost';

@@ -1,0 +1,11 @@
+{
+  "name": "school-management-system-root",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "db:ensure": "npm run --prefix backend db:ensure",
+    "migrate": "npm run --prefix backend migrate",
+    "seed": "npm run --prefix backend seed",
+    "setup": "npm run db:ensure && npm run migrate && npm run seed"
+  }
+}
