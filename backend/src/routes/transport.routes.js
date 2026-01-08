@@ -11,7 +11,7 @@ router.get('/buses/:id', authenticate, [param('id').isInt()], validate, controll
 router.post(
   '/buses',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('number').isString().notEmpty(),
     body('driverName').optional().isString(),
@@ -27,7 +27,7 @@ router.post(
 router.put(
   '/buses/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('number').optional().isString(),
@@ -41,19 +41,19 @@ router.put(
   validate,
   controller.updateBus
 );
-router.delete('/buses/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.deleteBus);
+router.delete('/buses/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.deleteBus);
 
 router.get('/routes', authenticate, controller.listRoutes);
 router.get('/routes/:id', authenticate, [param('id').isInt()], validate, controller.getRouteById);
-router.post('/routes', authenticate, authorize('admin'), [body('name').isString().notEmpty()], validate, controller.createRoute);
-router.put('/routes/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.updateRoute);
-router.delete('/routes/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.deleteRoute);
+router.post('/routes', authenticate, authorize('admin', 'owner'), [body('name').isString().notEmpty()], validate, controller.createRoute);
+router.put('/routes/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.updateRoute);
+router.delete('/routes/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.deleteRoute);
 
 router.get('/routes/:id/stops', authenticate, [param('id').isInt()], validate, controller.listStops);
 router.post(
   '/routes/:id/stops',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt(), body('name').isString().notEmpty(), body('latitude').optional().isFloat(), body('longitude').optional().isFloat(), body('sequence').optional().isInt({ min: 1 })],
   validate,
   controller.addStop
@@ -61,7 +61,7 @@ router.post(
 router.put(
   '/routes/:id/stops/:stopId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt(), param('stopId').isInt()],
   validate,
   controller.updateStop
@@ -69,7 +69,7 @@ router.put(
 router.delete(
   '/routes/:id/stops/:stopId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt(), param('stopId').isInt()],
   validate,
   controller.removeStop
@@ -78,7 +78,7 @@ router.delete(
 router.post(
   '/assign-bus',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [body('busId').isInt(), body('routeId').isInt()],
   validate,
   controller.assignBusToRoute
@@ -88,7 +88,7 @@ router.get('/students/:studentId', authenticate, [param('studentId').isInt()], v
 router.put(
   '/students/:studentId',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('studentId').isInt()],
   validate,
   controller.setStudentTransport

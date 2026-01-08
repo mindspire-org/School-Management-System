@@ -26,7 +26,7 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
-import { MdPeople, MdChevronRight } from 'react-icons/md';
+import { MdPeople, MdChevronRight, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import { parentsApi } from '../../../../services/api';
 import { Link, useNavigate } from 'react-router-dom';
@@ -69,6 +69,20 @@ export default function ParentsList() {
     }
   };
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this parent? This action cannot be undone.')) return;
+    try {
+      setLoading(true);
+      await parentsApi.remove(id);
+      toast({ title: 'Parent deleted successfully', status: 'success' });
+      refresh();
+    } catch (e) {
+      toast({ title: 'Failed to delete parent', status: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const childrenCount = (p) => p?.childrenCount ?? p?.children?.length ?? 0;
 
   return (
@@ -93,6 +107,9 @@ export default function ParentsList() {
         <Box p={4}>
           <Flex justify="space-between" align="center" mb={3}>
             <Heading size="md">Parent List ({total})</Heading>
+            <Button colorScheme="blue" leftIcon={<Icon as={MdAdd} />} onClick={() => navigate('/admin/parents/add')}>
+              Add Parent
+            </Button>
           </Flex>
           <Box overflowX="auto">
             <Table variant="simple">
@@ -117,6 +134,14 @@ export default function ParentsList() {
                     <Td>
                       <HStack spacing={2} justify="end">
                         <Button size="sm" variant="ghost" onClick={() => openParent(p.id)}>View</Button>
+                        <Button size="sm" colorScheme="blue" variant="ghost" leftIcon={<Icon as={MdEdit} />}
+                          onClick={() => navigate(`/admin/parents/edit/${p.id}`)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" colorScheme="red" variant="ghost" leftIcon={<Icon as={MdDelete} />}
+                          onClick={() => handleDelete(p.id)}>
+                          Delete
+                        </Button>
                         <Button size="sm" colorScheme="blue" as={Link} to={`/admin/parents/inform?parentId=${p.id}`}>
                           Inform
                         </Button>

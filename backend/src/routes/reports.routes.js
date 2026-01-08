@@ -6,12 +6,12 @@ import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
-router.get('/overview', authenticate, authorize('admin'), controller.overview);
+router.get('/overview', authenticate, authorize('admin', 'owner'), controller.overview);
 
 router.get(
   '/attendance-summary',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),
@@ -26,7 +26,7 @@ router.get(
 router.get(
   '/finance-summary',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [query('fromDate').optional().isISO8601(), query('toDate').optional().isISO8601()],
   validate,
   controller.financeSummary
@@ -35,7 +35,7 @@ router.get(
 router.get(
   '/exam-performance',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [query('examId').optional().isInt()],
   validate,
   controller.examPerformance
@@ -44,7 +44,7 @@ router.get(
 router.get(
   '/attendance-by-class',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),
@@ -59,7 +59,7 @@ router.get(
 router.get(
   '/attendance-heatmap',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),

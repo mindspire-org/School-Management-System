@@ -134,7 +134,21 @@ export const create = async (data) => {
      RETURNING id, family_number AS "familyNumber"`,
     [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null]
   );
-  return rows[0];
+
+  const parent = rows[0];
+
+  // Link students if roll numbers are provided
+  if (data.studentRollNumbers) {
+    const rollNumbers = data.studentRollNumbers.split(',').map(s => s.trim()).filter(Boolean);
+    if (rollNumbers.length > 0) {
+      await query(
+        `UPDATE students SET family_number = $1 WHERE roll_number = ANY($2)`,
+        [fam, rollNumbers]
+      );
+    }
+  }
+
+  return parent;
 };
 
 export const update = async (id, data) => {
@@ -143,17 +157,40 @@ export const update = async (id, data) => {
   const map = {
     primaryName: 'primary_name', fatherName: 'father_name', motherName: 'mother_name', whatsappPhone: 'whatsapp_phone', email: 'email', address: 'address'
   };
-  Object.entries(data || {}).forEach(([k,v]) => {
+  Object.entries(data || {}).forEach(([k, v]) => {
     if (map[k]) { values.push(v); fields.push(`${map[k]} = $${values.length}`); }
   });
-  if (!fields.length) return await getById(id);
-  values.push(id);
-  const { rowCount } = await query(`UPDATE parents SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
-  if (!rowCount) return null;
+  if (!fields.length && !data.studentRollNumbers) return await getById(id);
+
+  if (fields.length) {
+    values.push(id);
+    await query(`UPDATE parents SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
+  }
+
+  // Handle student linking/re-linking
+  if (data.studentRollNumbers !== undefined) {
+    const { family_number } = (await query('SELECT family_number FROM parents WHERE id = $1', [id])).rows[0];
+
+    // First, clear existing links for this family number (optional, depending on business logic)
+    // For now, let's keep it additive or just apply the new list
+    const rollNumbers = data.studentRollNumbers.split(',').map(s => s.trim()).filter(Boolean);
+
+    if (rollNumbers.length > 0) {
+      await query(
+        `UPDATE students SET family_number = $1 WHERE roll_number = ANY($2)`,
+        [family_number, rollNumbers]
+      );
+    }
+  }
+
   return await getById(id);
 };
 
 export const findByFamilyNumber = async (familyNumber) => {
   const { rows } = await query('SELECT id, family_number AS "familyNumber", primary_name AS "primaryName", whatsapp_phone AS "whatsappPhone" FROM parents WHERE family_number = $1', [familyNumber]);
   return rows[0] || null;
+};
+export const remove = async (id) => {
+  const { rowCount } = await query('DELETE FROM parents WHERE id = $1', [id]);
+  return rowCount > 0;
 };

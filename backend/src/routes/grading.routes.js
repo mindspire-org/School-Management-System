@@ -13,7 +13,7 @@ router.get('/:id', authenticate, [param('id').isInt()], validate, controller.get
 router.post(
   '/',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [body('name').optional().isString(), body('academicYear').optional().isString(), body('bands').isObject(), body('isDefault').optional().isBoolean()],
   validate,
   controller.create
@@ -22,13 +22,13 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   controller.update
 );
 
-router.post('/:id/default', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.setDefault);
+router.post('/:id/default', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.setDefault);
 
 router.post('/compute', authenticate, [body('percentage').optional().isFloat({ min: 0, max: 100 })], validate, controller.compute);
 

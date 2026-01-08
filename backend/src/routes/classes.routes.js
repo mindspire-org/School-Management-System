@@ -35,7 +35,7 @@ router.get(
 router.post(
   '/',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('className').isString().notEmpty(),
     body('section').isString().notEmpty(),
@@ -57,7 +57,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('className').optional().isString().notEmpty(),
@@ -80,7 +80,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   classController.remove
@@ -91,7 +91,7 @@ router.get('/:id/subjects', authenticate, [param('id').isInt()], validate, class
 router.post(
   '/:id/subjects',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   classController.upsertSubjects

@@ -29,7 +29,7 @@ const optionalStringBody = (field) => body(field).optional({ checkFalsy: true })
 router.post(
   '/',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     body('className').optional().isString().trim(),
     body('class').optional().isString().trim(),
@@ -48,7 +48,7 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [
     param('id').isInt(),
     body('className').optional().isString().trim(),
@@ -68,7 +68,7 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   syllabusController.remove

@@ -5,10 +5,11 @@ import * as controller from '../controllers/parents.controller.js';
 const router = Router();
 
 // Admin management endpoints
-router.get('/', authenticate, authorize('admin'), controller.list);
-router.get('/:id', authenticate, authorize('admin'), controller.getById);
-router.post('/', authenticate, authorize('admin'), controller.create);
-router.put('/:id', authenticate, authorize('admin'), controller.update);
-router.post('/:id/inform', authenticate, authorize('admin'), controller.inform);
+router.get('/', authenticate, authorize('admin', 'owner'), controller.list);
+router.get('/:id', authenticate, authorize('admin', 'owner'), controller.getById);
+router.post('/', authenticate, authorize('admin', 'owner'), controller.create);
+router.put('/:id', authenticate, authorize('admin', 'owner'), controller.update);
+router.post('/:id/inform', authenticate, authorize('admin', 'owner'), controller.inform);
+router.delete('/:id', authenticate, authorize('admin', 'owner'), controller.remove);
 
 export default router;

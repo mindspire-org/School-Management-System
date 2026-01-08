@@ -28,19 +28,19 @@ router.get('/:id', authenticate, [param('id').isInt()], validate, controller.get
 router.post(
   '/',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [body('examId').isInt(), body('studentId').isInt(), body('subject').isString().notEmpty(), body('marks').optional().isFloat(), body('grade').optional().isString()],
   validate,
   controller.create
 );
 
-router.put('/:id', authenticate, authorize('admin', 'teacher'), [param('id').isInt()], validate, controller.update);
-router.delete('/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.remove);
+router.put('/:id', authenticate, authorize('admin', 'teacher', 'owner'), [param('id').isInt()], validate, controller.update);
+router.delete('/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.remove);
 
 router.post(
   '/bulk',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   // Minimal validation: expect an array; detailed validation can be added later
   validate,
   controller.bulkCreate

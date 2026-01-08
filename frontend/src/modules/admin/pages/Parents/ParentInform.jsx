@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Card, CardBody, Flex, Heading, Input, InputGroup, InputLeftAddon, Select, Textarea, useToast } from '@chakra-ui/react';
-import { useSearchParams } from 'react-router-dom';
+import { Box, Button, Card, CardBody, Flex, Heading, HStack, Icon, Input, InputGroup, InputLeftAddon, Select, Textarea, useToast } from '@chakra-ui/react';
+import { MdArrowBack } from 'react-icons/md';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { parentsApi } from '../../../../services/api';
 
 export default function ParentInform() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const [parentId, setParentId] = useState(params.get('parentId') || '');
   const [parents, setParents] = useState([]);
@@ -26,7 +28,7 @@ export default function ParentInform() {
             setChildren(pd?.children || []);
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     load();
   }, [parentId]);
@@ -38,7 +40,7 @@ export default function ParentInform() {
       if (!id) { setChildren([]); return; }
       const data = await parentsApi.getById(id);
       setChildren(data?.children || []);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const handleSend = async () => {
@@ -60,7 +62,16 @@ export default function ParentInform() {
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-      <Heading size="lg" mb={4}>Inform Parent</Heading>
+      <HStack justify="space-between" mb={4}>
+        <Heading size="lg">Inform Parent</Heading>
+        <Button
+          leftIcon={<MdArrowBack />}
+          variant="ghost"
+          onClick={() => navigate('/admin/parents/list')}
+        >
+          Back to List
+        </Button>
+      </HStack>
       <Card>
         <CardBody>
           <Flex direction="column" gap={4}>

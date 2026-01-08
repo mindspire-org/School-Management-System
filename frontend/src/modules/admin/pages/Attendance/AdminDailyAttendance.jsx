@@ -18,7 +18,7 @@ import {
   useToast,
   TableContainer,
 } from '@chakra-ui/react';
-import { MdSearch, MdRefresh, MdFileDownload, MdCheckCircle, MdCancel, MdAvTimer } from 'react-icons/md';
+import { MdSearch, MdRefresh, MdFileDownload, MdCheckCircle, MdCancel, MdAvTimer, MdSave } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
@@ -186,7 +186,10 @@ export default function AdminDailyAttendance() {
       <Card p='0'>
         <Flex justify='space-between' align='center' p='12px' borderBottom='1px solid' borderColor='gray.100'>
           <Text fontWeight='600'>Students</Text>
-          <Text fontSize='sm' color='gray.500'>{items.length} found</Text>
+          <HStack>
+            <Text fontSize='sm' color='gray.500'>{items.length} found</Text>
+            <Button size='sm' leftIcon={<MdSave />} colorScheme='green' onClick={saveAttendance} isLoading={saving} isDisabled={items.length===0}>Save</Button>
+          </HStack>
         </Flex>
         <TableContainer>
           <Table size='sm' variant='striped' colorScheme='gray'>

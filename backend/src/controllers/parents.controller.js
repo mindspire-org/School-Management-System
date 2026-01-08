@@ -6,7 +6,7 @@ export const list = async (req, res, next) => {
   try {
     await ensureParentsSchema();
     // Backfill parents table from students having family_number to ensure legacy data shows up
-    try { await parents.backfillFromStudents(); } catch (_) {}
+    try { await parents.backfillFromStudents(); } catch (_) { }
     const { q, page = 1, pageSize = 50 } = req.query;
     const data = await parents.list({ q, page: Number(page), pageSize: Number(pageSize) });
     res.json(data);
@@ -69,7 +69,7 @@ export const inform = async (req, res, next) => {
         try {
           const item = await settingsSvc.getByKey('whatsapp.webhook.url');
           webhook = item?.value || '';
-        } catch (_) {}
+        } catch (_) { }
       }
       if (!delivered && webhook && toNumber && typeof fetch === 'function') {
         await fetch(webhook, {
@@ -80,7 +80,7 @@ export const inform = async (req, res, next) => {
         delivered = true;
         via = 'webhook';
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // WhatsApp Cloud API (fallback if webhook not configured)
     try {
@@ -88,10 +88,10 @@ export const inform = async (req, res, next) => {
         let cloudToken = process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
         let cloudPhoneId = process.env.WHATSAPP_CLOUD_PHONE_ID;
         if (!cloudToken) {
-          try { cloudToken = (await settingsSvc.getByKey('whatsapp.cloud.access_token'))?.value || ''; } catch (_) {}
+          try { cloudToken = (await settingsSvc.getByKey('whatsapp.cloud.access_token'))?.value || ''; } catch (_) { }
         }
         if (!cloudPhoneId) {
-          try { cloudPhoneId = (await settingsSvc.getByKey('whatsapp.cloud.phone_id'))?.value || ''; } catch (_) {}
+          try { cloudPhoneId = (await settingsSvc.getByKey('whatsapp.cloud.phone_id'))?.value || ''; } catch (_) { }
         }
         if (cloudToken && cloudPhoneId) {
           const url = `https://graph.facebook.com/v20.0/${encodeURIComponent(cloudPhoneId)}/messages`;
@@ -114,8 +114,15 @@ export const inform = async (req, res, next) => {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     res.json({ success: true, delivered, via, to: toNumber || null });
+  } catch (e) { next(e); }
+};
+export const remove = async (req, res, next) => {
+  try {
+    const success = await parents.remove(Number(req.params.id));
+    if (!success) return res.status(404).json({ message: 'Parent not found' });
+    res.json({ success: true });
   } catch (e) { next(e); }
 };

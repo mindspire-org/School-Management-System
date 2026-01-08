@@ -24,7 +24,7 @@ router.get(
 router.get(
   '/daily',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [
     query('date').isISO8601({ strict: false }),
     query('class').optional().isString(),
@@ -38,7 +38,7 @@ router.get(
 router.post(
   '/daily',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [
     body('date').isISO8601({ strict: false }),
     body('records').isArray({ min: 1 }),

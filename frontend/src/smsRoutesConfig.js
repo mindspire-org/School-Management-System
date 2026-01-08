@@ -60,10 +60,10 @@ import StudentAttendance from './modules/students/StudentAttendance';
 
 // Placeholder component for pages under development
 const ComingSoon = () => (
-  <div style={{ 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
     height: '100vh',
     fontSize: '24px',
     color: '#666'
@@ -87,33 +87,6 @@ export const getSMSRoutes = () => {
     {
       name: 'Parent Portal',
       layout: '/admin',
-      icon: <Icon as={MdNotifications} width="20px" height="20px" color="inherit" />,
-      collapse: true,
-      items: [
-        {
-          name: 'Alerts',
-          layout: '/admin',
-          path: '/parent/alerts',
-          component: <ParentAlerts />,
-        },
-        {
-          name: 'Notifications',
-          layout: '/admin',
-          path: '/parent/notifications',
-          component: <ParentAlerts />,
-        },
-        {
-          name: 'Messages',
-          layout: '/admin',
-          path: '/parent/messages',
-          component: <ParentAlerts />,
-        },
-      ],
-    },
-
-    {
-      name: 'Parents',
-      layout: '/admin',
       icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
       collapse: true,
       items: [
@@ -124,14 +97,27 @@ export const getSMSRoutes = () => {
           component: lazy(() => import('./modules/admin/pages/Parents/ParentsList')),
         },
         {
-          name: 'Inform',
+          name: 'Add Parent',
+          layout: '/admin',
+          path: '/parents/add',
+          component: lazy(() => import('./modules/admin/pages/Parents/AddParent')),
+        },
+        {
+          name: 'Parent Inform',
           layout: '/admin',
           path: '/parents/inform',
           component: lazy(() => import('./modules/admin/pages/Parents/ParentInform')),
         },
+        {
+          name: 'Edit Parent',
+          layout: '/admin',
+          path: '/parents/edit/:id',
+          component: lazy(() => import('./modules/admin/pages/Parents/EditParent')),
+          hidden: true,
+        },
       ],
     },
-    
+
     // Students Section
     {
       name: 'Students',
@@ -219,7 +205,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     // Teachers Section
     {
       name: 'Teachers',
@@ -271,7 +257,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     // Academics Section
     {
       name: 'Academics',
@@ -281,7 +267,7 @@ export const getSMSRoutes = () => {
       items: [
         {
           name: 'Classes',
-          layout: '/admin',          
+          layout: '/admin',
           path: '/academics/classes',
           component: lazy(() => import('./modules/admin/pages/academics/Classes')),
         },
@@ -337,7 +323,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     // Attendance Section
     {
       name: 'Attendance',
@@ -387,7 +373,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     // Transport Section
     {
       name: 'Transport',
@@ -445,7 +431,7 @@ export const getSMSRoutes = () => {
         */
       ],
     },
-    
+
     // Finance Section
     {
       name: 'Finance',
@@ -503,7 +489,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     /*
     // Communication Section (paused)
     {
@@ -545,7 +531,7 @@ export const getSMSRoutes = () => {
       ],
     },
     */
-    
+
     /*
     // Reports & Analytics Section (paused)
     {
@@ -593,7 +579,7 @@ export const getSMSRoutes = () => {
       ],
     },
     */
-    
+
     // Settings Section
     {
       name: 'Settings',
@@ -645,7 +631,7 @@ export const getSMSRoutes = () => {
         },
       ],
     },
-    
+
     /* Notifications (temporarily hidden)
     {
       name: 'Notifications',

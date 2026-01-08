@@ -11,63 +11,85 @@ import {
 } from '@chakra-ui/react';
 
 const StatCard = ({ title, value, subValue, note, icon, trend, trendValue, colorScheme = 'blue' }) => {
-    const bg = useColorModeValue('white', 'navy.800');
-    const textColor = useColorModeValue('gray.700', 'white');
-    const subTextColor = useColorModeValue('gray.500', 'gray.400');
+    // Professional Pastel Palette with polished accents
+    const colors = {
+        blue: { bg: '#E3F2FD', text: '#1565C0', iconBg: '#FFFFFF', border: '#BBDEFB' },
+        green: { bg: '#E8F5E9', text: '#2E7D32', iconBg: '#FFFFFF', border: '#C8E6C9' },
+        red: { bg: '#FFEBEE', text: '#C62828', iconBg: '#FFFFFF', border: '#FFCDD2' },
+        orange: { bg: '#FFF3E0', text: '#EF6C00', iconBg: '#FFFFFF', border: '#FFE0B2' },
+        purple: { bg: '#F3E5F5', text: '#6A1B9A', iconBg: '#FFFFFF', border: '#E1BEE7' },
+        cyan: { bg: '#E0F7FA', text: '#00838F', iconBg: '#FFFFFF', border: '#B2EBF2' },
+        yellow: { bg: '#FFFDE7', text: '#F9A825', iconBg: '#FFFFFF', border: '#FFF9C4' },
+    };
+
+    const theme = colors[colorScheme] || colors.blue;
+    const bg = useColorModeValue(theme.bg, 'gray.800');
+    const color = useColorModeValue(theme.text, 'white');
+    const iconBg = useColorModeValue(theme.iconBg, 'whiteAlpha.200');
+    const borderColor = useColorModeValue(theme.border, 'whiteAlpha.100');
 
     return (
         <Box
             bg={bg}
             p='24px'
             borderRadius='20px'
-            boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'
+            border='1px solid'
+            borderColor={borderColor}
             position='relative'
             overflow='hidden'
+            transition='all 0.3s ease-out'
+            _hover={{
+                transform: 'translateY(-5px)',
+                boxShadow: '0 12px 24px rgba(0, 0, 0, 0.08)'
+            }}
         >
             <Flex justify='space-between' align='start' mb='10px'>
-                <VStack align='start' spacing='0px'>
-                    <Icon as={icon} w='28px' h='28px' color={`${colorScheme}.500`} mb='10px' />
-                    <Text color={subTextColor} fontSize='sm' fontWeight='500' mb='4px'>
-                        {title}
-                    </Text>
-                    <HStack align='baseline' spacing='6px'>
-                        <Text color={textColor} fontSize='2xl' fontWeight='700'>
-                            {value}
-                        </Text>
-                        {subValue && (
-                            <Text color={subTextColor} fontSize='lg' fontWeight='500'>
-                                - {subValue}
-                            </Text>
-                        )}
-                    </HStack>
-                </VStack>
-
-                <Box position='relative'>
-                    {trend && (
-                        <Badge
-                            colorScheme={trend === 'up' ? 'green' : 'red'}
-                            borderRadius='full'
-                            px='2'
-                            fontSize='xs'
-                        >
-                            {trend === 'up' ? '+' : ''}{trendValue}%
-                        </Badge>
-                    )}
-                </Box>
+                <Flex
+                    align='center'
+                    justify='center'
+                    w='48px'
+                    h='48px'
+                    borderRadius='14px'
+                    bg={iconBg}
+                    boxShadow="sm"
+                    transition='transform 0.3s ease'
+                    _groupHover={{ transform: 'scale(1.1)' }}
+                >
+                    <Icon as={icon} w='22px' h='22px' color={color} />
+                </Flex>
+                {trend && (
+                    <Badge
+                        bg={trend === 'up' ? 'green.100' : 'red.100'}
+                        color={trend === 'up' ? 'green.700' : 'red.700'}
+                        borderRadius='full'
+                        px='3'
+                        py='1'
+                        fontSize='xs'
+                        fontWeight='700'
+                    >
+                        {trend === 'up' ? '↑' : '↓'} {trendValue}%
+                    </Badge>
+                )}
             </Flex>
-            <Text color={subTextColor} fontSize='xs'>
-                {note}
-            </Text>
 
-            <Box
-                position='absolute'
-                right='0'
-                top='30%'
-                h='40%'
-                w='4px'
-                bg={`${colorScheme}.500`}
-                borderLeftRadius='4px'
-            />
+            <VStack align='start' spacing='4px' mt='5px'>
+                <Text color={color} fontSize='xs' fontWeight='700' textTransform="uppercase" letterSpacing="0.8px" opacity={0.8}>
+                    {title}
+                </Text>
+                <Text color={color} fontSize='2xl' fontWeight='800' letterSpacing="-0.5px">
+                    {value}
+                </Text>
+                {subValue && (
+                    <Text color={color} fontSize='xs' fontWeight='600' opacity={0.7}>
+                        {subValue}
+                    </Text>
+                )}
+                {note && (
+                    <Text color={color} fontSize='10px' fontWeight='500' opacity={0.6} mt='2px'>
+                        {note}
+                    </Text>
+                )}
+            </VStack>
         </Box>
     );
 };

@@ -53,20 +53,28 @@ import * as transportApi from '../../../services/api/transport';
 
 // --- Custom Components ---
 
-// 2. Line Chart Card (NEW - Sales Style)
-const LineChartCard = ({ title, categories, series, height = 250, value, label }) => {
-  const bg = useColorModeValue('white', 'navy.800');
+// 2. Line Chart Card (Premium Area Chart)
+const LineChartCard = ({ title, categories, series, height = 250 }) => {
+  const bg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.100', 'gray.700');
+  const mainColor = useColorModeValue('#4318FF', '#7551FF'); // Vivid Primary Blue
 
   const chartOptions = {
     chart: {
       toolbar: { show: false },
-      type: 'area', // Area chart for that nice gradient fill
-      zoom: { enabled: false }
+      type: 'area',
+      zoom: { enabled: false },
+      animations: {
+        enabled: true,
+        easing: 'easeinout',
+        speed: 800,
+      },
+      background: 'transparent'
     },
+    colors: [mainColor],
     stroke: {
       curve: 'smooth',
       width: 3,
-      colors: ['#4318FF']
     },
     fill: {
       type: 'gradient',
@@ -74,60 +82,59 @@ const LineChartCard = ({ title, categories, series, height = 250, value, label }
         shadeIntensity: 1,
         opacityFrom: 0.4,
         opacityTo: 0.05,
-        stops: [0, 90, 100],
-        colorStops: [
-          { offset: 0, color: "#4318FF", opacity: 0.4 },
-          { offset: 100, color: "#4318FF", opacity: 0.0 }
-        ]
+        stops: [0, 100],
       }
     },
     xaxis: {
       categories: categories,
-      labels: { style: { colors: '#A3AED0', fontSize: '12px' } },
+      labels: {
+        style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }
+      },
       axisBorder: { show: false },
       axisTicks: { show: false },
     },
     yaxis: {
       show: true,
-      labels: { style: { colors: '#A3AED0', fontSize: '12px' } }
+      labels: {
+        style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }
+      }
     },
     grid: {
       strokeDashArray: 5,
-      borderColor: '#E6E6E6',
+      borderColor: useColorModeValue('rgba(163, 174, 208, 0.1)', 'rgba(255, 255, 255, 0.05)'),
       yaxis: { lines: { show: true } },
       xaxis: { lines: { show: false } },
     },
     dataLabels: { enabled: false },
     tooltip: {
-      theme: 'false',
-      custom: function ({ series, seriesIndex, dataPointIndex, w }) {
-        return '<div style="background: #111C44; color: #fff; padding: 10px; border-radius: 10px; font-family: Plus Jakarta Sans; min-width: 120px;">' +
-          '<span style="font-size: 10px; opacity: 0.8; display: block; margin-bottom: 5px;">' + w.globals.categoryLabels[dataPointIndex] + '</span>' +
-          '<span style="font-size: 16px; font-weight: bold; display: block;">' + series[seriesIndex][dataPointIndex] + '</span>' +
-          '</div>'
-      }
+      theme: 'light',
+      style: { fontSize: '12px', fontFamily: 'Inter' },
+      x: { show: true },
+      marker: { show: false }
     }
   };
 
   return (
     <Box
       bg={bg}
-      padding='20px'
+      p='24px'
       borderRadius='20px'
-      boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'
+      border='1px solid'
+      borderColor={borderColor}
+      boxShadow='0px 4px 12px rgba(0, 0, 0, 0.05)'
       h='100%'
-      position='relative'
+      transition='all 0.3s'
+      _hover={{ boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.1)' }}
     >
       <Flex justify='space-between' align='center' mb='20px'>
-        <Box>
-          <Text fontSize='lg' fontWeight='bold' color='gray.800'>{title}</Text>
-          {/* Optional Value Display if needed like the reference image */}
-        </Box>
+        <Text fontSize='lg' fontWeight='800' color={useColorModeValue('gray.800', 'white')} letterSpacing="-0.5px">
+          {title}
+        </Text>
 
-        <HStack spacing='8px' bg='#ffffff' p='5px' borderRadius='10px'>
-          <Button size='xs' variant='ghost' color='gray.500'>Week</Button>
-          <Button size='xs' variant='ghost' color='gray.500'>Month</Button>
-          <Button size='xs' bg='white' color='black' shadow='sm'>Year</Button>
+        <HStack spacing='6px' bg={useColorModeValue('gray.100', 'whiteAlpha.100')} p='4px' borderRadius='12px'>
+          <Button size='xs' variant='ghost' colorScheme='gray' borderRadius='8px' fontSize='10px' fontWeight='600'>7D</Button>
+          <Button size='xs' bg={useColorModeValue('white', 'gray.700')} color={mainColor} shadow='sm' borderRadius='8px' fontSize='10px' fontWeight='700'>1M</Button>
+          <Button size='xs' variant='ghost' colorScheme='gray' borderRadius='8px' fontSize='10px' fontWeight='600'>1Y</Button>
         </HStack>
       </Flex>
 
@@ -238,232 +245,332 @@ export default function AdminDashboard() {
     };
   }, [feesMonthly]);
 
+  // Professional Vibrant Background
+  const bgMain = useColorModeValue('gray.50', 'gray.900');
+  const subtleText = useColorModeValue('gray.500', 'gray.400');
+
+  // Subtle Mesh Gradient for Top Section
+  const meshBg = useColorModeValue(
+    'radial-gradient(at 0% 0%, hsla(210, 100%, 96%, 1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(220, 100%, 96%, 1) 0, transparent 50%)',
+    'radial-gradient(at 0% 0%, hsla(210, 30%, 20%, 1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(220, 30%, 20%, 1) 0, transparent 50%)'
+  );
+
   const recentAlerts = overview.recentAlerts || [];
 
-  const bgMain = useColorModeValue('#ffffff', 'gray.900');
-  const subtleText = useColorModeValue('gray.600', 'gray.400'); // Defined subtleText
-
   return (
-    <Box pt={{ base: '130px', md: '80px', xl: '80px' }} bg={bgMain} minH='100vh'>
+    <Box
+      pt={{ base: '130px', md: '80px', xl: '80px' }}
+      bg={bgMain}
+      minH='100vh'
+      position="relative"
+      fontFamily="'Inter', sans-serif" // Clean professional font
+    >
+      {/* Background Accent */}
+      <Box
+        position="absolute"
+        top="0"
+        left="0"
+        right="0"
+        h="300px" // Only top section has gradient
+        bg={meshBg}
+        zIndex="0"
+      />
 
-      {/* Header */}
-      <Flex justify='space-between' align='center' mb='30px' px='10px'>
-        <VStack align='start' spacing='2px'>
-          <Text fontSize='2xl' fontWeight='bold' fontFamily="'Plus Jakarta Sans', sans-serif">
-            Good Morning, Admin
-          </Text>
-          <Text fontSize='sm' color='gray.500'>
-            Here is your school overview
-          </Text>
-        </VStack>
-      </Flex>
-
-      {/* --- Section 1: Top Stats Cards (New Design) --- */}
-      <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing='20px' mb='20px'>
-        <StatCard
-          title="Total Students"
-          value={formatNumber(overview.totalStudents)}
-          subValue="42 new"
-          note="Active in this academic year"
-          icon={FaUserGraduate}
-          colorScheme="blue"
-          trend="up"
-          trendValue={5}
-        />
-        <StatCard
-          title="Total Teachers"
-          value={formatNumber(overview.totalTeachers)}
-          subValue="- 2"
-          note="Staff currently signed in"
-          icon={FaChalkboardTeacher}
-          colorScheme="orange"
-          trend="up"
-          trendValue={2}
-        />
-        <StatCard
-          title="Active Buses"
-          value={overview.activeBuses}
-          subValue=""
-          note="Vehicles in transit"
-          icon={FaBus}
-          colorScheme="red"
-          trend="down"
-          trendValue={5}
-        />
-        <StatCard
-          title="Today's Attendance"
-          value={`${overview.todayAttendance}%`}
-          subValue=""
-          note="Compared to yesterday"
-          icon={MdCheckCircle}
-          colorScheme="green"
-          trend="up"
-          trendValue={3}
-        />
-      </SimpleGrid>
-
-      {/* --- Section 2: Trend Charts (NEW - Upper Section) --- */}
-      <SimpleGrid columns={{ base: 1, md: 2 }} gap='20px' mb='20px'>
-        <LineChartCard
-          title="Weekly Attendance Trend"
-          categories={attendanceBars.map(d => d.day)}
-          series={[{ name: 'Attendance', data: attendanceBars.map(d => d.value) }]}
-          height={280}
-        />
-        <LineChartCard
-          title="Monthly Fee Collection"
-          categories={feeMonths.map(d => d.month)}
-          series={[{ name: 'Collections', data: feeMonths.map(d => d.collected) }]}
-          height={280}
-        />
-      </SimpleGrid>
-
-      {/* --- Section 3: Charts & Graphs (Restored Content - Shifted Down) --- */}
-      <SimpleGrid columns={{ base: 1, md: 3 }} gap='20px' mb='20px'>
-        {/* Card 1: Radial Attendance */}
-        <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-          <Flex justify='space-between' align='center' mb='8px'>
-            <Text fontSize='lg' fontWeight='bold'>Today's Attendance</Text>
-            <Badge colorScheme={attendanceToday >= 90 ? 'green' : attendanceToday >= 75 ? 'orange' : 'red'}>
-              {attendanceToday >= 90 ? 'Excellent' : attendanceToday >= 75 ? 'Good' : 'Needs Attention'}
-            </Badge>
-          </Flex>
-          <Text fontSize='sm' color={subtleText} mb='10px'>
-            Overall attendance rate for today.
-          </Text>
-          <RadialAttendance ariaLabel="Today's attendance" value={attendanceToday} height={260} label="Attendance" subtitle={`${attendanceToday}%`} />
-        </Card>
-
-        {/* Card 2: Fee Collection Donut */}
-        <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-          <Flex justify='space-between' align='center' mb='8px'>
-            <Text fontSize='lg' fontWeight='bold'>Fee Collection Split</Text>
-            <Badge colorScheme={feeDonut.rate >= 80 ? 'green' : feeDonut.rate >= 60 ? 'orange' : 'red'}>
-              {feeDonut.rate}%
-            </Badge>
-          </Flex>
-          <Text fontSize='sm' color={subtleText} mb='10px'>
-            Last 4 months collected vs pending.
-          </Text>
-          <PieChart
-            type="donut"
-            height={260}
-            chartData={feeDonut.series}
-            chartOptions={{
-              labels: feeDonut.labels,
-              legend: { position: 'bottom' },
-              colors: ['#14b8a6', '#f59e0b'],
-            }}
-          />
-        </Card>
-
-        {/* Card 3: Weekly Activity Sparkline */}
-        <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-          <Flex justify='space-between' align='center' mb='8px'>
-            <Text fontSize='lg' fontWeight='bold'>Weekly Activity</Text>
-            <Badge colorScheme='blue'>Last 7 days</Badge>
-          </Flex>
-          <Text fontSize='sm' color={subtleText} mb='10px'>
-            Attendance trend (proxy for engagement).
-          </Text>
-          <Sparkline ariaLabel="Weekly activity trend" data={activitySeries} height={140} type="area" />
-          <Flex mt={3} justify='space-between' align='center'>
-            <Text fontSize='xs' color={subtleText}>Min {Math.min(...activitySeries)}</Text>
-            <Text fontSize='xs' color={subtleText}>Max {Math.max(...activitySeries)}</Text>
-          </Flex>
-        </Card>
-      </SimpleGrid>
-
-      {/* --- Section 4: Detailed Stats & Lists (Restored Content) --- */}
-      <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
-
-        {/* Left: Bus Overview */}
-        <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-          <Flex justify='space-between' align='center' mb='20px'>
-            <Text fontSize='lg' fontWeight='bold'>Bus Overview</Text>
-            <Icon as={MdMoreVert} color='gray.400' cursor='pointer' />
-          </Flex>
-          <Text fontSize='sm' color='gray.500' mb='12px'>
-            Snapshot of your registered school buses and their current status.
-          </Text>
-
-          <VStack align='stretch' spacing='12px'>
-            {buses.length === 0 && <Text fontSize='sm' color='gray.400'>No active buses found.</Text>}
-            {buses.slice(0, 3).map((bus) => (
-              <Flex
-                key={bus.id}
-                p='12px'
-                bg='gray.50'
-                borderRadius='8px'
-                justify='space-between'
-                align='center'
-              >
-                <HStack>
-                  <Icon
-                    as={MdDirectionsBus}
-                    color={`${getStatusColor(bus.status)}.500`}
-                  />
-                  <Box>
-                    <Text fontWeight='bold' fontSize='sm'>
-                      {bus.number || bus.busNumber}
-                    </Text>
-                    {bus.driverName && (
-                      <Text fontSize='xs' color='gray.500'>
-                        Driver: {bus.driverName}
-                      </Text>
-                    )}
-                  </Box>
-                </HStack>
-                <Badge colorScheme={getStatusColor(bus.status)}>
-                  {bus.status}
-                </Badge>
-              </Flex>
-            ))}
+      <Box position="relative" zIndex="1">
+        {/* Header */}
+        <Flex justify='space-between' align='center' mb='45px' px='20px'>
+          <VStack align='start' spacing='4px'>
+            <Text
+              fontSize='4xl'
+              fontWeight='900'
+              letterSpacing='-1px'
+              bgGradient="linear(to-r, blue.500, purple.500)"
+              bgClip="text"
+            >
+              Good Morning, Admin 👋
+            </Text>
+            <Text fontSize='lg' color='gray.500' fontWeight='600' opacity={0.8}>
+              Your school is performing exceptionally today.
+            </Text>
           </VStack>
+          <HStack spacing='25px'>
+            <Box textAlign='right' display={{ base: 'none', md: 'block' }}>
+              <Text fontSize='sm' fontWeight='800' color='blue.600'>{formatDate(new Date())}</Text>
+              <Text fontSize='xs' color='gray.400' fontWeight='700' textTransform="uppercase">Term II • 2024-25</Text>
+            </Box>
+            <Avatar
+              size='lg'
+              name='Admin User'
+              src=''
+              border='4px solid'
+              borderColor='white'
+              boxShadow="xl"
+              p='2px'
+              bg='blue.500'
+            />
+          </HStack>
+        </Flex>
 
-          <Button
-            mt='12px'
-            w='100%'
-            variant='outline'
-            colorScheme='blue'
-            onClick={() => navigate('/admin/transport/buses')}
-          >
-            View All Buses
-          </Button>
-        </Card>
+        {/* --- Section 1: Top Stats Cards (Premium) --- */}
+        <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing='24px' mb='30px' px='10px'>
+          <StatCard
+            title="Total Students"
+            value={formatNumber(overview.totalStudents)}
+            subValue="+42"
+            note="Active this academic year"
+            icon={FaUserGraduate}
+            colorScheme="blue"
+            trend="up"
+            trendValue={5}
+          />
+          <StatCard
+            title="Total Teachers"
+            value={formatNumber(overview.totalTeachers)}
+            subValue="82"
+            note="Staff currently on duty"
+            icon={FaChalkboardTeacher}
+            colorScheme="purple"
+            trend="up"
+            trendValue={2}
+          />
+          <StatCard
+            title="Active Buses"
+            value={overview.activeBuses}
+            note="Vehicles currently in transit"
+            icon={FaBus}
+            colorScheme="cyan"
+            trend="up"
+            trendValue={0}
+          />
+          <StatCard
+            title="Average Attendance"
+            value={`${overview.todayAttendance}%`}
+            note="Across all departments"
+            icon={MdCheckCircle}
+            colorScheme="green"
+            trend="up"
+            trendValue={3}
+          />
+        </SimpleGrid>
 
-        {/* Right: Alerts & Actions */}
-        <Flex direction='column' gap='20px'>
-          <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-            <Text fontSize='lg' fontWeight='bold' mb='20px'>Recent Alerts</Text>
-            <VStack align='stretch' spacing='12px'>
-              {recentAlerts.length === 0 && (
-                <Text fontSize='sm' color='gray.500'>No recent alerts.</Text>
-              )}
-              {recentAlerts.slice(0, 4).map((alert) => (
-                <Alert key={alert.id} status={alert.severity === 'error' ? 'error' : 'info'} borderRadius='8px' fontSize='sm'>
-                  <AlertIcon />
-                  <Box flex='1'>
-                    <AlertTitle fontSize='sm'>{alert.title}</AlertTitle>
-                    <AlertDescription fontSize='xs'>{alert.message}</AlertDescription>
-                  </Box>
-                </Alert>
+        {/* --- Section 2: Trend Charts (NEW - Upper Section) --- */}
+        <SimpleGrid columns={{ base: 1, md: 2 }} gap='20px' mb='20px'>
+          <LineChartCard
+            title="Weekly Attendance Trend"
+            categories={attendanceBars.map(d => d.day)}
+            series={[{ name: 'Attendance', data: attendanceBars.map(d => d.value) }]}
+            height={280}
+          />
+          <LineChartCard
+            title="Monthly Fee Collection"
+            categories={feeMonths.map(d => d.month)}
+            series={[{ name: 'Collections', data: feeMonths.map(d => d.collected) }]}
+            height={280}
+          />
+        </SimpleGrid>
+
+        {/* --- Section 3: Charts & Graphs --- */}
+        <SimpleGrid columns={{ base: 1, md: 3 }} gap='24px' mb='30px' px='10px'>
+          {/* Card 1: Radial Attendance */}
+          <Card p='24px'>
+            <Flex justify='space-between' align='center' mb='16px'>
+              <Text fontSize='lg' fontWeight='800'>Attendance</Text>
+              <Badge colorScheme={attendanceToday >= 90 ? 'green' : attendanceToday >= 75 ? 'orange' : 'red'} borderRadius='8px' px='2'>
+                {attendanceToday >= 90 ? 'Excellent' : attendanceToday >= 75 ? 'Good' : 'Needs Care'}
+              </Badge>
+            </Flex>
+            <Text fontSize='sm' color={subtleText} mb='20px'>
+              Real-time attendance insights.
+            </Text>
+            <RadialAttendance ariaLabel="Today's attendance" value={attendanceToday} height={240} label="Attendance" subtitle={`${attendanceToday}%`} />
+          </Card>
+
+          {/* Card 2: Fee Collection Donut */}
+          <Card p='24px'>
+            <Flex justify='space-between' align='center' mb='16px'>
+              <Text fontSize='lg' fontWeight='800'>Fee Split</Text>
+              <Badge colorScheme={feeDonut.rate >= 80 ? 'green' : 'orange'} borderRadius='8px' px='2'>
+                {feeDonut.rate}%
+              </Badge>
+            </Flex>
+            <Text fontSize='sm' color={subtleText} mb='20px'>
+              Collected vs Pending breakdown.
+            </Text>
+            <PieChart
+              type="donut"
+              height={240}
+              chartData={feeDonut.series}
+              chartOptions={{
+                labels: feeDonut.labels,
+                legend: { position: 'bottom', fontSize: '12px', fontWeight: 600 },
+                colors: ['#4318FF', '#FFAE1F'],
+                plotOptions: { pie: { donut: { size: '75%' } } }
+              }}
+            />
+          </Card>
+
+          {/* Card 3: Weekly Activity Sparkline */}
+          <Card p='24px'>
+            <Flex justify='space-between' align='center' mb='16px'>
+              <Text fontSize='lg' fontWeight='800'>Activity</Text>
+              <Badge colorScheme='blue' borderRadius='8px' px='2'>TRENDING</Badge>
+            </Flex>
+            <Text fontSize='sm' color={subtleText} mb='20px'>
+              Engagement trend for the past week.
+            </Text>
+            <Sparkline ariaLabel="Weekly activity trend" data={activitySeries} height={140} type="area" />
+            <Flex mt={6} justify='space-between' align='center'>
+              <VStack align='start' spacing='0'>
+                <Text fontSize='10px' color='gray.400' fontWeight='700' textTransform='uppercase'>Minimum</Text>
+                <Text fontSize='sm' fontWeight='800'>{Math.min(...activitySeries)}%</Text>
+              </VStack>
+              <VStack align='end' spacing='0'>
+                <Text fontSize='10px' color='gray.400' fontWeight='700' textTransform='uppercase'>Maximum</Text>
+                <Text fontSize='sm' fontWeight='800' color='blue.500'>{Math.max(...activitySeries)}%</Text>
+              </VStack>
+            </Flex>
+          </Card>
+        </SimpleGrid>
+
+        {/* --- Section 4: Detailed Stats & Lists --- */}
+        <SimpleGrid columns={{ base: 1, xl: 2 }} gap='24px' mb='30px' px='10px'>
+
+          {/* Left: Bus Overview */}
+          <Card p='24px'>
+            <Flex justify='space-between' align='center' mb='24px'>
+              <Box>
+                <Text fontSize='lg' fontWeight='800'>Transport Status</Text>
+                <Text fontSize='xs' color='gray.400'>Live bus tracking overview</Text>
+              </Box>
+              <Button size='xs' variant='light' colorScheme='blue' borderRadius='8px' onClick={() => navigate('/admin/transport/buses')}>Manage</Button>
+            </Flex>
+
+            <VStack align='stretch' spacing='16px'>
+              {buses.length === 0 && <Text fontSize='sm' color='gray.400'>No active buses found.</Text>}
+              {buses.slice(0, 3).map((bus) => (
+                <Flex
+                  key={bus.id}
+                  p='16px'
+                  bg={useColorModeValue('gray.50', 'whiteAlpha.50')}
+                  borderRadius='16px'
+                  justify='space-between'
+                  align='center'
+                  transition='all 0.2s'
+                  _hover={{ bg: useColorModeValue('blue.50', 'blue.900') }}
+                >
+                  <HStack spacing='16px'>
+                    <IconBox
+                      w='40px'
+                      h='40px'
+                      bg={useColorModeValue('white', 'navy.700')}
+                      icon={<Icon as={MdDirectionsBus} color='blue.500' w='20px' h='20px' />}
+                    />
+                    <Box>
+                      <Text fontWeight='800' fontSize='sm'>
+                        {bus.number || bus.busNumber}
+                      </Text>
+                      {bus.driverName && (
+                        <Text fontSize='xs' color='gray.500' fontWeight='500'>
+                          {bus.driverName} • Driver
+                        </Text>
+                      )}
+                    </Box>
+                  </HStack>
+                  <Badge
+                    variant='subtle'
+                    colorScheme={getStatusColor(bus.status)}
+                    borderRadius='10px'
+                    px='3'
+                    py='1'
+                    fontSize='10px'
+                    fontWeight='800'
+                    textTransform='uppercase'
+                  >
+                    {bus.status}
+                  </Badge>
+                </Flex>
               ))}
             </VStack>
           </Card>
 
-          <Card p='20px' borderRadius='20px' boxShadow='0px 10px 30px rgba(112, 144, 176, 0.08)'>
-            <Text fontSize='lg' fontWeight='bold' mb='20px'>Quick Actions</Text>
-            <SimpleGrid columns={2} spacing={3}>
-              <Button leftIcon={<MdAdd />} colorScheme='blue' size='sm' onClick={() => navigate('/admin/students/add')}>New Student</Button>
-              <Button leftIcon={<MdCheckCircle />} colorScheme='green' variant='outline' size='sm' onClick={() => navigate('/admin/attendance/daily')}>Attendance</Button>
-              <Button leftIcon={<MdBarChart />} colorScheme='purple' variant='outline' size='sm' onClick={() => navigate('/admin/finance/reports')}>Reports</Button>
-              <Button leftIcon={<MdTimer />} colorScheme='orange' variant='outline' size='sm' onClick={() => navigate('/admin/exams')}>Exams</Button>
-            </SimpleGrid>
-          </Card>
-        </Flex>
-      </SimpleGrid>
+          {/* Right: Alerts & Actions */}
+          <Flex direction='column' gap='24px'>
+            <Card p='24px'>
+              <Text fontSize='lg' fontWeight='800' mb='20px'>System Alerts</Text>
+              <VStack align='stretch' spacing='12px'>
+                {recentAlerts.length === 0 && (
+                  <Text fontSize='sm' color='gray.500'>System status normal. No alerts.</Text>
+                )}
+                {recentAlerts.slice(0, 3).map((alert) => (
+                  <Alert key={alert.id} status={alert.severity === 'error' ? 'error' : 'info'} borderRadius='12px' fontSize='sm' variant='subtle'>
+                    <AlertIcon />
+                    <Box flex='1'>
+                      <AlertTitle fontSize='sm' fontWeight='700'>{alert.title}</AlertTitle>
+                      <AlertDescription fontSize='xs' opacity={0.8}>{alert.message}</AlertDescription>
+                    </Box>
+                  </Alert>
+                ))}
+              </VStack>
+            </Card>
 
+            <Card p='24px'>
+              <Text fontSize='lg' fontWeight='800' mb='20px'>Administrative Shortcuts</Text>
+              <SimpleGrid columns={2} spacing={4}>
+                <Button
+                  leftIcon={<Icon as={MdAdd} />}
+                  bgGradient="linear(to-r, blue.400, blue.600)"
+                  color='white'
+                  _hover={{ bgGradient: 'linear(to-r, blue.500, blue.700)', transform: 'translateY(-2px)' }}
+                  _active={{ transform: 'translateY(0)' }}
+                  size='md'
+                  borderRadius='14px'
+                  fontSize='sm'
+                  boxShadow="0px 10px 20px rgba(66, 153, 225, 0.3)"
+                  onClick={() => navigate('/admin/students/add')}
+                >
+                  Add Student
+                </Button>
+                <Button
+                  leftIcon={<Icon as={MdCheckCircle} />}
+                  variant='outline'
+                  colorScheme='green'
+                  size='md'
+                  borderRadius='14px'
+                  fontSize='sm'
+                  _hover={{ bg: 'green.50', transform: 'translateY(-2px)' }}
+                  onClick={() => navigate('/admin/attendance/daily')}
+                >
+                  Attendance
+                </Button>
+                <Button
+                  leftIcon={<Icon as={MdBarChart} />}
+                  variant='outline'
+                  colorScheme='purple'
+                  size='md'
+                  borderRadius='14px'
+                  fontSize='sm'
+                  _hover={{ bg: 'purple.50', transform: 'translateY(-2px)' }}
+                  onClick={() => navigate('/admin/finance/reports')}
+                >
+                  Reports
+                </Button>
+                <Button
+                  leftIcon={<Icon as={MdTimer} />}
+                  variant='outline'
+                  colorScheme='orange'
+                  size='md'
+                  borderRadius='14px'
+                  fontSize='sm'
+                  _hover={{ bg: 'orange.50', transform: 'translateY(-2px)' }}
+                  onClick={() => navigate('/admin/academics/exams')}
+                >
+                  Examination
+                </Button>
+              </SimpleGrid>
+            </Card>
+          </Flex>
+        </SimpleGrid>
+      </Box>
     </Box>
   );
 }

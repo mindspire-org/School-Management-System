@@ -36,7 +36,7 @@ router.get(
 router.post(
     '/',
     authenticate,
-    authorize('admin'),
+    authorize('admin', 'owner'),
     [
         body('name').notEmpty().withMessage('Name is required'),
         body('email').optional().isEmail(),
@@ -63,7 +63,7 @@ router.post(
 router.put(
     '/:id',
     authenticate,
-    authorize('admin'),
+    authorize('admin', 'owner'),
     [
         param('id').isInt(),
         body('name').optional().isString(),
@@ -91,7 +91,7 @@ router.put(
 router.delete(
     '/:id',
     authenticate,
-    authorize('admin'),
+    authorize('admin', 'owner'),
     [
         param('id').isInt(),
         query('force').optional().isIn(['true', 'false']),
@@ -117,7 +117,7 @@ router.get(
 router.post(
     '/:id/payroll',
     authenticate,
-    authorize('admin'),
+    authorize('admin', 'owner'),
     [
         param('id').isInt(),
         body('periodMonth').isISO8601().withMessage('Period month is required'),
@@ -135,7 +135,7 @@ router.post(
 router.patch(
     '/:id/payroll/:payrollId/status',
     authenticate,
-    authorize('admin'),
+    authorize('admin', 'owner'),
     [
         param('id').isInt(),
         param('payrollId').isInt(),

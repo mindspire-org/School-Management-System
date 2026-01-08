@@ -27,7 +27,7 @@ router.get('/:id', authenticate, [param('id').isInt()], validate, controller.get
 router.post(
   '/',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [
     body('title').isString().notEmpty(),
     body('examDate').optional().isISO8601(),
@@ -38,7 +38,7 @@ router.post(
   controller.create
 );
 
-router.put('/:id', authenticate, authorize('admin', 'teacher'), [param('id').isInt()], validate, controller.update);
-router.delete('/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.remove);
+router.put('/:id', authenticate, authorize('admin', 'teacher', 'owner'), [param('id').isInt()], validate, controller.update);
+router.delete('/:id', authenticate, authorize('admin', 'owner'), [param('id').isInt()], validate, controller.remove);
 
 export default router;
