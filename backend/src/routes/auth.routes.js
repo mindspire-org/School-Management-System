@@ -10,15 +10,15 @@ const ownerKeyMin = Number(process.env.OWNER_KEY_MIN_LENGTH || 30);
 router.post(
   '/login',
   [
-    body('email')
-      .custom((v) => {
-        if (!v) return false;
-        const s = String(v).trim();
-        const emailRegex = /.+@.+\..+/;
-        const phoneRegex = /^\+?\d{10,15}$|^0\d{10}$|^3\d{9}$/;
-        return emailRegex.test(s) || phoneRegex.test(s);
-      })
-      .withMessage('Provide a valid email or phone number'),
+    body().custom((_, { req }) => {
+      const uname = String(req.body?.username || '').trim();
+      if (uname && uname.length >= 3) return true;
+      const v = String(req.body?.email || '').trim();
+      const emailRegex = /.+@.+\..+/;
+      const phoneRegex = /^\+?\d{10,15}$|^0\d{10}$|^3\d{9}$/;
+      if (emailRegex.test(v) || phoneRegex.test(v)) return true;
+      throw new Error('Provide username or a valid email/phone number');
+    }),
     body('password').isString().isLength({ min: 6 }),
     body('ownerKey').optional().isString().isLength({ min: ownerKeyMin })
   ],
@@ -46,13 +46,15 @@ router.post('/refresh', [body('refreshToken').isString()], validate, authControl
 router.get('/profile', authenticate, authController.profile);
 router.get('/users', authenticate, authController.getAllUsers);
 router.get('/users/:id', authenticate, authController.getUserById);
+router.put('/users/:id', authenticate, authorize('admin'), validate, authController.updateUser);
+router.delete('/users/:id', authenticate, authorize('admin'), authController.deleteUser);
 
 // Create missing user accounts from domain tables by role
 router.post(
   '/backfill-users',
   authenticate,
   authorize('admin'),
-  [body('role').isIn(['student','teacher','driver'])],
+  [body('role').isIn(['student', 'teacher', 'driver'])],
   validate,
   authController.backfillUsers
 );

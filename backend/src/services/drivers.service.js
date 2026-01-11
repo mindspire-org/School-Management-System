@@ -63,20 +63,37 @@ export const getDriverById = async (id) => {
   return rows[0] || null;
 };
 
+// Get driver by linked user id
+export const getDriverByUserId = async (userId) => {
+  const { rows } = await query(`
+    SELECT d.id, d.name, d.email, d.phone, d.license_number AS "licenseNumber",
+           d.license_expiry AS "licenseExpiry", d.national_id AS "nationalId",
+           d.address, d.bus_id AS "busId", b.number AS "busNumber",
+           d.base_salary AS "baseSalary", d.allowances, d.deductions,
+           d.payment_method AS "paymentMethod", d.bank_name AS "bankName",
+           d.account_number AS "accountNumber", d.status, d.avatar,
+           d.joining_date AS "joiningDate", d.created_at AS "createdAt", d.updated_at AS "updatedAt"
+    FROM drivers d
+    LEFT JOIN buses b ON d.bus_id = b.id
+    WHERE d.user_id = $1
+  `, [userId]);
+  return rows[0] || null;
+};
+
 // Create driver
 export const createDriver = async (data) => {
   const {
     name, email, phone, licenseNumber, licenseExpiry, nationalId, address,
     busId, baseSalary, allowances, deductions, paymentMethod, bankName,
-    accountNumber, status, avatar, joiningDate
+    accountNumber, status, avatar, joiningDate, userId
   } = data;
   
   const { rows } = await query(`
     INSERT INTO drivers (
       name, email, phone, license_number, license_expiry, national_id, address,
       bus_id, base_salary, allowances, deductions, payment_method, bank_name,
-      account_number, status, avatar, joining_date
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      account_number, status, avatar, joining_date, user_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     RETURNING id, name, email, phone, license_number AS "licenseNumber",
               license_expiry AS "licenseExpiry", national_id AS "nationalId",
               address, bus_id AS "busId", base_salary AS "baseSalary",
@@ -87,7 +104,8 @@ export const createDriver = async (data) => {
     name, email || null, phone || null, licenseNumber || null, licenseExpiry || null,
     nationalId || null, address || null, busId || null, baseSalary || 0,
     allowances || 0, deductions || 0, paymentMethod || 'bank', bankName || null,
-    accountNumber || null, status || 'active', avatar || null, joiningDate || null
+    accountNumber || null, status || 'active', avatar || null, joiningDate || null,
+    userId || null
   ]);
   return rows[0];
 };
@@ -97,7 +115,7 @@ export const updateDriver = async (id, data) => {
   const {
     name, email, phone, licenseNumber, licenseExpiry, nationalId, address,
     busId, baseSalary, allowances, deductions, paymentMethod, bankName,
-    accountNumber, status, avatar, joiningDate
+    accountNumber, status, avatar, joiningDate, userId
   } = data;
   
   const { rows } = await query(`
@@ -119,6 +137,7 @@ export const updateDriver = async (id, data) => {
       status = COALESCE($16, status),
       avatar = COALESCE($17, avatar),
       joining_date = COALESCE($18, joining_date),
+      user_id = COALESCE($19, user_id),
       updated_at = NOW()
     WHERE id = $1
     RETURNING id, name, email, phone, license_number AS "licenseNumber",
@@ -131,7 +150,8 @@ export const updateDriver = async (id, data) => {
     id, name || null, email || null, phone || null, licenseNumber || null,
     licenseExpiry || null, nationalId || null, address || null, busId || null,
     baseSalary ?? null, allowances ?? null, deductions ?? null, paymentMethod || null,
-    bankName || null, accountNumber || null, status || null, avatar || null, joiningDate || null
+    bankName || null, accountNumber || null, status || null, avatar || null, joiningDate || null,
+    userId || null
   ]);
   return rows[0] || null;
 };

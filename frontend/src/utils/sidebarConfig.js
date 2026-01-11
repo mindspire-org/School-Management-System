@@ -194,11 +194,11 @@ export const getDashboardPath = (role) => {
     case 'admin':
       return '/admin/dashboard';
     case 'teacher':
-      return '/admin/dashboard';
+      return '/teacher/dashboard';
     case 'student':
-      return '/admin/dashboard';
+      return '/student/dashboard';
     case 'driver':
-      return '/admin/dashboard';
+      return '/driver/dashboard';
     case 'parent':
       return '/admin/parent/alerts';
     default:

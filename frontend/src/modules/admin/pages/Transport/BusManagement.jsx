@@ -44,6 +44,7 @@ import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
 import StatCard from '../../../../components/card/StatCard';
 import * as transportApi from '../../../../services/api/transport';
+import * as driversApi from '../../../../services/api/drivers';
 
 const fallbackBuses = [
   { backendId: null, id: 'BUS-101', plate: 'LEB-1234', capacity: 45, driver: 'Imran Khan', route: 'R1', status: 'Active', lastService: '2025-10-10', maintDue: false },
@@ -59,10 +60,11 @@ export default function BusManagement() {
   const [routeFilter, setRouteFilter] = useState('all');
   const [rows, setRows] = useState([]);
   const [routesOptions, setRoutesOptions] = useState([]);
+  const [driversOptions, setDriversOptions] = useState([]);
   const [selected, setSelected] = useState(null);
   const viewDisc = useDisclosure();
   const editDisc = useDisclosure();
-  const [form, setForm] = useState({ backendId: null, id: '', plate: '', capacity: 0, driver: '', routeId: '', status: 'Active', lastService: '' });
+  const [form, setForm] = useState({ backendId: null, id: '', plate: '', capacity: 0, driver: '', driverId: '', routeId: '', status: 'Active', lastService: '' });
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
 
   const normalizeBus = (bus) => {
@@ -111,6 +113,17 @@ export default function BusManagement() {
     loadBuses();
   }, []);
 
+  // When editing, try to pre-select the driver option based on name or current bus assignment
+  useEffect(() => {
+    if (!editDisc.isOpen) return;
+    if (form.driverId) return;
+    if (!driversOptions.length) return;
+    const byBus = driversOptions.find(d => String(d.busId || '') === String(form.backendId || ''));
+    const byName = driversOptions.find(d => d.name === form.driver);
+    const found = byBus || byName;
+    if (found) setForm(f => ({ ...f, driverId: String(found.id) }));
+  }, [editDisc.isOpen, driversOptions, form.backendId, form.driver, form.driverId]);
+
   useEffect(() => {
     const loadRoutes = async () => {
       try {
@@ -120,6 +133,19 @@ export default function BusManagement() {
       } catch (e) { }
     };
     loadRoutes();
+  }, []);
+
+  useEffect(() => {
+    const loadDrivers = async () => {
+      try {
+        const data = await driversApi.list({ status: 'active', pageSize: 200 });
+        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+        setDriversOptions(items.map(d => ({ id: d.id, name: d.name, busId: d.busId || null })));
+      } catch (e) {
+        setDriversOptions([]);
+      }
+    };
+    loadDrivers();
   }, []);
 
   const filtered = useMemo(() => {
@@ -211,7 +237,7 @@ export default function BusManagement() {
             leftIcon={<MdPlaylistAdd />}
             colorScheme="blue"
             onClick={() => {
-              setForm({ backendId: null, id: '', plate: '', capacity: 0, driver: '', routeId: '', status: 'Active', lastService: '' });
+              setForm({ backendId: null, id: '', plate: '', capacity: 0, driver: '', driverId: '', routeId: '', status: 'Active', lastService: '' });
               editDisc.onOpen();
             }}
           >
@@ -352,7 +378,19 @@ export default function BusManagement() {
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Driver</FormLabel>
-              <Input value={form.driver} onChange={(e) => setForm(f => ({ ...f, driver: e.target.value }))} />
+              <Select
+                placeholder='Select driver'
+                value={form.driverId || ''}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const found = driversOptions.find(d => String(d.id) === String(id));
+                  setForm(f => ({ ...f, driverId: id, driver: found ? found.name : '' }));
+                }}
+              >
+                {driversOptions.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </Select>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Route</FormLabel>
@@ -401,12 +439,20 @@ export default function BusManagement() {
                     routeId: form.routeId || undefined,
                   };
 
+                  let busIdForDriver = null;
                   if (form.backendId) {
-                    await transportApi.updateBus(form.backendId, payload);
+                    const updated = await transportApi.updateBus(form.backendId, payload);
+                    busIdForDriver = updated?.id || form.backendId;
                   } else {
                     const created = await transportApi.createBus(payload);
+                    busIdForDriver = created?.id || null;
                     const normalized = normalizeBus(created);
                     setRows(prev => normalized ? [...prev, normalized] : prev);
+                  }
+
+                  // Optionally assign selected driver to this bus (drivers table relation)
+                  if (form.driverId && busIdForDriver) {
+                    try { await driversApi.update(form.driverId, { busId: busIdForDriver }); } catch (_) { /* ignore */ }
                   }
 
                   await loadBuses();

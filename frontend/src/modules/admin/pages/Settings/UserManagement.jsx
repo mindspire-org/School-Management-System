@@ -1,34 +1,226 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input, InputGroup, InputLeftElement, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, Switch } from '@chakra-ui/react';
-import { MdPeople, MdAdminPanelSettings, MdSecurity, MdFileDownload, MdAdd, MdRefresh, MdSearch } from 'react-icons/md';
-import Card from '../../../../components/card/Card';
-import MiniStatistics from '../../../../components/card/MiniStatistics';
-import IconBox from '../../../../components/icons/IconBox';
-import StatCard from '../../../../components/card/StatCard';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup,
+  useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input,
+  InputGroup, InputLeftElement, InputRightElement, useDisclosure, Modal,
+  ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody,
+  ModalFooter, FormControl, FormLabel, Switch, useToast, FormHelperText,
+  Spinner, Center
+} from '@chakra-ui/react';
+import { MdPeople, MdAdminPanelSettings, MdSecurity, MdFileDownload, MdAdd, MdRefresh, MdSearch, MdEdit, MdDelete } from 'react-icons/md';
 
-const mockUsers = [
-  { id: 'U-001', name: 'Admin User', email: 'admin@school.com', role: 'Administrator', status: 'Active', lastLogin: '2025-11-12 09:22' },
-  { id: 'U-002', name: 'Hina Shah', email: 'hina@school.com', role: 'Teacher', status: 'Active', lastLogin: '2025-11-12 10:02' },
-  { id: 'U-003', name: 'Omar Ali', email: 'omar@school.com', role: 'Accountant', status: 'Inactive', lastLogin: '2025-11-09 15:40' },
-];
+import Card from '../../../../components/card/Card';
+import StatCard from '../../../../components/card/StatCard';
+import { authApi, studentsApi, teachersApi, driversApi, parentsApi } from '../../../../services/api';
+
+const roleDisplayMap = {
+  student: 'Student',
+  teacher: 'Teacher',
+  driver: 'Driver',
+  parent: 'Parent',
+  admin: 'Administrator',
+  owner: 'Owner'
+};
 
 export default function UserManagement() {
   const [role, setRole] = useState('all');
-  const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const createDisc = useDisclosure();
   const detailDisc = useDisclosure();
+  const editDisc = useDisclosure();
+  const deleteDisc = useDisclosure();
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
+  const toast = useToast();
 
-  const stats = useMemo(() => ({ users: mockUsers.length, active: mockUsers.filter(u => u.status === 'Active').length, roles: new Set(mockUsers.map(u => u.role)).size }), []);
+  // Form state for creating new user
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'student',
+    active: true
+  });
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const filtered = useMemo(() => mockUsers.filter(u => {
+  // Edit form state
+  const [editData, setEditData] = useState({
+    id: null,
+    name: '',
+    email: '',
+    role: 'student',
+    password: '' // Optional for reset
+  });
+
+  // Entity lookup state
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupResults, setLookupResults] = useState([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  // Real users data from API
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+
+  // Fetch users from API
+  useEffect(() => {
+    fetchUsers();
+  }, [role, search]);
+
+  // Handle entity lookup
+  useEffect(() => {
+    const searchEntities = async () => {
+      if (!lookupQuery || lookupQuery.length < 2) {
+        setLookupResults([]);
+        return;
+      }
+
+      // Only search for allowed roles
+      const allowedRoles = ['student', 'teacher', 'driver', 'parent'];
+      if (!allowedRoles.includes(formData.role)) return;
+
+      try {
+        setLookupLoading(true);
+        const params = { search: lookupQuery, pageSize: 5 };
+        let res;
+
+        switch (formData.role) {
+          case 'student': res = await studentsApi.list(params); break;
+          case 'teacher': res = await teachersApi.list(params); break;
+          case 'driver': res = await driversApi.list(params); break;
+          case 'parent': res = await parentsApi.list(params); break;
+          default: res = { rows: [] };
+        }
+
+        // Handle different API response structures if any
+        const results = res.rows || res.data || [];
+        setLookupResults(results);
+      } catch (err) {
+        console.error('Lookup error:', err);
+      } finally {
+        setLookupLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(searchEntities, 500);
+    return () => clearTimeout(timeoutId);
+  }, [lookupQuery, formData.role]);
+
+  const selectEntity = (entity) => {
+    // Auto-fill form data
+    setFormData(prev => ({
+      ...prev,
+      name: entity.name || prev.name,
+      email: entity.email || prev.email,
+    }));
+    setLookupQuery('');
+    setLookupResults([]);
+    toast({
+      title: 'Data Autofilled',
+      description: `Loaded details for ${entity.name}`,
+      status: 'info',
+      duration: 2000,
+    });
+  };
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        role: role === 'all' ? undefined : role,
+        search,
+        page: 1, // Add pagination support later if needed UI
+        pageSize: 100
+      };
+
+      const response = await authApi.getUsers(params);
+      const data = response.rows ? response : (response.data || response);
+
+      setUsers(data.rows || []);
+      setTotal(data.total || 0);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to load users',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (user) => {
+    setEditData({
+      id: user.id,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role,
+      password: ''
+    });
+    editDisc.onOpen();
+  };
+
+  const handleDeleteClick = (user) => {
+    setSelected(user);
+    deleteDisc.onOpen();
+  };
+
+  const confirmDelete = async () => {
+    if (!selected) return;
+    try {
+      setIsDeleting(true);
+      await authApi.deleteUser(selected.id);
+      toast({ title: 'User Deleted', status: 'success', duration: 2000 });
+      deleteDisc.onClose();
+      fetchUsers();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, status: 'error', duration: 3000 });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const submitEdit = async () => {
+    try {
+      setIsUpdating(true);
+      const payload = {
+        name: editData.name,
+        email: editData.email,
+        role: editData.role
+      };
+      if (editData.password && editData.password.length >= 6) {
+        payload.password = editData.password;
+      } else if (editData.password && editData.password.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+
+      await authApi.updateUser(editData.id, payload);
+      toast({ title: 'User Updated', status: 'success', duration: 2000 });
+      editDisc.onClose();
+      fetchUsers();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, status: 'error', duration: 3000 });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const stats = useMemo(() => ({
+    users: total,
+    active: users.filter(u => u.role !== 'inactive').length,
+    roles: new Set(users.map(u => u.role)).size
+  }), [users, total]);
+
+  const filtered = useMemo(() => users.filter(u => {
     const byRole = role === 'all' || u.role === role;
-    const byStatus = status === 'all' || u.status === status;
-    const bySearch = !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.id.toLowerCase().includes(search.toLowerCase());
-    return byRole && byStatus && bySearch;
-  }), [role, status, search]);
+    const bySearch = !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase());
+    return byRole && bySearch;
+  }), [users, role, search]);
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
@@ -60,84 +252,267 @@ export default function UserManagement() {
           </InputGroup>
           <Select maxW='220px' value={role} onChange={(e) => setRole(e.target.value)}>
             <option value='all'>All Roles</option>
-            <option value='Administrator'>Administrator</option>
-            <option value='Teacher'>Teacher</option>
-            <option value='Accountant'>Accountant</option>
-          </Select>
-          <Select maxW='220px' value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value='all'>All Status</option>
-            <option value='Active'>Active</option>
-            <option value='Inactive'>Inactive</option>
+            <option value='student'>Student</option>
+            <option value='teacher'>Teacher</option>
+            <option value='driver'>Driver</option>
+            <option value='parent'>Parent</option>
+            <option value='admin'>Administrator</option>
+            <option value='owner'>Owner</option>
           </Select>
         </Flex>
       </Card>
 
       <Card>
         <Box overflowX='auto'>
-          <Table variant='simple'>
-            <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
-              <Tr>
-                <Th>User</Th>
-                <Th>ID</Th>
-                <Th>Email</Th>
-                <Th>Role</Th>
-                <Th>Status</Th>
-                <Th>Last Login</Th>
-                <Th>Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {filtered.map((u) => (
-                <Tr key={u.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
-                  <Td><Text fontWeight='600'>{u.name}</Text></Td>
-                  <Td>{u.id}</Td>
-                  <Td>{u.email}</Td>
-                  <Td><Badge colorScheme='blue'>{u.role}</Badge></Td>
-                  <Td><Badge colorScheme={u.status === 'Active' ? 'green' : 'gray'}>{u.status}</Badge></Td>
-                  <Td><Text color={textColorSecondary}>{u.lastLogin}</Text></Td>
-                  <Td>
-                    <Button size='sm' variant='outline' mr={2} onClick={() => { setSelected(u); detailDisc.onOpen(); }}>Details</Button>
-                    <Button size='sm' colorScheme={u.status === 'Active' ? 'red' : 'green'}>{u.status === 'Active' ? 'Deactivate' : 'Activate'}</Button>
-                  </Td>
+          {loading ? (
+            <Center p={10}><Spinner size='xl' /></Center>
+          ) : (
+            <Table variant='simple'>
+              <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
+                <Tr>
+                  <Th>Name</Th>
+                  <Th>Username</Th>
+                  <Th>Email</Th>
+                  <Th>Role</Th>
+                  <Th>Created</Th>
+                  <Th>Actions</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
+              </Thead>
+              <Tbody>
+                {filtered.map((u) => (
+                  <Tr key={u.id}>
+                    <Td><Text fontWeight='600'>{u.name || 'N/A'}</Text></Td>
+                    <Td><Text fontFamily='mono'>{u.username || 'N/A'}</Text></Td>
+                    <Td>{u.email || 'N/A'}</Td>
+                    <Td><Badge colorScheme='blue'>{roleDisplayMap[u.role] || u.role}</Badge></Td>
+                    <Td><Text color={textColorSecondary}>{new Date(u.createdAt).toLocaleDateString()}</Text></Td>
+                    <Td>
+                      <ButtonGroup size='sm' variant='outline'>
+                        <Button leftIcon={<MdEdit />} onClick={() => handleEdit(u)}>Edit</Button>
+                        <Button leftIcon={<MdDelete />} colorScheme='red' onClick={() => handleDeleteClick(u)}>Delete</Button>
+                      </ButtonGroup>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          )}
         </Box>
       </Card>
 
       {/* Add User Modal */}
-      <Modal isOpen={createDisc.isOpen} onClose={createDisc.onClose} size='lg'>
+      <Modal isOpen={createDisc.isOpen} onClose={() => {
+        createDisc.onClose();
+        setFormData({ name: '', email: '', password: '', role: 'student', active: true });
+      }} size='lg'>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Add User</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <FormControl mb={4}>
+            {['student', 'teacher', 'driver', 'parent'].includes(formData.role) && (
+              <Box mb={5} position="relative" borderBottom="1px dashed" borderColor="gray.200" pb={4}>
+                <FormControl>
+                  <FormLabel>Link to Existing {roleDisplayMap[formData.role]}</FormLabel>
+                  <InputGroup>
+                    <InputLeftElement pointerEvents='none'><MdSearch color='gray.300' /></InputLeftElement>
+                    <Input
+                      placeholder={`Search ${roleDisplayMap[formData.role]} by name...`}
+                      value={lookupQuery}
+                      onChange={(e) => setLookupQuery(e.target.value)}
+                      bg={useColorModeValue('gray.50', 'gray.700')}
+                    />
+                    {lookupLoading && <InputRightElement><Spinner size="sm" color='blue.500' /></InputRightElement>}
+                  </InputGroup>
+                  <FormHelperText mt={1}>Search and select to autofill details</FormHelperText>
+                </FormControl>
+
+                {/* Results dropdown */}
+                {lookupResults.length > 0 && (
+                  <Box
+                    position="absolute" top="75px" left={0} right={0} zIndex={100}
+                    bg={useColorModeValue('white', 'navy.800')}
+                    boxShadow="xl" borderRadius="md" maxHeight="200px" overflowY="auto"
+                    border="1px solid" borderColor={useColorModeValue('gray.100', 'whiteAlpha.200')}
+                  >
+                    {lookupResults.map((item) => (
+                      <Box
+                        key={item.id} p={3} borderBottom="1px solid" borderColor={useColorModeValue('gray.100', 'whiteAlpha.100')} cursor="pointer"
+                        _hover={{ bg: useColorModeValue('blue.50', 'whiteAlpha.200') }}
+                        onClick={() => selectEntity(item)}
+                      >
+                        <Text fontWeight="bold" fontSize="sm">{item.name}</Text>
+                        <Text fontSize="xs" color="gray.500">{item.email || 'No Email'} {item.roll_number ? `• Roll: ${item.roll_number}` : ''}</Text>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            <FormControl mb={4} isRequired>
               <FormLabel>Full Name</FormLabel>
-              <Input placeholder='e.g. Adeel Khan' />
+              <Input
+                placeholder='e.g. Adeel Khan'
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
+            <FormControl mb={4} isRequired>
               <FormLabel>Email</FormLabel>
-              <Input placeholder='email@school.com' type='email' />
+              <Input
+                placeholder='email@school.com'
+                type='email'
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
+            <FormControl mb={4} isRequired>
+              <FormLabel>Password</FormLabel>
+              <Input
+                placeholder='Enter password'
+                type='password'
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+              <FormHelperText>Minimum 6 characters</FormHelperText>
+            </FormControl>
+            <FormControl mb={4} isRequired>
               <FormLabel>Role</FormLabel>
-              <Select defaultValue='Teacher'>
-                <option>Administrator</option>
-                <option>Teacher</option>
-                <option>Accountant</option>
-                <option>Viewer</option>
+              <Select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              >
+                <option value='student'>Student</option>
+                <option value='teacher'>Teacher</option>
+                <option value='driver'>Driver</option>
+                <option value='parent'>Parent</option>
               </Select>
+              <FormHelperText>Only Student, Teacher, Driver, and Parent roles can be created</FormHelperText>
             </FormControl>
             <FormControl display='flex' alignItems='center'>
               <FormLabel mb='0' flex='1'>Active</FormLabel>
-              <Switch defaultChecked />
+              <Switch
+                isChecked={formData.active}
+                onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+              />
             </FormControl>
           </ModalBody>
           <ModalFooter>
-            <Button mr={3} onClick={createDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue'>Create</Button>
+            <Button mr={3} onClick={() => {
+              createDisc.onClose();
+              setFormData({ name: '', email: '', password: '', role: 'student', active: true });
+            }}>Cancel</Button>
+            <Button colorScheme='blue' isLoading={isCreating} onClick={async () => {
+              if (!formData.name || !formData.email || !formData.password) {
+                toast({
+                  title: 'Validation Error',
+                  description: 'Please fill in all required fields',
+                  status: 'error',
+                  duration: 3000,
+                  isClosable: true,
+                });
+                return;
+              }
+
+              if (formData.password.length < 6) {
+                toast({
+                  title: 'Validation Error',
+                  description: 'Password must be at least 6 characters',
+                  status: 'error',
+                  duration: 3000,
+                  isClosable: true,
+                });
+                return;
+              }
+
+              try {
+                setIsCreating(true);
+                await authApi.register({
+                  name: formData.name,
+                  email: formData.email,
+                  password: formData.password,
+                  role: formData.role
+                });
+
+                toast({
+                  title: 'User Created',
+                  description: `User ${formData.name} has been created successfully`,
+                  status: 'success',
+                  duration: 3000,
+                  isClosable: true,
+                });
+
+                createDisc.onClose();
+                setFormData({ name: '', email: '', password: '', role: 'student', active: true });
+
+                // Refresh the page to show new user
+                setTimeout(() => window.location.reload(), 1000);
+              } catch (error) {
+                toast({
+                  title: 'Error',
+                  description: error.response?.data?.message || 'Failed to create user',
+                  status: 'error',
+                  duration: 5000,
+                  isClosable: true,
+                });
+              } finally {
+                setIsCreating(false);
+              }
+            }}>Create</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal isOpen={editDisc.isOpen} onClose={editDisc.onClose} size='lg'>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit User</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl mb={4}>
+              <FormLabel>Full Name</FormLabel>
+              <Input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+            </FormControl>
+            <FormControl mb={4}>
+              <FormLabel>Email</FormLabel>
+              <Input value={editData.email} onChange={(e) => setEditData({ ...editData, email: e.target.value })} />
+            </FormControl>
+            <FormControl mb={4}>
+              <FormLabel>Role</FormLabel>
+              <Select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })}>
+                <option value='student'>Student</option>
+                <option value='teacher'>Teacher</option>
+                <option value='driver'>Driver</option>
+                <option value='parent'>Parent</option>
+              </Select>
+            </FormControl>
+            <FormControl mb={4}>
+              <FormLabel>New Password (Optional)</FormLabel>
+              <Input type='password' placeholder='Leave blank to keep current' value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} />
+              <FormHelperText>Enter only if you want to reset the password</FormHelperText>
+            </FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button mr={3} onClick={editDisc.onClose}>Cancel</Button>
+            <Button colorScheme='blue' isLoading={isUpdating} onClick={submitEdit}>Update</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={deleteDisc.isOpen} onClose={deleteDisc.onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Delete User</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            Are you sure you want to delete <strong>{selected?.name}</strong>? This action cannot be undone.
+          </ModalBody>
+          <ModalFooter>
+            <Button mr={3} onClick={deleteDisc.onClose}>Cancel</Button>
+            <Button colorScheme='red' isLoading={isDeleting} onClick={confirmDelete}>Delete</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

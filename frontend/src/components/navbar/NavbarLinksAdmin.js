@@ -124,6 +124,7 @@ export default function HeaderLinks(props) {
           me={{ base: '30px', md: 'unset' }}
           minW={{ base: 'unset', md: '400px', xl: '450px' }}
           maxW={{ base: '360px', md: 'unset' }}
+          zIndex="1000"
         >
           <Flex w="100%" mb="20px">
             <Text fontSize="md" fontWeight="600" color={textColor}>
@@ -201,6 +202,7 @@ export default function HeaderLinks(props) {
           borderRadius="20px"
           bg={menuBg}
           border="none"
+          zIndex="1000"
         >
           <Flex w="100%" mb="0px">
             <Text

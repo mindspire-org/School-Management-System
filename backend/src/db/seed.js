@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { pool, query } from '../config/db.js';
 import { loadEnv } from '../config/env.js';
+import { ensureAuthSchema } from './autoMigrate.js';
 
 loadEnv();
 
@@ -8,6 +9,9 @@ async function seed() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Ensure auth schema (username + user_id links) exists
+    try { await ensureAuthSchema(); } catch (_) {}
 
     // Ensure Super Admin / Owner account exists with desired credentials
     const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
@@ -18,12 +22,12 @@ async function seed() {
       const ownerHash = await bcrypt.hash(ownerPassword, 10);
       if (!existingOwner.length) {
         await client.query(
-          'INSERT INTO users (email, password_hash, role, name) VALUES ($1,$2,$3,$4)',
-          [ownerEmail, ownerHash, 'owner', ownerName]
+          'INSERT INTO users (username, email, password_hash, role, name) VALUES ($1,$2,$3,$4,$5)',
+          ['owner', ownerEmail, ownerHash, 'owner', ownerName]
         );
         console.log('Seeded OWNER user:', ownerEmail, 'password:', ownerPassword);
       } else {
-        await client.query('UPDATE users SET role=$2, password_hash=$3, name=$4 WHERE id=$1', [existingOwner[0].id, 'owner', ownerHash, ownerName]);
+        await client.query('UPDATE users SET role=$2, password_hash=$3, name=$4, username = COALESCE(username, $5) WHERE id=$1', [existingOwner[0].id, 'owner', ownerHash, ownerName, 'owner']);
         console.log('Updated OWNER user:', ownerEmail, 'password reset applied');
       }
     }
@@ -55,18 +59,20 @@ async function seed() {
 
     // Create demo users if not exists
     const usersToSeed = [
-      { email: 'admin@mindspire.com', role: 'admin', name: 'Admin User', password: 'password123' },
-      { email: 'teacher@mindspire.com', role: 'teacher', name: 'Teacher Ali', password: 'password123' },
-      { email: 'student@mindspire.com', role: 'student', name: 'Student Ahmed', password: 'password123' },
-      { email: 'driver@mindspire.com', role: 'driver', name: 'Driver Umar', password: 'password123' },
+      { email: 'admin@mindspire.com', username: 'admin', role: 'admin', name: 'Admin User', password: 'password123' },
+      { email: 'teacher@mindspire.com', username: 'teacher', role: 'teacher', name: 'Teacher Ali', password: 'password123' },
+      { email: 'student@mindspire.com', username: 'student', role: 'student', name: 'Student Ahmed', password: 'password123' },
+      { email: 'driver@mindspire.com', username: 'driver', role: 'driver', name: 'Driver Umar', password: 'password123' },
     ];
     for (const u of usersToSeed) {
       const { rows: existing } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [u.email]);
       if (!existing.length) {
         const hash = await bcrypt.hash(u.password, 10);
-        await client.query('INSERT INTO users (email, password_hash, role, name) VALUES ($1,$2,$3,$4)', [u.email, hash, u.role, u.name]);
+        await client.query('INSERT INTO users (username, email, password_hash, role, name) VALUES ($1,$2,$3,$4,$5)', [u.username, u.email, hash, u.role, u.name]);
         console.log('Seeded user:', u.email, 'password:', u.password);
       } else {
+        // Ensure username set for existing row
+        await client.query('UPDATE users SET username = COALESCE(username, $2) WHERE id = $1', [existing[0].id, u.username]);
         console.log('User already exists:', u.email);
       }
     }
@@ -77,12 +83,18 @@ async function seed() {
       ['student@mindspire.com', 'STD001']
     );
     if (!existsStudent.length) {
+      const { rows: userRow } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['student@mindspire.com']);
+      const studentUserId = userRow[0]?.id || null;
       await client.query(
-        `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status)
-         VALUES ('Student Ahmed','student@mindspire.com','STD001','10','A','RFID-001',95.5,'paid','101',true,'Khan Sahab','+92 300 1234567','active')`
+        `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status, user_id)
+         VALUES ('Student Ahmed','student@mindspire.com','STD001','10','A','RFID-001',95.5,'paid','101',true,'Khan Sahab','+92 300 1234567','active',$1)`,
+        [studentUserId]
       );
       console.log('Seeded demo student: student@mindspire.com');
     } else {
+      // Link existing demo student to user_id if missing
+      const { rows: u } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['student@mindspire.com']);
+      if (u[0]) await client.query('UPDATE students SET user_id = COALESCE(user_id, $1) WHERE email = $2', [u[0].id, 'student@mindspire.com']);
       console.log('Demo student already exists, skipping.');
     }
 
@@ -123,11 +135,13 @@ async function seed() {
     for (const t of demoTeachers) {
       const { rows: existing } = await client.query('SELECT id FROM teachers WHERE email = $1', [t.email]);
       if (!existing.length) {
+        const { rows: tu } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [t.email]);
+        const linkedUserId = tu[0]?.id || null;
         const insertRes = await client.query(
           `INSERT INTO teachers (
             name, email, employee_id, department, designation,
-            subjects, classes, base_salary
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            subjects, classes, base_salary, user_id
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
           [
             t.name,
             t.email,
@@ -137,10 +151,14 @@ async function seed() {
             JSON.stringify(t.subjects),
             JSON.stringify(t.classes),
             t.baseSalary,
+            linkedUserId,
           ]
         );
         console.log('Seeded teacher:', t.email);
       } else {
+        // Link existing teacher to user if not linked
+        const { rows: tu } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [t.email]);
+        if (tu[0]) await client.query('UPDATE teachers SET user_id = COALESCE(user_id, $1) WHERE email = $2', [tu[0].id, t.email]);
         console.log('Teacher already exists:', t.email);
       }
     }

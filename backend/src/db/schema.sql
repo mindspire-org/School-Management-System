@@ -13,6 +13,20 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users
   ADD CONSTRAINT users_role_check CHECK (role IN ('owner','admin','teacher','student','driver','parent'));
 
+-- Username-based login support and nullable email for non-email users
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key'
+  ) THEN
+    ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);
+  END IF;
+END $$;
+
+-- Allow NULL email (students/drivers may not have emails)
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+
 -- Students
 CREATE TABLE IF NOT EXISTS students (
   id SERIAL PRIMARY KEY,
@@ -47,6 +61,19 @@ ALTER TABLE students
 
 ALTER TABLE students
   ADD CONSTRAINT students_fee_status_check CHECK (fee_status IN ('paid','pending','in_progress','overdue'));
+
+-- Link students to users table for per-user authentication
+ALTER TABLE students
+  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'students_user_id_key'
+  ) THEN
+    ALTER TABLE students ADD CONSTRAINT students_user_id_key UNIQUE (user_id);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
 
 CREATE TABLE IF NOT EXISTS teachers (
   id SERIAL PRIMARY KEY,
@@ -97,6 +124,9 @@ CREATE TABLE IF NOT EXISTS teachers (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Allow NULL emails for teachers to support username-only accounts
+ALTER TABLE teachers ALTER COLUMN email DROP NOT NULL;
+
 -- Backfill columns for existing deployments
 ALTER TABLE teachers
   ADD COLUMN IF NOT EXISTS qualification TEXT,
@@ -137,6 +167,19 @@ ALTER TABLE teachers
   ADD COLUMN IF NOT EXISTS iban TEXT,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW();
+
+-- Link teachers to users table for per-user authentication
+ALTER TABLE teachers
+  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'teachers_user_id_key'
+  ) THEN
+    ALTER TABLE teachers ADD CONSTRAINT teachers_user_id_key UNIQUE (user_id);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_teachers_user_id ON teachers(user_id);
 
 UPDATE teachers SET employee_id = CONCAT('T-', id) WHERE employee_id IS NULL;
 
@@ -777,6 +820,19 @@ ALTER TABLE drivers
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
+-- Link drivers to users table for per-user authentication
+ALTER TABLE drivers
+  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'drivers_user_id_key'
+  ) THEN
+    ALTER TABLE drivers ADD CONSTRAINT drivers_user_id_key UNIQUE (user_id);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_drivers_user_id ON drivers(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 CREATE INDEX IF NOT EXISTS idx_drivers_bus ON drivers(bus_id);
 
@@ -935,3 +991,28 @@ FROM finance_payments fp
 WHERE NOT EXISTS (
   SELECT 1 FROM finance_receipts fr WHERE fr.payment_id = fp.id
 );
+
+-- ========================================
+-- EXPENSES (Operational)
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id SERIAL PRIMARY KEY,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  category TEXT NOT NULL,
+  vendor TEXT,
+  description TEXT,
+  amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved','Paid','Rejected')),
+  receipt TEXT,
+  note TEXT,
+  logs JSONB DEFAULT '[]'::jsonb,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status);
+

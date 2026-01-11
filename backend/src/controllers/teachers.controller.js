@@ -1,4 +1,6 @@
 import * as teachers from '../services/teachers.service.js';
+import bcrypt from 'bcryptjs';
+import * as authSvc from '../services/auth.service.js';
 
 const coerceString = (value) => {
   if (value === undefined) return undefined;
@@ -144,6 +146,11 @@ const normalizeTeacherPayload = (raw = {}, { partial = false } = {}) => {
 
 export const list = async (req, res, next) => {
   try {
+    // If a teacher is logged in, only return their own record
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      return res.json({ rows: self ? [self] : [], total: self ? 1 : 0, page: 1, pageSize: 1 });
+    }
     const { page = 1, pageSize = 50, q } = req.query;
     const result = await teachers.list({ page: Number(page), pageSize: Number(pageSize), q });
     return res.json(result);
@@ -154,6 +161,10 @@ export const list = async (req, res, next) => {
 
 export const getById = async (req, res, next) => {
   try {
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const teacher = await teachers.getById(Number(req.params.id));
     if (!teacher) return res.status(404).json({ message: 'Teacher not found' });
     return res.json(teacher);
@@ -164,6 +175,10 @@ export const getById = async (req, res, next) => {
 
 export const getSchedule = async (req, res, next) => {
   try {
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const schedule = await teachers.getSchedule(Number(req.params.id));
     return res.json(schedule);
   } catch (e) {
@@ -174,8 +189,25 @@ export const getSchedule = async (req, res, next) => {
 export const create = async (req, res, next) => {
   try {
     const payload = normalizeTeacherPayload(req.body, { partial: false });
+    let credentials = null;
+    // Auto-provision user account if not already linked
+    if (!payload.userId) {
+      let user = null;
+      if (payload.email) {
+        try { user = await authSvc.findUserByEmail(payload.email); } catch (_) { user = null; }
+      }
+      if (!user) {
+        const username = await authSvc.generateUniqueUsername({ base: payload.name || payload.email || 'teacher', role: 'teacher' });
+        const password = authSvc.generateRandomPassword(12);
+        const passwordHash = await bcrypt.hash(password, 10);
+        user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'teacher', name: payload.name || username });
+        credentials = { username, password };
+      }
+      if (user) payload.userId = user.id;
+    }
     const created = await teachers.create(payload);
-    return res.status(201).json(created);
+    const resp = credentials ? { ...created, credentials } : created;
+    return res.status(201).json(resp);
   } catch (e) {
     next(e);
   }
@@ -204,7 +236,11 @@ export const remove = async (req, res, next) => {
 
 export const listSchedules = async (req, res, next) => {
   try {
-    const { teacherId, day, dayOfWeek } = req.query;
+    let { teacherId, day, dayOfWeek } = req.query;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
     const schedules = await teachers.listSchedules({
       teacherId: teacherId ? Number(teacherId) : undefined,
       dayOfWeek: day ?? dayOfWeek,
@@ -257,7 +293,12 @@ export const deleteScheduleSlot = async (req, res, next) => {
 
 export const listAttendance = async (req, res, next) => {
   try {
-    const { date, teacherId } = req.query;
+    const { date } = req.query;
+    let { teacherId } = req.query;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
     const records = await teachers.getAttendanceByDate({ date, teacherId: teacherId ? Number(teacherId) : undefined });
     return res.json({ date, records });
   } catch (e) {
@@ -289,10 +330,15 @@ export const saveAttendance = async (req, res, next) => {
 
 export const listPayrolls = async (req, res, next) => {
   try {
+    let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
     const payrolls = await teachers.listPayrolls({
       month: req.query.month,
       status: req.query.status,
-      teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
+      teacherId,
     });
     return res.json(payrolls);
   } catch (e) {
@@ -335,9 +381,14 @@ export const updatePayroll = async (req, res, next) => {
 
 export const listPerformanceReviews = async (req, res, next) => {
   try {
+    let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
     const reviews = await teachers.listPerformanceReviews({
       periodType: req.query.periodType || req.query.period,
-      teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
+      teacherId,
     });
     return res.json(reviews);
   } catch (e) {

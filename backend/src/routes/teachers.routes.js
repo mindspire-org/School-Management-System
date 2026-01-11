@@ -55,7 +55,7 @@ const sharedOptionalValidators = [
 
 const createTeacherValidators = [
   body('name').isString().trim().notEmpty(),
-  body('email').isEmail().normalizeEmail(),
+  body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
   body('phone').isString().trim().notEmpty(),
   body('qualification').isString().trim().notEmpty(),
   body('employmentType').isIn(['fullTime', 'partTime']),

@@ -85,7 +85,7 @@ export const getSMSRoutes = () => {
 
     // Parents Section
     {
-      name: 'Parent Portal',
+      name: 'Parents',
       layout: '/admin',
       icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
       collapse: true,

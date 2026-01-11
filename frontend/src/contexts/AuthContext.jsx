@@ -151,8 +151,12 @@ export const AuthProvider = ({ children }) => {
         token = 'demo-token-' + Date.now();
         userData = { email, role: roleFromEmail, name: roleFromEmail.toUpperCase(), id: roleFromEmail + '-001' };
       } else {
-        // Real backend login
-        const res = await authApi.login({ email, password, ownerKey });
+        // Real backend login; detect if identifier is username vs email/phone
+        const id = String(email).trim();
+        const emailRegex = /.+@.+\..+/;
+        const phoneRegex = /^\+?\d{10,15}$|^0\d{10}$|^3\d{9}$/;
+        const looksEmailOrPhone = emailRegex.test(id) || phoneRegex.test(id);
+        const res = await authApi.login({ email: looksEmailOrPhone ? id : undefined, username: looksEmailOrPhone ? undefined : id, password, ownerKey });
         token = res?.token || res?.accessToken;
         userData = res?.user || null;
         if (!token || !userData) throw new Error('Invalid auth response');

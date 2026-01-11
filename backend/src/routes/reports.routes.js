@@ -11,7 +11,7 @@ router.get('/overview', authenticate, authorize('admin', 'owner'), controller.ov
 router.get(
   '/attendance-summary',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'teacher'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),
@@ -44,7 +44,7 @@ router.get(
 router.get(
   '/attendance-by-class',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'teacher'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),
@@ -59,7 +59,7 @@ router.get(
 router.get(
   '/attendance-heatmap',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'teacher'),
   [
     query('fromDate').optional().isISO8601(),
     query('toDate').optional().isISO8601(),

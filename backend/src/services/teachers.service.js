@@ -189,6 +189,7 @@ const columnMap = {
   accountNumber: 'account_number',
   iban: 'iban',
   avatar: 'avatar',
+  userId: 'user_id',
 };
 
 const jsonColumns = new Set(['subjects', 'classes']);
@@ -379,6 +380,11 @@ export const getById = async (id) => {
   return rows[0] ? mapTeacherRow(rows[0]) : null;
 };
 
+export const getByUserId = async (userId) => {
+  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers WHERE user_id = $1`, [userId]);
+  return rows[0] ? mapTeacherRow(rows[0]) : null;
+};
+
 export const getSchedule = async (id) => {
   const { rows } = await query(
     `SELECT ${scheduleSelect} FROM teacher_schedules ts
@@ -421,6 +427,8 @@ export const create = async (payload = {}) => {
     'currency', 'payFrequency', 'paymentMethod', 'bankName', 'accountNumber', 'iban',
     // Media
     'avatar',
+    // Link to users
+    'userId',
   ];
 
   const columns = insertFields.map((field) => columnMap[field]);

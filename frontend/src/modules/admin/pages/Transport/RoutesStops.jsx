@@ -57,7 +57,7 @@ export default function RoutesStops() {
   const editDisc = useDisclosure();
   const stopDisc = useDisclosure();
   const [activeRoute, setActiveRoute] = useState(null);
-  const [routeForm, setRouteForm] = useState({ id: '', name: '' });
+  const [routeForm, setRouteForm] = useState({ id: '', name: '', start: '', end: '' });
   const [stopForm, setStopForm] = useState({ routeId: '', stopId: '', name: '' });
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
 
@@ -66,7 +66,7 @@ export default function RoutesStops() {
       try {
         const res = await transportApi.listRoutes();
         const items = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
-        setRoutes(items.map(r => ({ id: r.id, name: r.name, buses: Number(r.busesCount || 0), stops: Number(r.stopsCount || 0), start: '', end: '' })));
+        setRoutes(items.map(r => ({ id: r.id, name: r.name, buses: Number(r.busesCount || 0), stops: Number(r.stopsCount || 0), start: r.start || '', end: r.end || '' })));
         if (items[0]) setSelected(String(items[0].id));
       } catch (e) {
         toast({ title: 'Failed to load routes', status: 'error' });
@@ -107,7 +107,7 @@ export default function RoutesStops() {
           <Text color={textColorSecondary}>Configure routes and their designated stops</Text>
         </Box>
         <ButtonGroup>
-          <Button leftIcon={<MdAdd />} colorScheme='blue' onClick={() => { setRouteForm({ id: '', name: '' }); editDisc.onOpen(); }}>Add Route</Button>
+          <Button leftIcon={<MdAdd />} colorScheme='blue' onClick={() => { setRouteForm({ id: '', name: '', start: '', end: '' }); editDisc.onOpen(); }}>Add Route</Button>
           <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export CSV</Button>
           <Button leftIcon={<MdPictureAsPdf />} colorScheme='blue'>Export PDF</Button>
         </ButtonGroup>
@@ -167,7 +167,7 @@ export default function RoutesStops() {
                           <Portal>
                             <MenuList zIndex={1500}>
                               <MenuItem onClick={() => { setActiveRoute(r); viewDisc.onOpen(); }}>View Details</MenuItem>
-                              <MenuItem onClick={() => { setRouteForm({ id: r.id, name: r.name }); editDisc.onOpen(); }}>Edit</MenuItem>
+                              <MenuItem onClick={() => { setRouteForm({ id: r.id, name: r.name, start: r.start || '', end: r.end || '' }); editDisc.onOpen(); }}>Edit</MenuItem>
                               <MenuItem color='red.500' onClick={async () => {
                                 if (!window.confirm('Delete this route?')) return;
                                 try {
@@ -264,6 +264,14 @@ export default function RoutesStops() {
               <FormLabel>Name</FormLabel>
               <Input value={routeForm.name} onChange={(e) => setRouteForm(f => ({ ...f, name: e.target.value }))} />
             </FormControl>
+            <FormControl mb={3}>
+              <FormLabel>Start</FormLabel>
+              <Input value={routeForm.start} onChange={(e) => setRouteForm(f => ({ ...f, start: e.target.value }))} />
+            </FormControl>
+            <FormControl>
+              <FormLabel>End</FormLabel>
+              <Input value={routeForm.end} onChange={(e) => setRouteForm(f => ({ ...f, end: e.target.value }))} />
+            </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
@@ -271,11 +279,11 @@ export default function RoutesStops() {
               try {
                 const exists = routes.find(r => String(r.id) === String(routeForm.id));
                 if (exists) {
-                  await transportApi.updateRoute(routeForm.id, { name: routeForm.name });
-                  setRoutes(prev => prev.map(r => String(r.id) === String(routeForm.id) ? { ...r, name: routeForm.name } : r));
+                  await transportApi.updateRoute(routeForm.id, { name: routeForm.name, start: routeForm.start, end: routeForm.end });
+                  setRoutes(prev => prev.map(r => String(r.id) === String(routeForm.id) ? { ...r, name: routeForm.name, start: routeForm.start, end: routeForm.end } : r));
                 } else {
-                  const created = await transportApi.createRoute({ name: routeForm.name });
-                  setRoutes(prev => [...prev, { id: created.id, name: created.name, buses: 0, stops: 0, start: '', end: '' }]);
+                  const created = await transportApi.createRoute({ name: routeForm.name, start: routeForm.start, end: routeForm.end });
+                  setRoutes(prev => [...prev, { id: created.id, name: created.name, buses: 0, stops: 0, start: created.start || '', end: created.end || '' }]);
                   setSelected(String(created.id));
                   setStops([]);
                 }

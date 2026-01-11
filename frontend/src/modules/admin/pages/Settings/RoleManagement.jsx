@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input, InputGroup, InputLeftElement, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, Switch, CheckboxGroup, Checkbox, Stack } from '@chakra-ui/react';
+import { Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input, InputGroup, InputLeftElement, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, Switch, CheckboxGroup, Checkbox, Stack, useToast } from '@chakra-ui/react';
 import { MdAdminPanelSettings, MdGroup, MdSecurity, MdFileDownload, MdAdd, MdRefresh, MdSearch } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
@@ -24,6 +24,7 @@ export default function RoleManagement() {
   const createDisc = useDisclosure();
   const editDisc = useDisclosure();
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
+  const toast = useToast();
 
   useEffect(() => {
     const load = async () => {
@@ -97,7 +98,22 @@ export default function RoleManagement() {
       await rbacApi.setModules(selectedRole, payload);
       const mods = await rbacApi.getModules();
       setModuleAssignments(mods?.assignments || {});
-    } catch (_) { }
+      toast({
+        title: 'Changes saved',
+        description: 'Module access has been updated.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (_) {
+      toast({
+        title: 'Save failed',
+        description: 'Unable to save module access. Please try again.',
+        status: 'error',
+        duration: 4000,
+        isClosable: true,
+      });
+    }
   };
 
   const stats = useMemo(() => ({ roles: roles.length, users: roles.reduce((s, r) => s + (r.users || 0), 0), perms: Object.values(permAssignments || {}).reduce((s, arr) => s + (Array.isArray(arr) ? arr.length : 0), 0) }), [roles, permAssignments]);

@@ -40,10 +40,25 @@ export const deleteBus = async (req, res, next) => {
 
 // Routes
 export const listRoutes = async (req, res, next) => {
-  try { res.json({ items: await service.listRoutes() }); } catch (e) { next(e); }
+  try {
+    if (req.user?.role === 'driver') {
+      const items = await service.listRoutesForDriver(req.user.id);
+      return res.json({ items });
+    }
+    res.json({ items: await service.listRoutes() });
+  } catch (e) { next(e); }
 };
 export const getRouteById = async (req, res, next) => {
-  try { const row = await service.getRouteById(req.params.id); if (!row) return res.status(404).json({ message: 'Route not found' }); res.json(row); } catch (e) { next(e); }
+  try {
+    if (req.user?.role === 'driver') {
+      const mine = await service.listRoutesForDriver(req.user.id);
+      const owns = mine.some((r) => String(r.id) === String(req.params.id));
+      if (!owns) return res.status(403).json({ message: 'Forbidden' });
+    }
+    const row = await service.getRouteById(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Route not found' });
+    res.json(row);
+  } catch (e) { next(e); }
 };
 export const createRoute = async (req, res, next) => {
   try { const row = await service.createRoute(req.body); res.status(201).json(row); } catch (e) { next(e); }

@@ -1,7 +1,9 @@
 import { http } from '../http';
 
-export const login = async ({ email, password, ownerKey }) => {
-  const payload = { email, password };
+export const login = async ({ email, username, password, ownerKey }) => {
+  const payload = { password };
+  if (username) payload.username = username;
+  else payload.email = email;
   if (ownerKey) payload.ownerKey = ownerKey;
   return http.post('/auth/login', payload);
 };
@@ -23,9 +25,12 @@ export const refresh = async () => {
 };
 
 // Admin only: list all users with roles
-export const getUsers = async () => {
-  return http.get('/auth/users');
+export const getUsers = async (params) => {
+  return http.get('/auth/users', { params });
 };
+
+export const updateUser = (id, data) => http.put(`/auth/users/${id}`, data);
+export const deleteUser = (id) => http.delete(`/auth/users/${id}`);
 
 export const profile = async () => {
   return http.get('/auth/profile');

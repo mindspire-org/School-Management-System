@@ -57,3 +57,59 @@ export const submitWork = async (assignmentId, studentId, { content }) => {
   );
   return rows[0];
 };
+
+// List assignments created by or assigned to a specific teacher
+export const listByTeacher = async (teacherId, { page = 1, pageSize = 50, q }) => {
+  const offset = (page - 1) * pageSize;
+  const params = [teacherId];
+  const where = ['(a.created_by = $1 OR EXISTS (SELECT 1 FROM teachers t WHERE t.id = $1 AND (a.class = ANY(t.classes) OR a.class IS NULL)))'];
+
+  if (q) {
+    params.push(`%${q.toLowerCase()}%`);
+    where.push(`(LOWER(a.title) LIKE $${params.length} OR LOWER(a.description) LIKE $${params.length})`);
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM assignments a ${whereSql}`, params);
+  const total = countRows[0]?.count || 0;
+
+  const { rows } = await query(
+    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy" 
+     FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, pageSize, offset]
+  );
+  return { rows, total, page, pageSize };
+};
+
+// List assignments for a specific student's class/section
+export const listByStudent = async (student, { page = 1, pageSize = 50, q }) => {
+  const offset = (page - 1) * pageSize;
+  const params = [];
+  const where = [];
+
+  if (student.class) {
+    params.push(student.class);
+    where.push(`(a.class = $${params.length} OR a.class IS NULL)`);
+  }
+  if (student.section) {
+    params.push(student.section);
+    where.push(`(a.section = $${params.length} OR a.section IS NULL)`);
+  }
+
+  if (q) {
+    params.push(`%${q.toLowerCase()}%`);
+    where.push(`(LOWER(a.title) LIKE $${params.length} OR LOWER(a.description) LIKE $${params.length})`);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM assignments a ${whereSql}`, params);
+  const total = countRows[0]?.count || 0;
+
+  const { rows } = await query(
+    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy" 
+     FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, pageSize, offset]
+  );
+  return { rows, total, page, pageSize };
+};

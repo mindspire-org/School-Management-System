@@ -2,13 +2,13 @@ import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import * as authService from '../services/auth.service.js';
-import { ensureParentsSchema } from '../db/autoMigrate.js';
+import { ensureParentsSchema, ensureAuthSchema } from '../db/autoMigrate.js';
 import * as parentsSvc from '../services/parents.service.js';
 import * as settingsSvc from '../services/settings.service.js';
 
 export const login = async (req, res, next) => {
   try {
-    const { email, password, ownerKey } = req.body;
+    const { email, username, password, ownerKey } = req.body;
     const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
     const ownerKeyMin = Number(process.env.OWNER_KEY_MIN_LENGTH || 30);
 
@@ -23,7 +23,7 @@ export const login = async (req, res, next) => {
       const allowedRow = await settingsSvc.getByKey('licensing.allowed_modules');
       allowedModules = JSON.parse(allowedRow?.value || '[]');
     } catch (_) { allowedModules = []; }
-    if (force) { allowedModules = ['Dashboard','Settings','Teachers','Students','Parents','Transport']; }
+    if (force) { allowedModules = ['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport']; }
     const allowedRoles = new Set();
     if (Array.isArray(allowedModules)) {
       if (allowedModules.includes('Teachers')) allowedRoles.add('teacher');
@@ -32,6 +32,9 @@ export const login = async (req, res, next) => {
       if (allowedModules.includes('Transport')) allowedRoles.add('driver');
       if (allowedModules.includes('Dashboard') || allowedModules.includes('Settings')) allowedRoles.add('admin');
     }
+
+    // Ensure auth schema changes are applied
+    try { await ensureAuthSchema(); } catch (_) { }
 
     // Owner-first: verify email/password first, then require Owner Key as step-2
     if (String(email).toLowerCase().trim() === String(ownerEmail).toLowerCase().trim()) {
@@ -49,7 +52,7 @@ export const login = async (req, res, next) => {
             await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
             ownerUser = await authService.findUserByEmail(ownerEmail);
             passOk = await bcrypt.compare(password, ownerUser.password_hash || '');
-          } catch (_) {}
+          } catch (_) { }
           if (!passOk && !force) return res.status(401).json({ message: 'Invalid credentials' });
         }
 
@@ -67,8 +70,8 @@ export const login = async (req, res, next) => {
             // Auto-complete licensing on first-time activation
             try {
               await settingsSvc.setKey('licensing.configured', 'true');
-              await settingsSvc.setKey('licensing.allowed_modules', JSON.stringify(['Dashboard','Settings','Teachers','Students','Parents','Transport']));
-            } catch (_) {}
+              await settingsSvc.setKey('licensing.allowed_modules', JSON.stringify(['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport']));
+            } catch (_) { }
           } else {
             // Subsequent owner logins: ownerKey is optional; if provided, verify
             if (ownerKey) {
@@ -98,8 +101,8 @@ export const login = async (req, res, next) => {
       const id = String(email || '').trim();
       const looksLikePhone = /^\+?\d{10,15}$/.test(id) || /^0\d{10}$/.test(id) || /^3\d{9}$/.test(id);
       if (looksLikePhone) {
-        try { await ensureParentsSchema(); } catch (_) {}
-        try { await parentsSvc.backfillFromStudents(); } catch (_) {}
+        try { await ensureParentsSchema(); } catch (_) { }
+        try { await parentsSvc.backfillFromStudents(); } catch (_) { }
         try {
           const ensured = await authService.upsertParentUserForPhone({ phone: id, password, name: 'Parent' });
           if (ensured) {
@@ -111,11 +114,26 @@ export const login = async (req, res, next) => {
             const refreshToken = signRefreshToken({ id: ensured.id });
             return res.json({ token, refreshToken, user: userPayload });
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
     // Accept either email or WhatsApp number in the "email" field for parents
-    let user = await authService.findUserByEmail(email);
+    let user = null;
+    if (email) {
+      user = await authService.findUserByEmail(email);
+    }
+    if (!user && username) {
+      user = await authService.findUserByUsername(username);
+    }
+    // If still not found and an email-like field was actually a username, try it
+    if (!user && email) {
+      const s = String(email).trim();
+      const looksLikeEmail = /.+@.+\..+/.test(s);
+      const looksLikePhone = /^\+?\d{10,15}$/.test(s) || /^0\d{10}$/.test(s) || /^3\d{9}$/.test(s);
+      if (!looksLikeEmail && !looksLikePhone) {
+        user = await authService.findUserByUsername(s);
+      }
+    }
     if (!user) {
       // Fallback: if this is the configured Owner email, ensure it exists now
       const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
@@ -123,15 +141,15 @@ export const login = async (req, res, next) => {
         try {
           await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
           user = await authService.findUserByEmail(ownerEmail);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // If identifier looks like a phone, try parent auto-provisioning by phone
       const id = String(email || '').trim();
       const looksLikePhone = /^\+?\d{10,15}$/.test(id) || /^0\d{10}$/.test(id) || /^3\d{9}$/.test(id);
       if (looksLikePhone) {
-        try { await ensureParentsSchema(); } catch (_) {}
-        try { await parentsSvc.backfillFromStudents(); } catch (_) {}
+        try { await ensureParentsSchema(); } catch (_) { }
+        try { await parentsSvc.backfillFromStudents(); } catch (_) { }
         const parent = await authService.findParentByPhone(id);
         if (parent) {
           const created = await authService.ensureParentUserForPhone({ phone: id, password, name: parent.primary_name || 'Parent' });
@@ -154,7 +172,7 @@ export const login = async (req, res, next) => {
             user = refreshed;
             ok = await bcrypt.compare(password, user.password_hash || '');
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
     if (!ok) {
@@ -168,7 +186,7 @@ export const login = async (req, res, next) => {
             user = refreshed;
             // proceed without failing
           }
-        } catch (_) {}
+        } catch (_) { }
       } else {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -188,9 +206,109 @@ export const login = async (req, res, next) => {
   }
 };
 
+// Get all users with pagination and filtering
+export const getAllUsers = async (req, res, next) => {
+  try {
+    const { page = 1, pageSize = 50, role, search } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    const where = [];
+    const params = [];
+
+    if (role && role !== 'all') {
+      params.push(role);
+      where.push(`role = $${params.length}`);
+    }
+
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      where.push(`(LOWER(name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length} OR LOWER(username) LIKE $${params.length})`);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    // Get total count
+    const { rows: countRows } = await query(
+      `SELECT COUNT(*)::int AS count FROM users ${whereSql}`,
+      params
+    );
+    const total = countRows[0]?.count || 0;
+
+    // Get users
+    const { rows } = await query(
+      `SELECT id, username, email, role, name, created_at AS "createdAt"
+       FROM users ${whereSql}
+       ORDER BY created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset]
+    );
+
+    return res.json({ rows, total, page: Number(page), pageSize: Number(pageSize) });
+  } catch (e) {
+    next(e);
+  }
+};
+
+// Update user
+export const updateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, email, role, password } = req.body;
+
+    // Prevent updating self role to avoid lockout or owner
+    if (req.user.id === Number(id) && role && role !== req.user.role) {
+      return res.status(400).json({ message: 'Cannot change your own role' });
+    }
+
+    const updates = { name, email, role };
+    if (password && password.length >= 6) {
+      updates.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    const updated = await authService.updateUser(id, updates);
+    if (!updated) return res.status(404).json({ message: 'User not found' });
+
+    return res.json(updated);
+  } catch (e) {
+    next(e);
+  }
+};
+
+// Delete user
+export const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Prevent deleting self or owner
+    if (req.user.id === Number(id)) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+    const user = await authService.findUserById(id);
+    if (user && user.role === 'owner') {
+      return res.status(403).json({ message: 'Cannot delete the Owner account' });
+    }
+
+    const deleted = await authService.deleteUser(id);
+    if (!deleted) return res.status(404).json({ message: 'User not found' });
+
+    return res.json({ message: 'User deleted successfully' });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const register = async (req, res, next) => {
   try {
     const { email, password, name, role } = req.body;
+
+    // Validate role is allowed (student, teacher, driver, parent only)
+    const allowedRoles = ['student', 'teacher', 'driver', 'parent'];
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({
+        message: `Invalid role. Allowed roles are: ${allowedRoles.join(', ')}`,
+        allowedRoles
+      });
+    }
 
     // Enforce single Admin policy: only one admin user may exist
     if (role === 'admin') {
@@ -264,20 +382,10 @@ export const getUserById = async (req, res, next) => {
   }
 };
 
-export const getAllUsers = async (req, res, next) => {
-  try {
-    const users = await authService.listUsers();
-    const mapped = users.map((u) => ({ id: u.id, email: u.email, role: u.role, name: u.name }));
-    return res.json({ users: mapped });
-  } catch (e) {
-    next(e);
-  }
-};
-
 export const backfillUsers = async (req, res, next) => {
   try {
     const { role } = req.body;
-    const allowed = ['student','teacher','driver'];
+    const allowed = ['student', 'teacher', 'driver'];
     if (!allowed.includes(role)) return res.status(400).json({ message: 'Invalid role' });
     const result = await authService.backfillUsersFromDomain(role);
     return res.json(result);
@@ -298,7 +406,7 @@ export const status = async (req, res, next) => {
       allowedModules = JSON.parse(allowedRow?.value || '[]');
     } catch (_) { allowedModules = []; }
     if (force && (!Array.isArray(allowedModules) || allowedModules.length === 0)) {
-      allowedModules = ['Dashboard','Settings','Teachers','Students','Parents','Transport'];
+      allowedModules = ['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport'];
     }
     const { rows: adminRows } = await query('SELECT 1 FROM users WHERE role = $1 LIMIT 1', ['admin']);
     const adminExists = adminRows.length > 0;

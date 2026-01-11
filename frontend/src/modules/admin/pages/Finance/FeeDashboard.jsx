@@ -30,17 +30,19 @@ export default function FeeDashboard() {
   const loading = usersLoading || statsLoading || analyticsLoading;
 
   const userTypeFromRoleFilter = useMemo(() => {
-    if (roleFilter === 'students') return 'student';
-    if (roleFilter === 'teachers') return 'teacher';
-    if (roleFilter === 'drivers') return 'driver';
-    return undefined;
+    if (roleFilter === 'student') return 'student';
+    if (roleFilter === 'teacher') return 'teacher';
+    if (roleFilter === 'driver') return 'driver';
+    return undefined; // 'all'
   }, [roleFilter]);
 
   useEffect(() => {
-    updateStatsParams({ userType: userTypeFromRoleFilter });
+    // We do NOT update stats params here so it always fetches GLOBAL stats
+    // updateStatsParams({ userType: userTypeFromRoleFilter }); 
+
     updateAnalyticsParams({ userType: userTypeFromRoleFilter, days: 14 });
     updateInvoiceParams({ userType: userTypeFromRoleFilter, page: 1, pageSize: 5 });
-  }, [updateAnalyticsParams, updateInvoiceParams, updateStatsParams, userTypeFromRoleFilter]);
+  }, [updateAnalyticsParams, updateInvoiceParams, userTypeFromRoleFilter]); // Removed updateStatsParams dependency
 
   // Safe counts with defaults
   const safeCounts = counts && typeof counts === 'object'
@@ -58,6 +60,7 @@ export default function FeeDashboard() {
     const defaultStats = { studentFees: 0, teacherPayroll: 0, driverPayroll: 0, total: 0, collected: 0, outstanding: 0, collectionRate: 0 };
     if (!stats) return defaultStats;
 
+    // These are GLOBAL totals because we stopped filtering stats
     const studentFeesTotal = Number(stats.studentFees?.total) || 0;
     const teacherPayrollTotal = Number(stats.teacherPayroll?.total) || 0;
     const driverPayrollTotal = Number(stats.driverPayroll?.total) || 0;
@@ -67,54 +70,43 @@ export default function FeeDashboard() {
     const driverPayrollPaid = Number(stats.driverPayroll?.paid) || 0;
 
     const studentOutstanding = Number(stats.studentFees?.outstanding) || 0;
+    const teacherOutstanding = Number(stats.teacherPayroll?.pending) || 0;
+    const driverOutstanding = Number(stats.driverPayroll?.pending) || 0;
 
-    const totalsByRole = {
-      all: {
-        studentFees: studentFeesTotal,
-        teacherPayroll: teacherPayrollTotal,
-        driverPayroll: driverPayrollTotal,
-        outstanding: studentOutstanding,
-        paidBase: studentFeesPaid,
-        totalBase: studentFeesTotal,
-      },
-      students: {
-        studentFees: studentFeesTotal,
-        teacherPayroll: 0,
-        driverPayroll: 0,
-        outstanding: studentOutstanding,
-        paidBase: studentFeesPaid,
-        totalBase: studentFeesTotal,
-      },
-      teachers: {
-        studentFees: 0,
-        teacherPayroll: teacherPayrollTotal,
-        driverPayroll: 0,
-        outstanding: Number(stats.teacherPayroll?.pending) || 0,
-        paidBase: teacherPayrollPaid,
-        totalBase: teacherPayrollTotal,
-      },
-      drivers: {
-        studentFees: 0,
-        teacherPayroll: 0,
-        driverPayroll: driverPayrollTotal,
-        outstanding: Number(stats.driverPayroll?.pending) || 0,
-        paidBase: driverPayrollPaid,
-        totalBase: driverPayrollTotal,
-      },
-    };
+    // Calculate context-specific metrics based on filter
+    let outstanding = 0;
+    let paidBase = 0;
+    let totalBase = 0;
 
-    const block = totalsByRole[roleFilter] || totalsByRole.all;
-    const total = block.studentFees + block.teacherPayroll + block.driverPayroll;
-    const collectionRate = block.totalBase > 0 ? Math.round((block.paidBase / block.totalBase) * 100) : 0;
+    if (roleFilter === 'all') {
+      outstanding = studentOutstanding + teacherOutstanding + driverOutstanding;
+      paidBase = studentFeesPaid + teacherPayrollPaid + driverPayrollPaid;
+      totalBase = studentFeesTotal + teacherPayrollTotal + driverPayrollTotal;
+    } else if (roleFilter === 'student') {
+      outstanding = studentOutstanding;
+      paidBase = studentFeesPaid;
+      totalBase = studentFeesTotal;
+    } else if (roleFilter === 'teacher') {
+      outstanding = teacherOutstanding;
+      paidBase = teacherPayrollPaid;
+      totalBase = teacherPayrollTotal;
+    } else if (roleFilter === 'driver') {
+      outstanding = driverOutstanding;
+      paidBase = driverPayrollPaid;
+      totalBase = driverPayrollTotal;
+    }
+
+    const total = studentFeesTotal + teacherPayrollTotal + driverPayrollTotal;
+    const collectionRate = totalBase > 0 ? Math.round((paidBase / totalBase) * 100) : 0;
 
     return {
-      studentFees: block.studentFees,
-      teacherPayroll: block.teacherPayroll,
-      driverPayroll: block.driverPayroll,
+      studentFees: studentFeesTotal,     // Always Global
+      teacherPayroll: teacherPayrollTotal, // Always Global
+      driverPayroll: driverPayrollTotal,   // Always Global
       total,
       collected: Number(collections.last30Days) || 0,
-      outstanding: Number(block.outstanding) || 0,
-      collectionRate,
+      outstanding: outstanding,          // Filtered
+      collectionRate,                    // Filtered
     };
   }, [collections.last30Days, roleFilter, stats]);
 
@@ -197,25 +189,31 @@ export default function FeeDashboard() {
       </Card>
 
       {/* Role-based Statistics */}
-      <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <StatCard
-          title="Total Student Fees"
-          value={`Rs. ${roleStats.studentFees.toLocaleString()}`}
-          icon={FaUserGraduate}
-          colorScheme="blue"
-        />
-        <StatCard
-          title="Total Teacher Payroll"
-          value={`Rs. ${roleStats.teacherPayroll.toLocaleString()}`}
-          icon={FaChalkboardTeacher}
-          colorScheme="green"
-        />
-        <StatCard
-          title="Total Driver Payroll"
-          value={`Rs. ${roleStats.driverPayroll.toLocaleString()}`}
-          icon={FaTruck}
-          colorScheme="red"
-        />
+      <SimpleGrid columns={{ base: 1, md: roleFilter === 'all' ? 4 : 2 }} spacing={5} mb={5}>
+        {(roleFilter === 'all' || roleFilter === 'student') && (
+          <StatCard
+            title="Total Student Fees"
+            value={`Rs. ${roleStats.studentFees.toLocaleString()}`}
+            icon={FaUserGraduate}
+            colorScheme="blue"
+          />
+        )}
+        {(roleFilter === 'all' || roleFilter === 'teacher') && (
+          <StatCard
+            title="Total Teacher Payroll"
+            value={`Rs. ${roleStats.teacherPayroll.toLocaleString()}`}
+            icon={FaChalkboardTeacher}
+            colorScheme="green"
+          />
+        )}
+        {(roleFilter === 'all' || roleFilter === 'driver') && (
+          <StatCard
+            title="Total Driver Payroll"
+            value={`Rs. ${roleStats.driverPayroll.toLocaleString()}`}
+            icon={FaTruck}
+            colorScheme="red"
+          />
+        )}
         <StatCard
           title="Collection Rate"
           value={`${roleStats.collectionRate}%`}
@@ -252,20 +250,22 @@ export default function FeeDashboard() {
       </SimpleGrid>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
-        <Card p={4}>
-          <Heading size='md' mb={3}>Role-wise Breakdown</Heading>
-          <DonutChart
-            height={chartHeight}
-            series={safeDonutSeries([roleStats.studentFees, roleStats.teacherPayroll, roleStats.driverPayroll])}
-            labels={['Student Fees', 'Teacher Payroll', 'Driver Payroll']}
-            ariaLabel="Role-wise fees and payroll donut chart"
-            options={{
-              colors: [primaryBlue, '#22c55e', '#f59e0b'],
-              legend: { position: legendPosition },
-              tooltip: { y: { formatter: (v) => `Rs. ${Number(v || 0).toLocaleString()}` } },
-            }}
-          />
-        </Card>
+        {roleFilter === 'all' && (
+          <Card p={4}>
+            <Heading size='md' mb={3}>Role-wise Breakdown</Heading>
+            <DonutChart
+              height={chartHeight}
+              series={safeDonutSeries([roleStats.studentFees, roleStats.teacherPayroll, roleStats.driverPayroll])}
+              labels={['Student Fees', 'Teacher Payroll', 'Driver Payroll']}
+              ariaLabel="Role-wise fees and payroll donut chart"
+              options={{
+                colors: [primaryBlue, '#22c55e', '#f59e0b'],
+                legend: { position: legendPosition },
+                tooltip: { y: { formatter: (v) => `Rs. ${Number(v || 0).toLocaleString()}` } },
+              }}
+            />
+          </Card>
+        )}
         <Card p={4}>
           <Heading size='md' mb={3}>Invoice Status</Heading>
           <DonutChart

@@ -1,5 +1,9 @@
 import { query } from '../config/db.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// Roles that can be created by admin/owner (excludes admin and owner for security)
+export const ALLOWED_USER_ROLES = ['student', 'teacher', 'driver', 'parent'];
 
 // Normalize Pakistan WhatsApp numbers to +92 format for consistent login identifiers
 const normalizePkPhone = (raw) => {
@@ -16,17 +20,96 @@ export const findUserByEmail = async (email) => {
   return rows[0] || null;
 };
 
+export const findUserByUsername = async (username) => {
+  const { rows } = await query('SELECT id, username, email, password_hash, role, name FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))', [username]);
+  return rows[0] || null;
+};
+
 export const findUserById = async (id) => {
   const { rows } = await query('SELECT id, email, role, name FROM users WHERE id = $1', [id]);
   return rows[0] || null;
 };
 
+// Create new user (admin only)
 export const createUser = async ({ email, passwordHash, role = 'student', name }) => {
+  // Validate role is in allowed list
+  if (!ALLOWED_USER_ROLES.includes(role)) {
+    throw new Error(`Invalid role: ${role}. Allowed roles are: ${ALLOWED_USER_ROLES.join(', ')}`);
+  }
   const { rows } = await query(
     'INSERT INTO users (email, password_hash, role, name) VALUES ($1,$2,$3,$4) RETURNING id, email, role, name',
     [email, passwordHash, role, name || email]
   );
   return rows[0];
+};
+
+export const updateUser = async (id, updates) => {
+  const { name, email, role, passwordHash, active } = updates;
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
+  if (email !== undefined) { fields.push(`email = $${idx++}`); values.push(email); }
+  if (role !== undefined) {
+    if (!ALLOWED_USER_ROLES.includes(role)) throw new Error(`Invalid role`);
+    fields.push(`role = $${idx++}`); values.push(role);
+  }
+  if (passwordHash !== undefined) { fields.push(`password_hash = $${idx++}`); values.push(passwordHash); }
+  // if (active !== undefined) { fields.push(`active = $${idx++}`); values.push(active); } // Active status column not in users table yet, skipping for now unless added
+
+  if (fields.length === 0) return null;
+
+  values.push(id);
+  const { rows } = await query(
+    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, email, role, name`,
+    values
+  );
+  return rows[0];
+};
+
+export const deleteUser = async (id) => {
+  const { rowCount } = await query('DELETE FROM users WHERE id = $1', [id]);
+  return rowCount > 0;
+};
+
+export const createUserWith = async ({ email = null, username = null, passwordHash, role = 'student', name }) => {
+  // Validate role is in allowed list
+  if (!ALLOWED_USER_ROLES.includes(role)) {
+    throw new Error(`Invalid role: ${role}. Allowed roles are: ${ALLOWED_USER_ROLES.join(', ')}`);
+  }
+  const columns = ['password_hash', 'role', 'name'];
+  const values = [passwordHash, role, name || email || username];
+  if (email !== null && email !== undefined) { columns.unshift('email'); values.unshift(email); }
+  if (username !== null && username !== undefined) { columns.unshift('username'); values.unshift(username); }
+  const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await query(`INSERT INTO users (${columns.join(',')}) VALUES (${placeholders}) RETURNING id, username, email, role, name`, values);
+  return rows[0];
+};
+
+const toSlug = (s) => String(s || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 24);
+
+export const generateUniqueUsername = async ({ base, role }) => {
+  const prefix = role === 'teacher' ? 't' : role === 'student' ? 's' : role === 'driver' ? 'd' : 'u';
+  const root = [prefix, toSlug(base)].filter(Boolean).join('-') || `${prefix}`;
+  let candidate = root;
+  let i = 0;
+  // Try plain, then with numeric suffixes
+  while (true) {
+    const { rows } = await query('SELECT 1 FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1', [candidate]);
+    if (!rows.length) return candidate;
+    i += 1;
+    candidate = `${root}${i}`;
+  }
+};
+
+export const generateRandomPassword = (length = 12) => {
+  const buf = crypto.randomBytes(Math.max(8, length));
+  return buf.toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, length);
 };
 
 export const listUsers = async () => {

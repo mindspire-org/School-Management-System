@@ -61,15 +61,23 @@ export const getById = async (id) => {
   return rows[0] || null;
 };
 
+export const getByUserId = async (userId) => {
+  const { rows } = await query(
+    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE user_id = $1',
+    [userId]
+  );
+  return rows[0] || null;
+};
+
 export const create = async (data) => {
   const {
     name, email, rollNumber, class: cls, section, rfidTag, attendance, feeStatus,
     busNumber, busAssigned, parentName, parentPhone, status = 'active', admissionDate, avatar,
-    personal, academic, parent, transport, fee, familyNumber
+    personal, academic, parent, transport, fee, familyNumber, userId
   } = data;
   const { rows } = await query(
-    `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status, admission_date, avatar, personal, academic, parent, transport, fee, family_number)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+    `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status, admission_date, avatar, personal, academic, parent, transport, fee, family_number, user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
      RETURNING id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee`,
     [
       name,
@@ -93,6 +101,7 @@ export const create = async (data) => {
       transport ? JSON.stringify(transport) : '{}',
       fee ? JSON.stringify(fee) : '{}',
       familyNumber || null,
+      userId || null,
     ]
   );
   return rows[0];
@@ -103,7 +112,7 @@ export const update = async (id, data) => {
   const values = [];
   const map = {
     name: 'name', email: 'email', rollNumber: 'roll_number', class: 'class', section: 'section', rfidTag: 'rfid_tag', attendance: 'attendance', feeStatus: 'fee_status', busNumber: 'bus_number', busAssigned: 'bus_assigned', parentName: 'parent_name', parentPhone: 'parent_phone', status: 'status', admissionDate: 'admission_date', avatar: 'avatar',
-    personal: 'personal', academic: 'academic', parent: 'parent', transport: 'transport', fee: 'fee', familyNumber: 'family_number'
+    personal: 'personal', academic: 'academic', parent: 'parent', transport: 'transport', fee: 'fee', familyNumber: 'family_number', userId: 'user_id'
   };
   Object.entries(data || {}).forEach(([k, v]) => {
     if (map[k] !== undefined) {

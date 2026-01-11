@@ -7,6 +7,13 @@ const ensureBusExtendedColumns = async () => {
   await query('ALTER TABLE IF EXISTS buses ADD COLUMN IF NOT EXISTS last_service DATE');
 };
 
+// Ensure extended columns exist on routes table (idempotent)
+const ensureRoutesExtendedColumns = async () => {
+  // Use non-reserved column names and alias them in queries to match frontend
+  await query('ALTER TABLE IF EXISTS routes ADD COLUMN IF NOT EXISTS start_location TEXT');
+  await query('ALTER TABLE IF EXISTS routes ADD COLUMN IF NOT EXISTS end_location TEXT');
+};
+
 // Buses
 export const listBuses = async () => {
   await ensureBusExtendedColumns();
@@ -92,9 +99,12 @@ export const deleteBus = async (id) => {
 
 // Routes
 export const listRoutes = async () => {
+  await ensureRoutesExtendedColumns();
   const { rows } = await query(`
     SELECT r.id,
            r.name,
+           r.start_location AS "start",
+           r.end_location AS "end",
            (SELECT COUNT(*) FROM bus_assignments ba WHERE ba.route_id = r.id) AS "busesCount",
            (SELECT COUNT(*) FROM route_stops rs WHERE rs.route_id = r.id) AS "stopsCount"
     FROM routes r
@@ -104,17 +114,38 @@ export const listRoutes = async () => {
 };
 
 export const getRouteById = async (id) => {
-  const { rows } = await query('SELECT id, name FROM routes WHERE id = $1', [id]);
+  await ensureRoutesExtendedColumns();
+  const { rows } = await query('SELECT id, name, start_location AS "start", end_location AS "end" FROM routes WHERE id = $1', [id]);
   return rows[0] || null;
 };
 
-export const createRoute = async ({ name }) => {
-  const { rows } = await query('INSERT INTO routes (name) VALUES ($1) RETURNING id, name', [name]);
+// Driver-specific: list the route assigned to the driver's bus via user_id
+export const listRoutesForDriver = async (userId) => {
+  await ensureRoutesExtendedColumns();
+  const { rows } = await query(`
+    SELECT r.id,
+           r.name,
+           r.start_location AS "start",
+           r.end_location AS "end",
+           (SELECT COUNT(*) FROM bus_assignments ba2 WHERE ba2.route_id = r.id) AS "busesCount",
+           (SELECT COUNT(*) FROM route_stops rs WHERE rs.route_id = r.id) AS "stopsCount"
+    FROM drivers d
+    LEFT JOIN bus_assignments ba ON ba.bus_id = d.bus_id
+    LEFT JOIN routes r ON r.id = ba.route_id
+    WHERE d.user_id = $1
+  `, [userId]);
+  return rows.filter(Boolean);
+};
+
+export const createRoute = async ({ name, start, end }) => {
+  await ensureRoutesExtendedColumns();
+  const { rows } = await query('INSERT INTO routes (name, start_location, end_location) VALUES ($1,$2,$3) RETURNING id, name, start_location AS "start", end_location AS "end"', [name, start || null, end || null]);
   return rows[0];
 };
 
-export const updateRoute = async (id, { name }) => {
-  const { rows } = await query('UPDATE routes SET name = COALESCE($2,name) WHERE id = $1 RETURNING id, name', [id, name || null]);
+export const updateRoute = async (id, { name, start, end }) => {
+  await ensureRoutesExtendedColumns();
+  const { rows } = await query('UPDATE routes SET name = COALESCE($2,name), start_location = COALESCE($3,start_location), end_location = COALESCE($4,end_location) WHERE id = $1 RETURNING id, name, start_location AS "start", end_location AS "end"', [id, name || null, start || null, end || null]);
   return rows[0] || null;
 };
 

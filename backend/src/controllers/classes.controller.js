@@ -63,6 +63,15 @@ export const list = async (req, res, next) => {
       status,
       teacherId,
     } = req.query;
+
+    // If teacher is logged in, filter to only their assigned classes
+    let filterTeacherId = teacherId;
+    if (req.user?.role === 'teacher') {
+      const teacher = await classService.getTeacherByUserId(req.user.id);
+      if (!teacher) return res.json({ rows: [], total: 0, page, pageSize });
+      filterTeacherId = teacher.id;
+    }
+
     const result = await classService.list({
       page: Number(page),
       pageSize: Number(pageSize),
@@ -71,7 +80,7 @@ export const list = async (req, res, next) => {
       section,
       academicYear,
       status,
-      teacherId: teacherId ? Number(teacherId) : undefined,
+      teacherId: filterTeacherId ? Number(filterTeacherId) : undefined,
     });
     return res.json(result);
   } catch (e) {

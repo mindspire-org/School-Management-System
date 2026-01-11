@@ -1,8 +1,31 @@
 import * as assignments from '../services/assignments.service.js';
+import * as teachers from '../services/teachers.service.js';
+import * as students from '../services/students.service.js';
 
 export const list = async (req, res, next) => {
   try {
     const { page = 1, pageSize = 50, q } = req.query;
+
+    // Filter assignments based on user role
+    if (req.user?.role === 'teacher') {
+      const teacher = await teachers.getByUserId(req.user.id);
+      if (!teacher) return res.json({ rows: [], total: 0, page, pageSize });
+
+      // Get assignments created by this teacher OR for classes assigned to this teacher
+      const result = await assignments.listByTeacher(teacher.id, { page: Number(page), pageSize: Number(pageSize), q });
+      return res.json(result);
+    }
+
+    if (req.user?.role === 'student') {
+      const student = await students.getByUserId(req.user.id);
+      if (!student) return res.json({ rows: [], total: 0, page, pageSize });
+
+      // Get assignments for student's class/section
+      const result = await assignments.listByStudent(student, { page: Number(page), pageSize: Number(pageSize), q });
+      return res.json(result);
+    }
+
+    // Admin/Owner see all assignments
     const result = await assignments.list({ page: Number(page), pageSize: Number(pageSize), q });
     return res.json(result);
   } catch (e) { next(e); }

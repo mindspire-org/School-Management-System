@@ -268,3 +268,9 @@ export const remove = async (id) => {
   const { rowCount } = await query('DELETE FROM class_sections WHERE id = $1', [id]);
   return rowCount > 0;
 };
+
+// Helper to get teacher by user_id for filtering
+export const getTeacherByUserId = async (userId) => {
+  const { rows } = await query('SELECT id, classes FROM teachers WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+};

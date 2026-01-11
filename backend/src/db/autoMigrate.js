@@ -68,6 +68,60 @@ export async function ensureStudentExtendedColumns() {
   `);
 }
 
+// Idempotent alterations to support username-based auth and domain linkage
+export async function ensureAuthSchema() {
+  await query(`
+    -- Users: username and nullable email
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);
+      END IF;
+    END $$;
+    ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+
+    -- Students: link to users
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'students_user_id_key'
+      ) THEN
+        ALTER TABLE students ADD CONSTRAINT students_user_id_key UNIQUE (user_id);
+      END IF;
+    END $$;
+    CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
+
+    -- Teachers: link and allow null email
+    ALTER TABLE teachers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'teachers_user_id_key'
+      ) THEN
+        ALTER TABLE teachers ADD CONSTRAINT teachers_user_id_key UNIQUE (user_id);
+      END IF;
+    END $$;
+    CREATE INDEX IF NOT EXISTS idx_teachers_user_id ON teachers(user_id);
+    ALTER TABLE teachers ALTER COLUMN email DROP NOT NULL;
+
+    -- Drivers: link to users
+    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'drivers_user_id_key'
+      ) THEN
+        ALTER TABLE drivers ADD CONSTRAINT drivers_user_id_key UNIQUE (user_id);
+      END IF;
+    END $$;
+    CREATE INDEX IF NOT EXISTS idx_drivers_user_id ON drivers(user_id);
+  `);
+}
+
 export async function ensureFinanceConstraints() {
   await query(`
     DO $$

@@ -1,4 +1,6 @@
 import * as students from '../services/students.service.js';
+import bcrypt from 'bcryptjs';
+import * as authSvc from '../services/auth.service.js';
 import cloudinary from '../config/cloudinary.js';
 import { ensureStudentExtendedColumns, ensureFinanceConstraints, ensureParentsSchema } from '../db/autoMigrate.js';
 import * as parentsSvc from '../services/parents.service.js';
@@ -7,6 +9,11 @@ import { upsertParentUserForPhone } from '../services/auth.service.js';
 export const list = async (req, res, next) => {
   try {
     await ensureStudentExtendedColumns();
+    // If a student is logged in, only return their own record
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      return res.json({ rows: self ? [self] : [], total: self ? 1 : 0, page: 1, pageSize: 1 });
+    }
     const { page = 1, pageSize = 50, q, class: cls, section } = req.query;
     const result = await students.list({ page: Number(page), pageSize: Number(pageSize), q, class: cls, section });
     return res.json(result);
@@ -16,6 +23,11 @@ export const list = async (req, res, next) => {
 export const getById = async (req, res, next) => {
   try {
     await ensureStudentExtendedColumns();
+    // Enforce self-only access for students
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const student = await students.getById(Number(req.params.id));
     if (!student) return res.status(404).json({ message: 'Student not found' });
     return res.json(student);
@@ -27,6 +39,7 @@ export const create = async (req, res, next) => {
     await ensureStudentExtendedColumns();
     await ensureParentsSchema();
     const payload = { ...req.body };
+    let credentials = null;
     // Upload base64 avatar to Cloudinary if provided
     if (payload.avatar && typeof payload.avatar === 'string' && payload.avatar.startsWith('data:')) {
       try {
@@ -64,8 +77,26 @@ export const create = async (req, res, next) => {
       }
     } catch (_) {}
 
+    // Auto-provision user account if not already linked
+    if (!payload.userId) {
+      let user = null;
+      if (payload.email) {
+        try { user = await authSvc.findUserByEmail(payload.email); } catch (_) { user = null; }
+      }
+      if (!user) {
+        const base = payload.rollNumber || payload.name || payload.email || 'student';
+        const username = await authSvc.generateUniqueUsername({ base, role: 'student' });
+        const password = authSvc.generateRandomPassword(12);
+        const passwordHash = await bcrypt.hash(password, 10);
+        user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'student', name: payload.name || username });
+        credentials = { username, password };
+      }
+      if (user) payload.userId = user.id;
+    }
+
     const created = await students.create(payload);
-    return res.status(201).json(created);
+    const resp = credentials ? { ...created, credentials } : created;
+    return res.status(201).json(resp);
   } catch (e) { next(e); }
 };
 
@@ -116,6 +147,10 @@ export const remove = async (req, res, next) => {
 export const listAttendance = async (req, res, next) => {
   try {
     const studentId = Number(req.params.id);
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== studentId) return res.status(403).json({ message: 'Forbidden' });
+    }
     const { startDate, endDate, page = 1, pageSize = 50 } = req.query;
     const data = await students.listAttendance(studentId, { startDate, endDate, page: Number(page), pageSize: Number(pageSize) });
     return res.json(data);
@@ -149,6 +184,10 @@ export const removeAttendance = async (req, res, next) => {
 // Performance
 export const getPerformance = async (req, res, next) => {
   try {
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const data = await students.getPerformance(Number(req.params.id));
     return res.json(data);
   } catch (e) { next(e); }
@@ -158,6 +197,10 @@ export const getPerformance = async (req, res, next) => {
 export const getFees = async (req, res, next) => {
   try {
     await ensureFinanceConstraints();
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const data = await students.getFees(Number(req.params.id));
     return res.json(data);
   } catch (e) { next(e); }
@@ -196,6 +239,10 @@ export const updateInvoice = async (req, res, next) => {
 // Transport
 export const getTransport = async (req, res, next) => {
   try {
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const data = await students.getTransport(Number(req.params.id));
     return res.json(data || {});
   } catch (e) { next(e); }

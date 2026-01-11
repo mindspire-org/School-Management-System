@@ -8,7 +8,7 @@ import { rbacApi, authApi } from '../../../../services/api';
 import { useAuth } from '../../../../contexts/AuthContext';
 
 const roleMap = { admin: 'Administrator', teacher: 'Teacher', student: 'Student', driver: 'Driver' };
-const baseModules = ['students','teachers','parents','finance','transport','attendance','reports','communication','settings'];
+const baseModules = ['students', 'teachers', 'parents', 'finance', 'transport', 'attendance', 'reports', 'communication', 'settings'];
 const displayToKey = {
   Students: 'students',
   Teachers: 'teachers',
@@ -22,7 +22,7 @@ const displayToKey = {
   Dashboard: 'dashboard',
   Academics: 'academics',
 };
-const actions = ['view','edit','export','manage'];
+const actions = ['view', 'edit', 'export', 'manage'];
 
 export default function Permissions() {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -31,7 +31,8 @@ export default function Permissions() {
   const [moduleFilter, setModuleFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [assignments, setAssignments] = useState({});
-  const [roles, setRoles] = useState(['teacher','student','driver','parent']);
+  // Only allowed roles that can be created by admin
+  const [roles, setRoles] = useState(['student', 'teacher', 'driver', 'parent']);
   // When Owner is viewing, we should respect modules assigned to Admin (licensed by Owner)
   const [adminAllowed, setAdminAllowed] = useState(null);
   const [licAllowed, setLicAllowed] = useState([]);
@@ -40,11 +41,11 @@ export default function Permissions() {
     const load = async () => {
       try {
         const data = await rbacApi.getPermissions();
-        const rs = Array.isArray(data?.roles) ? data.roles : ['admin','teacher','student','driver','parent'];
-        // Hide owner and admin columns entirely
-        setRoles(rs.filter((r) => r !== 'owner' && r !== 'admin'));
+        // Filter to only show allowed roles (exclude admin and owner)
+        const rs = Array.isArray(data?.roles) ? data.roles.filter(r => ['student', 'teacher', 'driver', 'parent'].includes(r)) : ['student', 'teacher', 'driver', 'parent'];
+        setRoles(rs);
         setAssignments(data?.assignments || {});
-      } catch (_) {}
+      } catch (_) { }
     };
     load();
   }, []);
@@ -74,7 +75,7 @@ export default function Permissions() {
         const st = await authApi.status();
         const arr = Array.isArray(st?.allowedModules) ? st.allowedModules : [];
         setLicAllowed(arr);
-      } catch (_) {}
+      } catch (_) { }
     };
     fetchLic();
     // Light polling for fast, dynamic updates when Owner changes licensing
@@ -105,7 +106,7 @@ export default function Permissions() {
 
   const rows = useMemo(() => {
     const base = allowedModules.flatMap((m) => actions.map((a) => ({ key: `${m}.${a}`, module: m, action: a })));
-    return base.filter(r => (moduleFilter==='all' || r.module===moduleFilter) && (!search || r.key.toLowerCase().includes(search.toLowerCase())));
+    return base.filter(r => (moduleFilter === 'all' || r.module === moduleFilter) && (!search || r.key.toLowerCase().includes(search.toLowerCase())));
   }, [moduleFilter, search, allowedModules]);
 
   const stats = useMemo(() => ({ modules: allowedModules.length, roles: roles.length, perms: allowedModules.length * actions.length }), [roles, allowedModules]);
@@ -119,9 +120,9 @@ export default function Permissions() {
   };
 
   const save = async () => {
-    const rs = roleFilter==='all' ? roles : [roleFilter];
+    const rs = roleFilter === 'all' ? roles : [roleFilter];
     for (const r of rs) {
-      try { await rbacApi.setPermissions(r, assignments[r] || []); } catch (_) {}
+      try { await rbacApi.setPermissions(r, assignments[r] || []); } catch (_) { }
     }
   };
 
@@ -171,7 +172,7 @@ export default function Permissions() {
             <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
               <Tr>
                 <Th>Permission</Th>
-                {roles.filter(r => roleFilter==='all' || r===roleFilter).map((r) => (
+                {roles.filter(r => roleFilter === 'all' || r === roleFilter).map((r) => (
                   <Th key={r} isNumeric>{roleMap[r] || r}</Th>
                 ))}
               </Tr>
@@ -180,9 +181,9 @@ export default function Permissions() {
               {rows.map((r) => (
                 <Tr key={r.key} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
                   <Td><Text fontWeight='600'>{r.key}</Text></Td>
-                  {roles.filter(x => roleFilter==='all' || x===roleFilter).map((role) => (
+                  {roles.filter(x => roleFilter === 'all' || x === roleFilter).map((role) => (
                     <Td key={role} isNumeric>
-                      <Checkbox isChecked={(assignments[role] || []).includes(r.key)} onChange={(e)=> toggle(role, r.key, e.target.checked)} />
+                      <Checkbox isChecked={(assignments[role] || []).includes(r.key)} onChange={(e) => toggle(role, r.key, e.target.checked)} />
                     </Td>
                   ))}
                 </Tr>

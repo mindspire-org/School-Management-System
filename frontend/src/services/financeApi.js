@@ -176,6 +176,30 @@ export const financeApi = {
     checkFinancialRecords: async (userType, userId) => {
         return await http.get(`${API_BASE}/check-records/${userType}/${userId}`);
     },
+    // ========================================
+    // EXPENSES
+    // ========================================
+
+    expenses: {
+        list: async (params = {}) => {
+            return await http.get(`/expenses`, { params });
+        },
+        getStats: async () => {
+            return await http.get(`/expenses/stats`);
+        },
+        getById: async (id) => {
+            return await http.get(`/expenses/${id}`);
+        },
+        create: async (data) => {
+            return await http.post(`/expenses`, data);
+        },
+        update: async (id, data) => {
+            return await http.put(`/expenses/${id}`, data);
+        },
+        delete: async (id) => {
+            return await http.delete(`/expenses/${id}`);
+        }
+    },
 };
 
 // ========================================
@@ -270,6 +294,8 @@ export const driversApi = {
     getCount: async () => {
         return await http.get(`${DRIVERS_BASE}/count`);
     },
+
+
 };
 
 export default financeApi;

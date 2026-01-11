@@ -6,7 +6,7 @@ import { SidebarContext } from 'contexts/SidebarContext';
 import AdminNavbarLinks from 'components/navbar/NavbarLinksAdmin';
 
 export default function AdminNavbar(props) {
-	const [ scrolled, setScrolled ] = useState(false);
+	const [scrolled, setScrolled] = useState(false);
 	const { toggleSidebar } = useContext(SidebarContext) || {};
 	const sidebarWidth = toggleSidebar ? 80 : 260;
 
@@ -44,6 +44,7 @@ export default function AdminNavbar(props) {
 		<Box
 			position={navbarPosition}
 			boxShadow={navbarShadow}
+			zIndex='1000'
 			bg={navbarBg}
 			borderColor={navbarBorder}
 			filter={navbarFilter}

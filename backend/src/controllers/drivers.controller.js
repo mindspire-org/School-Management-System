@@ -1,9 +1,15 @@
 import * as service from '../services/drivers.service.js';
+import bcrypt from 'bcryptjs';
+import * as authSvc from '../services/auth.service.js';
 
 // List all drivers
 export const listDrivers = async (req, res, next) => {
     try {
         const { status, busId, page, pageSize } = req.query;
+        if (req.user?.role === 'driver') {
+            const self = await service.getDriverByUserId(req.user.id);
+            return res.json({ items: self ? [self] : [], total: self ? 1 : 0 });
+        }
         const result = await service.listDrivers({ status, busId, page, pageSize });
         res.json(result);
     } catch (e) { next(e); }
@@ -12,6 +18,12 @@ export const listDrivers = async (req, res, next) => {
 // Get driver by ID
 export const getDriverById = async (req, res, next) => {
     try {
+        if (req.user?.role === 'driver') {
+            const self = await service.getDriverByUserId(req.user.id);
+            if (!self || String(self.id) !== String(req.params.id)) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+        }
         const driver = await service.getDriverById(req.params.id);
         if (!driver) return res.status(404).json({ message: 'Driver not found' });
         res.json(driver);
@@ -21,8 +33,26 @@ export const getDriverById = async (req, res, next) => {
 // Create driver
 export const createDriver = async (req, res, next) => {
     try {
-        const driver = await service.createDriver(req.body);
-        res.status(201).json(driver);
+        const payload = { ...req.body };
+        let credentials = null;
+        if (!payload.userId) {
+            let user = null;
+            if (payload.email) {
+                try { user = await authSvc.findUserByEmail(payload.email); } catch (_) { user = null; }
+            }
+            if (!user) {
+                const base = payload.licenseNumber || payload.name || payload.email || 'driver';
+                const username = await authSvc.generateUniqueUsername({ base, role: 'driver' });
+                const password = authSvc.generateRandomPassword(12);
+                const passwordHash = await bcrypt.hash(password, 10);
+                user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'driver', name: payload.name || username });
+                credentials = { username, password };
+            }
+            if (user) payload.userId = user.id;
+        }
+        const driver = await service.createDriver(payload);
+        const resp = credentials ? { ...driver, credentials } : driver;
+        res.status(201).json(resp);
     } catch (e) { next(e); }
 };
 
@@ -60,6 +90,12 @@ export const deleteDriver = async (req, res, next) => {
 export const getDriverPayroll = async (req, res, next) => {
     try {
         const { page, pageSize } = req.query;
+        if (req.user?.role === 'driver') {
+            const self = await service.getDriverByUserId(req.user.id);
+            if (!self || String(self.id) !== String(req.params.id)) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+        }
         const items = await service.getDriverPayroll(req.params.id, { page, pageSize });
         res.json({ items });
     } catch (e) { next(e); }
