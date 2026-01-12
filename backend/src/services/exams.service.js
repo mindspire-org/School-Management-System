@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const listExams = async ({ q, className, section, status, subject, fromDate, toDate, page = 1, pageSize = 50 }) => {
+export const listExams = async ({ q, className, section, status, subject, fromDate, toDate, page = 1, pageSize = 50, campusId }) => {
   const params = [];
   const where = [];
   if (q) { params.push(`%${q}%`); where.push(`(title ILIKE $${params.length} OR classes ILIKE $${params.length})`); }
@@ -11,13 +11,14 @@ export const listExams = async ({ q, className, section, status, subject, fromDa
   // Date filtering on start_date/end_date fallback to exam_date
   if (fromDate) { params.push(fromDate); where.push(`COALESCE(start_date, exam_date) >= $${params.length}`); }
   if (toDate) { params.push(toDate); where.push(`COALESCE(end_date, exam_date) <= $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`e.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
   params.push(pageSize, offset);
   const { rows } = await query(
     `SELECT e.id, e.title, e.exam_date AS "examDate", e.class, e.section,
             e.start_date AS "startDate", e.end_date AS "endDate", e.status, e.classes,
-            e.subject, e.invigilator_id AS "invigilatorId", t.name AS "invigilatorName"
+            e.subject, e.invigilator_id AS "invigilatorId", t.name AS "invigilatorName", e.campus_id AS "campusId"
      FROM exams e
      LEFT JOIN teachers t ON t.id = e.invigilator_id
      ${whereSql}
@@ -32,7 +33,7 @@ export const getExamById = async (id) => {
   const { rows } = await query(
     `SELECT e.id, e.title, e.exam_date AS "examDate", e.class, e.section,
             e.start_date AS "startDate", e.end_date AS "endDate", e.status, e.classes,
-            e.subject, e.invigilator_id AS "invigilatorId", t.name AS "invigilatorName"
+            e.subject, e.invigilator_id AS "invigilatorId", t.name AS "invigilatorName", e.campus_id AS "campusId"
      FROM exams e
      LEFT JOIN teachers t ON t.id = e.invigilator_id
      WHERE e.id = $1`,
@@ -41,12 +42,12 @@ export const getExamById = async (id) => {
   return rows[0] || null;
 };
 
-export const createExam = async ({ title, examDate, className, section, startDate, endDate, status, classes, subject, invigilatorId }) => {
+export const createExam = async ({ title, examDate, className, section, startDate, endDate, status, classes, subject, invigilatorId, campusId }) => {
   const { rows } = await query(
-    `INSERT INTO exams (title, exam_date, class, section, start_date, end_date, status, classes, subject, invigilator_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-     RETURNING id, title, exam_date AS "examDate", class, section, start_date AS "startDate", end_date AS "endDate", status, classes, subject, invigilator_id AS "invigilatorId"`,
-    [title, examDate || null, className || null, section || null, startDate || null, endDate || null, status || 'Planned', classes || null, subject || null, invigilatorId || null]
+    `INSERT INTO exams (title, exam_date, class, section, start_date, end_date, status, classes, subject, invigilator_id, campus_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     RETURNING id, title, exam_date AS "examDate", class, section, start_date AS "startDate", end_date AS "endDate", status, classes, subject, invigilator_id AS "invigilatorId", campus_id AS "campusId"`,
+    [title, examDate || null, className || null, section || null, startDate || null, endDate || null, status || 'Planned', classes || null, subject || null, invigilatorId || null, campusId || null]
   );
   return rows[0];
 };

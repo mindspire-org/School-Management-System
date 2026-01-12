@@ -14,8 +14,26 @@ export const list = async (req, res, next) => {
       const self = await students.getByUserId(req.user.id);
       return res.json({ rows: self ? [self] : [], total: self ? 1 : 0, page: 1, pageSize: 1 });
     }
-    const { page = 1, pageSize = 50, q, class: cls, section } = req.query;
-    const result = await students.list({ page: Number(page), pageSize: Number(pageSize), q, class: cls, section });
+
+    let { page = 1, pageSize = 50, q, class: cls, section, familyNumber } = req.query;
+
+    // If a parent is logged in, restrict to their children
+    if (req.user?.role === 'parent') {
+      const parent = await parentsSvc.getByUserId(req.user.id);
+      if (!parent) return res.json({ rows: [], total: 0, page, pageSize });
+      familyNumber = parent.familyNumber;
+    }
+
+    const campusId = req.user?.campusId;
+    const result = await students.list({
+      page: Number(page),
+      pageSize: Number(pageSize),
+      q,
+      class: cls,
+      section,
+      familyNumber,
+      campusId
+    });
     return res.json(result);
   } catch (e) { next(e); }
 };
@@ -72,10 +90,10 @@ export const create = async (req, res, next) => {
       const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || payload.parentName || payload.name || 'Parent';
       if (pwd && String(pwd).length >= 4 && phone) {
         if (!conf || String(conf) === String(pwd)) {
-          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) {}
+          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) { }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Auto-provision user account if not already linked
     if (!payload.userId) {
@@ -88,11 +106,21 @@ export const create = async (req, res, next) => {
         const username = await authSvc.generateUniqueUsername({ base, role: 'student' });
         const password = authSvc.generateRandomPassword(12);
         const passwordHash = await bcrypt.hash(password, 10);
-        user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'student', name: payload.name || username });
+        user = await authSvc.createUserWith({
+          email: payload.email || null,
+          username,
+          passwordHash,
+          role: 'student',
+          name: payload.name || username,
+          campusId: req.user?.campusId || payload.campusId
+        });
         credentials = { username, password };
       }
       if (user) payload.userId = user.id;
     }
+
+    if (!payload.campusId) payload.campusId = req.user?.campusId;
+    if (!payload.campusId) return res.status(400).json({ message: 'Campus ID is required' });
 
     const created = await students.create(payload);
     const resp = credentials ? { ...created, credentials } : created;
@@ -124,10 +152,10 @@ export const update = async (req, res, next) => {
       const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || data.parentName || data.name || 'Parent';
       if (pwd && String(pwd).length >= 4 && phone) {
         if (!conf || String(conf) === String(pwd)) {
-          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) {}
+          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) { }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const updated = await students.update(Number(req.params.id), data);
     if (!updated) return res.status(404).json({ message: 'Student not found' });
@@ -253,4 +281,41 @@ export const updateTransport = async (req, res, next) => {
     const data = await students.updateTransport(Number(req.params.id), req.body);
     return res.json(data);
   } catch (e) { next(e); }
+};
+
+export const getDashboardStats = async (req, res, next) => {
+  try {
+    let studentId = req.params.id ? Number(req.params.id) : undefined;
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self) return res.status(404).json({ message: 'Student profile not found' });
+      if (studentId && studentId !== self.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      studentId = self.id;
+    }
+
+    if (!studentId) return res.status(400).json({ message: 'Student ID required' });
+
+    const stats = await students.getDashboardStats(studentId);
+    return res.json(stats);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getAttendanceTrend = async (req, res, next) => {
+  try {
+    let studentId = req.params.id ? Number(req.params.id) : undefined;
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self) return res.status(404).json({ message: 'Student profile not found' });
+      studentId = self.id;
+    }
+    if (!studentId) return res.status(400).json({ message: 'Student ID required' });
+    const trend = await students.getAttendanceTrend(studentId);
+    return res.json(trend);
+  } catch (e) {
+    next(e);
+  }
 };

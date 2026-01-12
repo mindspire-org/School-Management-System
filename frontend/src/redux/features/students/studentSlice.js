@@ -156,19 +156,19 @@ const fetchStudentsAPI = async (filters = {}) => {
 
       // Apply filters if provided
       let filtered = [...mockStudents];
-      
+
       if (filters.class && filters.class !== 'all') {
         filtered = filtered.filter(student => student.class.split('-')[0] === filters.class);
       }
-      
+
       if (filters.section && filters.section !== 'all') {
         filtered = filtered.filter(student => student.section === filters.section);
       }
-      
+
       if (filters.status && filters.status !== 'all') {
         filtered = filtered.filter(student => student.status === filters.status);
       }
-      
+
       if (filters.transport && filters.transport !== 'all') {
         if (filters.transport === 'bus') {
           filtered = filtered.filter(student => student.busAssigned);
@@ -176,20 +176,20 @@ const fetchStudentsAPI = async (filters = {}) => {
           filtered = filtered.filter(student => !student.busAssigned);
         }
       }
-      
+
       if (filters.feeStatus && filters.feeStatus !== 'all') {
         filtered = filtered.filter(student => student.feeStatus === filters.feeStatus);
       }
-      
+
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
-        filtered = filtered.filter(student => 
-          student.name.toLowerCase().includes(term) || 
-          student.rollNumber.toLowerCase().includes(term) || 
+        filtered = filtered.filter(student =>
+          student.name.toLowerCase().includes(term) ||
+          student.rollNumber.toLowerCase().includes(term) ||
           student.rfidTag.toLowerCase().includes(term)
         );
       }
-      
+
       resolve(filtered);
     }, 800);
   });
@@ -221,7 +221,7 @@ const fetchStudentByIdAPI = async (studentId) => {
         admissionDate: '2024-01-15',
         // Additional detailed information would be included
       };
-      
+
       if (studentId === 'student_001') {
         resolve(mockStudent);
       } else {
@@ -256,13 +256,13 @@ export const addStudent = createAsyncThunk('students/addStudent', async (student
     // In a real app, this would be an API call
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const newStudent = { 
+
+    const newStudent = {
       id: `student_${Date.now()}`,
       photo: '', // No photo by default
       status: 'active',
       admissionDate: new Date().toISOString().split('T')[0],
-      ...studentData 
+      ...studentData
     };
     return newStudent;
   } catch (error) {
@@ -274,7 +274,7 @@ export const updateStudent = createAsyncThunk('students/updateStudent', async ({
   try {
     // In a real app, this would be an API call
     await new Promise(resolve => setTimeout(resolve, 800));
-    
+
     return { id: studentId, ...data };
   } catch (error) {
     return rejectWithValue(error.message);
@@ -285,7 +285,7 @@ export const deleteStudent = createAsyncThunk('students/deleteStudent', async (s
   try {
     // In a real app, this would be an API call
     await new Promise(resolve => setTimeout(resolve, 700));
-    
+
     return studentId;
   } catch (error) {
     return rejectWithValue(error.message);
@@ -296,19 +296,19 @@ export const bulkDeleteStudents = createAsyncThunk('students/bulkDeleteStudents'
   try {
     // In a real app, this would be an API call
     await new Promise(resolve => setTimeout(resolve, 1200));
-    
+
     return studentIds;
   } catch (error) {
     return rejectWithValue(error.message);
   }
 });
 
-export const bulkUpdateStudents = createAsyncThunk('students/bulkUpdateStudents', 
+export const bulkUpdateStudents = createAsyncThunk('students/bulkUpdateStudents',
   async ({ studentIds, data }, { rejectWithValue }) => {
     try {
       // In a real app, this would be an API call
       await new Promise(resolve => setTimeout(resolve, 1200));
-      
+
       return { studentIds, data };
     } catch (error) {
       return rejectWithValue(error.message);
@@ -324,7 +324,9 @@ const initialState = {
   formStep: 1, // Current step in multi-step form
   formData: {
     personal: {},
-    academic: {},
+    academic: {
+      campusId: null
+    },
     parent: {},
     transport: {},
     fee: {}
@@ -402,7 +404,7 @@ const studentSlice = createSlice({
     },
     updateFormData: (state, action) => {
       const { step, data } = action.payload;
-      switch(step) {
+      switch (step) {
         case 'personal':
           state.formData.personal = { ...state.formData.personal, ...data };
           break;
@@ -453,7 +455,7 @@ const studentSlice = createSlice({
     toggleStudentSelection: (state, action) => {
       const studentId = action.payload;
       const index = state.selectedStudents.indexOf(studentId);
-      
+
       if (index === -1) {
         state.selectedStudents.push(studentId);
       } else {
@@ -482,11 +484,11 @@ const studentSlice = createSlice({
       .addCase(fetchStudents.fulfilled, (state, action) => {
         state.students = action.payload;
         state.loading = false;
-        
+
         // Update stats based on fetched students
         const currentDate = new Date();
         const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        
+
         state.stats = {
           totalStudents: action.payload.length,
           activeStudents: action.payload.filter(s => s.status === 'active').length,
@@ -496,7 +498,7 @@ const studentSlice = createSlice({
             return admissionDate >= firstDayOfMonth;
           }).length
         };
-        
+
         // Update pagination info
         state.pagination.totalItems = action.payload.length;
         state.pagination.totalPages = Math.ceil(action.payload.length / state.pagination.rowsPerPage);
@@ -505,7 +507,7 @@ const studentSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Fetch student by ID
       .addCase(fetchStudentById.pending, (state) => {
         state.loading = true;
@@ -519,7 +521,7 @@ const studentSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Add student
       .addCase(addStudent.pending, (state) => {
         state.loading = true;
@@ -544,7 +546,7 @@ const studentSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Update student
       .addCase(updateStudent.pending, (state) => {
         state.loading = true;
@@ -553,15 +555,15 @@ const studentSlice = createSlice({
       .addCase(updateStudent.fulfilled, (state, action) => {
         const { id, ...updatedData } = action.payload;
         const index = state.students.findIndex(student => student.id === id);
-        
+
         if (index !== -1) {
           state.students[index] = { ...state.students[index], ...updatedData };
-          
+
           // If this is the currently selected student, update that too
           if (state.selectedStudent?.id === id) {
             state.selectedStudent = { ...state.selectedStudent, ...updatedData };
           }
-          
+
           // Update stats if status changed
           if (updatedData.status) {
             if (updatedData.status === 'active') {
@@ -573,14 +575,14 @@ const studentSlice = createSlice({
             }
           }
         }
-        
+
         state.loading = false;
       })
       .addCase(updateStudent.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Delete student
       .addCase(deleteStudent.pending, (state) => {
         state.loading = true;
@@ -589,34 +591,34 @@ const studentSlice = createSlice({
       .addCase(deleteStudent.fulfilled, (state, action) => {
         const studentId = action.payload;
         const deletedStudent = state.students.find(s => s.id === studentId);
-        
+
         state.students = state.students.filter(student => student.id !== studentId);
         state.stats.totalStudents--;
-        
+
         if (deletedStudent?.status === 'active') {
           state.stats.activeStudents--;
         } else {
           state.stats.inactiveStudents--;
         }
-        
+
         // If the deleted student was in the selected students array, remove it
         const selectedIndex = state.selectedStudents.indexOf(studentId);
         if (selectedIndex !== -1) {
           state.selectedStudents.splice(selectedIndex, 1);
         }
-        
+
         // If the deleted student was the currently selected student, clear it
         if (state.selectedStudent?.id === studentId) {
           state.selectedStudent = null;
         }
-        
+
         state.loading = false;
       })
       .addCase(deleteStudent.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       // Bulk operations
       .addCase(bulkDeleteStudents.pending, (state) => {
         state.bulkActionLoading = true;
@@ -625,31 +627,31 @@ const studentSlice = createSlice({
       .addCase(bulkDeleteStudents.fulfilled, (state, action) => {
         const studentIds = action.payload;
         const deletedStudents = state.students.filter(s => studentIds.includes(s.id));
-        
+
         state.students = state.students.filter(student => !studentIds.includes(student.id));
         state.stats.totalStudents -= studentIds.length;
         state.stats.activeStudents -= deletedStudents.filter(s => s.status === 'active').length;
         state.stats.inactiveStudents -= deletedStudents.filter(s => s.status === 'inactive').length;
-        
+
         // Clear selected students
         state.selectedStudents = state.selectedStudents.filter(
           id => !studentIds.includes(id)
         );
-        
+
         state.bulkActionLoading = false;
       })
       .addCase(bulkDeleteStudents.rejected, (state, action) => {
         state.bulkActionLoading = false;
         state.bulkActionError = action.payload;
       })
-      
+
       .addCase(bulkUpdateStudents.pending, (state) => {
         state.bulkActionLoading = true;
         state.bulkActionError = null;
       })
       .addCase(bulkUpdateStudents.fulfilled, (state, action) => {
         const { studentIds, data } = action.payload;
-        
+
         // Update each student in the list
         state.students = state.students.map(student => {
           if (studentIds.includes(student.id)) {
@@ -657,24 +659,24 @@ const studentSlice = createSlice({
           }
           return student;
         });
-        
+
         // Update stats if status is being changed
         if (data.status) {
           // Count students whose status is changing
           let activeToInactive = 0;
           let inactiveToActive = 0;
-          
+
           state.students
             .filter(s => studentIds.includes(s.id))
             .forEach(s => {
               if (s.status === 'active' && data.status === 'inactive') activeToInactive++;
               if (s.status === 'inactive' && data.status === 'active') inactiveToActive++;
             });
-          
+
           state.stats.activeStudents += inactiveToActive - activeToInactive;
           state.stats.inactiveStudents += activeToInactive - inactiveToActive;
         }
-        
+
         state.bulkActionLoading = false;
       })
       .addCase(bulkUpdateStudents.rejected, (state, action) => {
@@ -712,31 +714,31 @@ export const selectAllStudents = (state) => state.students.students;
 export const selectFilteredStudents = (state) => {
   const { students } = state.students;
   const { class: classFilter, section, status, transport, feeStatus, searchTerm, dateRange } = state.students.filters;
-  
+
   return students.filter(student => {
     // Filter by class
     const matchesClass = classFilter === 'all' || student.class.split('-')[0] === classFilter;
-    
+
     // Filter by section
     const matchesSection = section === 'all' || student.section === section;
-    
+
     // Filter by status
     const matchesStatus = status === 'all' || student.status === status;
-    
+
     // Filter by transport
     const matchesTransport = transport === 'all' ||
       (transport === 'bus' && student.busAssigned) ||
       (transport === 'non-bus' && !student.busAssigned);
-    
+
     // Filter by fee status
     const matchesFeeStatus = feeStatus === 'all' || student.feeStatus === feeStatus;
-    
+
     // Filter by search term
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.rollNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (student.rfidTag && student.rfidTag.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     // Filter by admission date range
     let matchesDateRange = true;
     if (dateRange && dateRange.startDate && dateRange.endDate) {
@@ -745,8 +747,8 @@ export const selectFilteredStudents = (state) => {
       const endDate = new Date(dateRange.endDate);
       matchesDateRange = admissionDate >= startDate && admissionDate <= endDate;
     }
-    
-    return matchesClass && matchesSection && matchesStatus && matchesTransport && 
+
+    return matchesClass && matchesSection && matchesStatus && matchesTransport &&
       matchesFeeStatus && matchesSearch && matchesDateRange;
   });
 };
@@ -759,30 +761,30 @@ export const selectStudentFormData = (state) => state.students.formData;
 export const selectFormErrors = (state) => state.students.formErrors;
 export const selectCurrentFormStep = (state) => state.students.formStep;
 export const selectUploadedFiles = (state) => state.students.uploadedFiles;
-export const selectStudentById = (state, studentId) => 
+export const selectStudentById = (state, studentId) =>
   state.students.students.find(student => student.id === studentId);
 
 // Select only students for current page based on pagination
 export const selectPaginatedStudents = (state) => {
   const { students } = state.students;
   const { currentPage, rowsPerPage } = state.students.pagination;
-  
+
   const filteredStudents = selectFilteredStudents(state);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
-  
+
   return filteredStudents.slice(startIndex, endIndex);
 };
 
 // Is a specific student selected (for bulk operations)
-export const isStudentSelected = (state, studentId) => 
+export const isStudentSelected = (state, studentId) =>
   state.students.selectedStudents.includes(studentId);
 
 // Are all current students selected
 export const areAllStudentsSelected = (state) => {
   const filtered = selectFilteredStudents(state);
   const selected = state.students.selectedStudents;
-  
+
   // All are selected if every filtered student's ID is in the selected array
   return filtered.length > 0 && filtered.every(student => selected.includes(student.id));
 };

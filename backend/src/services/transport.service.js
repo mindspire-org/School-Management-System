@@ -15,7 +15,7 @@ const ensureRoutesExtendedColumns = async () => {
 };
 
 // Buses
-export const listBuses = async () => {
+export const listBuses = async (campusId) => {
   await ensureBusExtendedColumns();
   const { rows } = await query(`
     SELECT b.id,
@@ -30,8 +30,9 @@ export const listBuses = async () => {
     FROM buses b
     LEFT JOIN bus_assignments ba ON ba.bus_id = b.id
     LEFT JOIN routes r ON r.id = ba.route_id
+    WHERE ($1::int IS NULL OR b.campus_id = $1::int)
     ORDER BY b.number ASC
-  `);
+  `, [campusId || null]);
   return rows;
 };
 
@@ -55,11 +56,11 @@ export const getBusById = async (id) => {
   return rows[0] || null;
 };
 
-export const createBus = async ({ number, driverName, status, plate, capacity, lastService, routeId }) => {
+export const createBus = async ({ number, driverName, status, plate, capacity, lastService, routeId, campusId }) => {
   await ensureBusExtendedColumns();
   const { rows } = await query(
-    'INSERT INTO buses (number, driver_name, status, plate, capacity, last_service) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, number, driver_name AS "driverName", status, plate, capacity, last_service AS "lastService"',
-    [number, driverName || null, status || 'active', plate || null, typeof capacity === 'number' ? capacity : null, lastService || null]
+    'INSERT INTO buses (number, driver_name, status, plate, capacity, last_service, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, number, driver_name AS "driverName", status, plate, capacity, last_service AS "lastService", campus_id AS "campusId"',
+    [number, driverName || null, status || 'active', plate || null, typeof capacity === 'number' ? capacity : null, lastService || null, campusId || null]
   );
   const bus = rows[0];
   if (bus && routeId) {
@@ -98,7 +99,7 @@ export const deleteBus = async (id) => {
 };
 
 // Routes
-export const listRoutes = async () => {
+export const listRoutes = async (campusId) => {
   await ensureRoutesExtendedColumns();
   const { rows } = await query(`
     SELECT r.id,
@@ -108,8 +109,9 @@ export const listRoutes = async () => {
            (SELECT COUNT(*) FROM bus_assignments ba WHERE ba.route_id = r.id) AS "busesCount",
            (SELECT COUNT(*) FROM route_stops rs WHERE rs.route_id = r.id) AS "stopsCount"
     FROM routes r
+    WHERE ($1::int IS NULL OR r.campus_id = $1::int)
     ORDER BY r.name ASC
-  `);
+  `, [campusId || null]);
   return rows;
 };
 
@@ -137,9 +139,9 @@ export const listRoutesForDriver = async (userId) => {
   return rows.filter(Boolean);
 };
 
-export const createRoute = async ({ name, start, end }) => {
+export const createRoute = async ({ name, start, end, campusId }) => {
   await ensureRoutesExtendedColumns();
-  const { rows } = await query('INSERT INTO routes (name, start_location, end_location) VALUES ($1,$2,$3) RETURNING id, name, start_location AS "start", end_location AS "end"', [name, start || null, end || null]);
+  const { rows } = await query('INSERT INTO routes (name, start_location, end_location, campus_id) VALUES ($1,$2,$3,$4) RETURNING id, name, start_location AS "start", end_location AS "end", campus_id AS "campusId"', [name, start || null, end || null, campusId || null]);
   return rows[0];
 };
 

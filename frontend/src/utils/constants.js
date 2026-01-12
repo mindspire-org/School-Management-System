@@ -230,6 +230,7 @@ export const STORAGE_KEYS = {
   THEME: 'sms_theme',
   LANGUAGE: 'sms_language',
   SIDEBAR_STATE: 'sms_sidebar_state',
+  SELECTED_CAMPUS_ID: 'sms_selected_campus_id',
 };
 
 // Validation Rules

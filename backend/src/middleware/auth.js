@@ -7,6 +7,13 @@ export const authenticate = (req, res, next) => {
   try {
     const secret = process.env.JWT_SECRET || 'dev_jwt_secret';
     const payload = jwt.verify(token, secret);
+
+    // Support campus override for administrators
+    const campusHeader = req.headers['x-campus-id'];
+    if (campusHeader && (payload.role === 'admin' || payload.role === 'owner')) {
+      payload.campusId = campusHeader;
+    }
+
     req.user = payload;
     return next();
   } catch (e) {

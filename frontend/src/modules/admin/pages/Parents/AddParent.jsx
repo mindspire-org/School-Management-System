@@ -22,13 +22,14 @@ import {
 } from '@chakra-ui/react';
 import { MdPerson, MdEmail, MdPhone, MdHome, MdSave, MdArrowBack, MdSchool } from 'react-icons/md';
 import { useNavigate } from 'react-router-dom';
-import { parentsApi } from '../../../../services/api';
+import { parentsApi, campusesApi } from '../../../../services/api';
 import StudentSearchInput from './StudentSearchInput';
 
 export default function AddParent() {
     const navigate = useNavigate();
     const toast = useToast();
     const [loading, setLoading] = useState(false);
+    const [campuses, setCampuses] = useState([]);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -40,8 +41,15 @@ export default function AddParent() {
         zipCode: '',
         relationship: 'Father',
         occupation: '',
-        studentRollNumbers: '', // New field for linking students
+        studentRollNumbers: '',
+        campusId: '',
     });
+
+    React.useEffect(() => {
+        campusesApi.list({ pageSize: 100 })
+            .then(res => setCampuses(res.rows || []))
+            .catch(err => console.error('Failed to fetch campuses', err));
+    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -62,6 +70,7 @@ export default function AddParent() {
                 whatsappPhone: formData.phone,
                 address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`.trim(),
                 studentRollNumbers: formData.studentRollNumbers,
+                campusId: formData.campusId,
             };
 
             await parentsApi.create(payload);
@@ -147,14 +156,13 @@ export default function AddParent() {
                                             </Select>
                                         </FormControl>
 
-                                        <FormControl>
-                                            <FormLabel>Occupation</FormLabel>
-                                            <Input
-                                                name="occupation"
-                                                placeholder="Software Engineer"
-                                                value={formData.occupation}
-                                                onChange={handleChange}
-                                            />
+                                        <FormControl isRequired>
+                                            <FormLabel>Campus</FormLabel>
+                                            <Select name="campusId" value={formData.campusId} onChange={handleChange} placeholder="Select campus">
+                                                {campuses.map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                ))}
+                                            </Select>
                                         </FormControl>
                                     </SimpleGrid>
                                 </Box>

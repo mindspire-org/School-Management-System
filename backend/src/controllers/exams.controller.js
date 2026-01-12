@@ -3,7 +3,10 @@ import * as service from '../services/exams.service.js';
 export const list = async (req, res, next) => {
   try {
     const { q, className, section, fromDate, toDate, page, pageSize } = req.query;
-    const items = await service.listExams({ q, className, section, fromDate, toDate, page, pageSize });
+    const items = await service.listExams({
+      q, className, section, fromDate, toDate, page, pageSize,
+      campusId: req.user?.campusId
+    });
     res.json({ items });
   } catch (e) { next(e); }
 };
@@ -18,7 +21,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const item = await service.createExam(req.body);
+    const item = await service.createExam({ ...req.body, campusId: req.user?.campusId });
     res.status(201).json(item);
   } catch (e) { next(e); }
 };

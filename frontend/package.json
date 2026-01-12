@@ -1,112 +1,84 @@
 {
-  "name": "school-management-system",
-  "version": "2.0.0",
+  "name": "school-management-frontend",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "main": "electron/main.js",
-  "dependencies": {
-    "@babel/preset-react": "^7.18.6",
-    "@chakra-ui/icons": "^2.0.19",
-    "@chakra-ui/react": "2.6.1",
-    "@chakra-ui/system": "2.5.7",
-    "@chakra-ui/theme-tools": "^1.3.6",
-    "@emotion/cache": "^11.12.0",
-    "@emotion/react": "^11.12.0",
-    "@emotion/styled": "^11.12.0",
-    "@reduxjs/toolkit": "^2.10.1",
-    "@tanstack/react-table": "^8.19.3",
-    "@testing-library/jest-dom": "^6.4.6",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.5.2",
-    "apexcharts": "3.50.0",
-    "axios": "^1.13.2",
-    "dotenv": "^17.2.3",
-    "framer-motion": "^11.3.7",
-    "jspdf": "^2.5.2",
-    "npm-force-resolutions": "^0.0.10",
-    "react": "^18.2.0",
-    "react-apexcharts": "1.4.1",
-    "react-calendar": "^5.0.0",
-    "react-custom-scrollbars-2": "^4.5.0",
-    "react-dom": "^18.2.0",
-    "react-dropzone": "^14.2.3",
-    "react-icons": "^5.2.1",
-    "react-is": "^18.3.1",
-    "react-redux": "^9.2.0",
-    "react-router-dom": "^6.25.1",
-    "stylis": "^4.3.2",
-    "stylis-plugin-rtl": "^2.0.2",
-    "web-vitals": "^4.2.2"
-  },
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n FRONTEND,BACKEND,ELECTRON -c cyan,magenta,green \"npm run dev:front\" \"npm run dev:back\" \"npm run dev:electron\"",
+    "dev:front": "vite --port 8080 --strictPort --host 127.0.0.1",
+    "dev:back": "npm --prefix backend run dev",
+    "dev:electron": "wait-on http://127.0.0.1:8080 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:8080 NODE_ENV=development electron ./electron/main.js",
     "build": "vite build",
-    "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
-    "preinstall": "npx npm-force-resolutions",
-    "electron:dev": "cross-env BACKEND_PORT=59201 concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder --win --x64"
-  },
-  "resolutions": {
-    "react-error-overlay": "6.0.9"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "build:front": "vite build",
+    "build:backend": "npm --prefix backend run build",
+    "make:ico": "node ./scripts/make-ico.mjs",
+    "dist:win": "npm run make:ico && npm run build:front && npm run build:backend && cross-env PUPPETEER_SKIP_DOWNLOAD=1 npm --prefix backend install --omit=dev && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder -w",
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.7",
-    "@babel/plugin-transform-react-jsx": "^7.23.4",
-    "@vitejs/plugin-react": "^4.2.1",
-    "anymatch": "^3.1.3",
-    "chokidar": "^3.6.0",
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "electron": "^30.0.0",
-    "electron-builder": "^24.9.1",
-    "gh-pages": "^6.1.1",
-    "wait-on": "^7.2.0",
-    "micromatch": "^4.0.7",
-    "vite": "^7.2.2",
-    "vite-plugin-svgr": "^4.2.0",
-    "vite-tsconfig-paths": "^5.1.4"
-  }
-  ,
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12",
+    "jimp": "^0.22.10",
+    "png-to-ico": "^2.1.8",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.16",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "wait-on": "^9.0.3"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
+    "lucide-react": "^0.548.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.4",
+    "recharts": "^3.6.0",
+    "xlsx": "^0.18.5"
+  },
   "build": {
-    "appId": "org.mindspire.academia.pro",
-    "productName": "Academia Pro",
+    "appId": "org.mindspire.school",
+    "productName": "School Management System",
+    "directories": {
+      "output": "release"
+    },
     "files": [
-      "dist/**/*",
-      "electron/**/*",
+      "dist/**",
+      "electron/**",
+      "public/**",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "../backend",
+        "from": "backend",
         "to": "backend",
-        "filter": ["**/*", "!**/.git/**"]
+        "filter": ["**/*"]
+      },
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": ["**/*"]
       }
     ],
     "win": {
-      "target": ["nsis"],
-      "artifactName": "academia-pro.exe"
+      "target": "nsis",
+      "icon": "public/favicon.ico"
     },
-    "directories": {
-      "buildResources": "public"
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/favicon.ico",
+      "uninstallerIcon": "public/favicon.ico"
     }
   }
 }

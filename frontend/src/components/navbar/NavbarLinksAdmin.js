@@ -13,13 +13,14 @@ import {
   Text,
   useColorModeValue,
   useColorMode,
+  Select,
 } from '@chakra-ui/react';
 // Custom Components
 import { ItemContent } from '../../components/menu/ItemContent';
 import { SearchBar } from '../../components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from '../../components/sidebar/Sidebar';
 import PropTypes from 'prop-types';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 // Assets
 import navImage from '../../assets/img/layout/Navbar.png';
 import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
@@ -27,10 +28,22 @@ import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
 import routes from '../../routes';
 import { useAuth } from '../../contexts/AuthContext';
+import { campusesApi } from '../../services/api';
+
 export default function HeaderLinks(props) {
   const { secondary } = props;
   const { colorMode, toggleColorMode } = useColorMode();
-  const { user, logout } = useAuth();
+  const { user, logout, campusId, setCampusId } = useAuth();
+  const [campuses, setCampuses] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'owner') {
+      campusesApi.list({ pageSize: 100 })
+        .then(res => setCampuses(res.rows || []))
+        .catch(err => console.error('Failed to load campuses for switcher', err));
+    }
+  }, [user?.role]);
+
   // Chakra Color Mode
   const navbarIcon = useColorModeValue('gray.400', 'white');
   let menuBg = useColorModeValue('white', 'navy.800');
@@ -103,6 +116,24 @@ export default function HeaderLinks(props) {
         </Text>
       </Flex>
       <SidebarResponsive routes={routes} />
+
+      {(user?.role === 'admin' || user?.role === 'owner') && (
+        <Select
+          size="sm"
+          variant="main"
+          maxW="180px"
+          ml="10px"
+          value={campusId || ''}
+          onChange={(e) => setCampusId(e.target.value)}
+          borderRadius="30px"
+          bg={useColorModeValue('secondaryGray.300', 'navy.900')}
+        >
+          {campuses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </Select>
+      )}
+
       <Menu>
         <MenuButton p="0px">
           <Icon

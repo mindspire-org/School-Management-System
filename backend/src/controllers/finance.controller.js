@@ -28,7 +28,7 @@ export const getUsersByType = async (req, res, next) => {
 export const getDashboardStats = async (req, res, next) => {
   try {
     const { userType } = req.query;
-    const stats = await service.getDashboardStats({ userType });
+    const stats = await service.getDashboardStats({ userType, campusId: req.user?.campusId });
     res.json(stats);
   } catch (e) { next(e); }
 };
@@ -36,7 +36,7 @@ export const getDashboardStats = async (req, res, next) => {
 export const getDashboardAnalytics = async (req, res, next) => {
   try {
     const { userType, days } = req.query;
-    const analytics = await service.getDashboardAnalytics({ userType, days });
+    const analytics = await service.getDashboardAnalytics({ userType, days, campusId: req.user?.campusId });
     res.json(analytics);
   } catch (e) { next(e); }
 };
@@ -48,8 +48,22 @@ export const getDashboardAnalytics = async (req, res, next) => {
 // List unified invoices
 export const listUnifiedInvoices = async (req, res, next) => {
   try {
-    const { userType, userId, status, invoiceType, page, pageSize } = req.query;
-    const result = await service.listUnifiedInvoices({ userType, userId, status, invoiceType, page, pageSize });
+    let { userType, userId, status, invoiceType, page, pageSize } = req.query;
+    let userIds = undefined;
+
+    if (req.user?.role === 'parent') {
+      const parent = await parentsSvc.getByUserId(req.user.id);
+      if (parent) {
+        const kids = await students.list({ familyNumber: parent.familyNumber });
+        userIds = kids.rows.map(k => k.id);
+        userType = 'student';
+      }
+    }
+
+    const result = await service.listUnifiedInvoices({
+      userType, userId, userIds, status, invoiceType, page, pageSize,
+      campusId: req.user?.campusId
+    });
     res.json(result);
   } catch (e) { next(e); }
 };
@@ -75,7 +89,7 @@ export const createUnifiedInvoice = async (req, res, next) => {
       });
     }
 
-    const invoice = await service.createUnifiedInvoice(req.body, req.user?.id);
+    const invoice = await service.createUnifiedInvoice({ ...req.body, campusId: req.user?.campusId }, req.user?.id);
     res.status(201).json(invoice);
   } catch (e) { next(e); }
 };
@@ -145,8 +159,19 @@ export const createReceipt = async (req, res, next) => {
 
 export const getOutstandingFees = async (req, res, next) => {
   try {
-    const { userType, page, pageSize } = req.query;
-    const result = await service.getOutstandingFees({ userType, page, pageSize });
+    let { userType, page, pageSize } = req.query;
+    let userIds = undefined;
+
+    if (req.user?.role === 'parent') {
+      const parent = await parentsSvc.getByUserId(req.user.id);
+      if (parent) {
+        const kids = await students.list({ familyNumber: parent.familyNumber });
+        userIds = kids.rows.map(k => k.id);
+        userType = 'student';
+      }
+    }
+
+    const result = await service.getOutstandingFees({ userType, userIds, page, pageSize, campusId: req.user?.campusId });
     res.json(result);
   } catch (e) { next(e); }
 };

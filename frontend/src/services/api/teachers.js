@@ -25,3 +25,4 @@ export const listSubjectAssignments = (params) => http.get('/teachers/subjects/a
 export const assignSubject = (data) => http.post('/teachers/subjects/assignments', data);
 export const updateSubjectAssignment = (id, data) => http.patch(`/teachers/subjects/assignments/${id}`, data);
 export const deleteSubjectAssignment = (id) => http.delete(`/teachers/subjects/assignments/${id}`);
+export const getDashboardStats = (id) => http.get(`/teachers/${id}/dashboard-stats`);

@@ -3,7 +3,10 @@ import * as service from '../services/results.service.js';
 export const list = async (req, res, next) => {
   try {
     const { examId, studentId, subject, className, section, q, page, pageSize } = req.query;
-    const items = await service.list({ examId, studentId, subject, className, section, q, page, pageSize });
+    const items = await service.list({
+      examId, studentId, subject, className, section, q, page, pageSize,
+      campusId: req.user?.campusId
+    });
     res.json({ items });
   } catch (e) { next(e); }
 };
@@ -18,7 +21,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body);
+    const item = await service.create({ ...req.body, campusId: req.user?.campusId });
     res.status(201).json(item);
   } catch (e) { next(e); }
 };
@@ -40,7 +43,8 @@ export const remove = async (req, res, next) => {
 
 export const bulkCreate = async (req, res, next) => {
   try {
-    const items = Array.isArray(req.body) ? req.body : [];
+    const rawItems = Array.isArray(req.body) ? req.body : [];
+    const items = rawItems.map(it => ({ ...it, campusId: req.user?.campusId }));
     const created = await service.bulkCreate(items);
     res.status(201).json({ items: created });
   } catch (e) { next(e); }

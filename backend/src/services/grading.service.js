@@ -1,23 +1,28 @@
 import { query } from '../config/db.js';
 
-export const listSchemes = async () => {
+export const listSchemes = async (campusId) => {
   const { rows } = await query(
     `SELECT id, name, academic_year AS "academicYear", bands, is_default AS "isDefault",
-            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt"
+            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt",
+            campus_id AS "campusId"
        FROM grading_schemes
-       ORDER BY (is_default DESC), updated_at DESC`
+      WHERE ($1::int IS NULL OR campus_id = $1::int)
+      ORDER BY (is_default DESC), updated_at DESC`,
+    [campusId || null]
   );
   return rows;
 };
 
-export const getDefaultScheme = async () => {
+export const getDefaultScheme = async (campusId) => {
   const { rows } = await query(
     `SELECT id, name, academic_year AS "academicYear", bands, is_default AS "isDefault",
-            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt"
+            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt",
+            campus_id AS "campusId"
        FROM grading_schemes
-      WHERE is_default = TRUE
+      WHERE is_default = TRUE AND ($1::int IS NULL OR campus_id = $1::int)
       ORDER BY updated_at DESC
-      LIMIT 1`
+      LIMIT 1`,
+    [campusId || null]
   );
   return rows[0] || null;
 };
@@ -25,7 +30,8 @@ export const getDefaultScheme = async () => {
 export const getById = async (id) => {
   const { rows } = await query(
     `SELECT id, name, academic_year AS "academicYear", bands, is_default AS "isDefault",
-            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt"
+            created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt",
+            campus_id AS "campusId"
        FROM grading_schemes
       WHERE id = $1`,
     [id]
@@ -33,13 +39,14 @@ export const getById = async (id) => {
   return rows[0] || null;
 };
 
-export const create = async ({ name, academicYear, bands, isDefault, userId }) => {
+export const create = async ({ name, academicYear, bands, isDefault, userId, campusId }) => {
   const { rows } = await query(
-    `INSERT INTO grading_schemes (name, academic_year, bands, is_default, created_by)
-     VALUES ($1, $2, $3::jsonb, COALESCE($4, FALSE), $5)
+    `INSERT INTO grading_schemes (name, academic_year, bands, is_default, created_by, campus_id)
+     VALUES ($1, $2, $3::jsonb, COALESCE($4, FALSE), $5, $6)
      RETURNING id, name, academic_year AS "academicYear", bands, is_default AS "isDefault",
-               created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt"`,
-    [name || 'Default', academicYear || '', JSON.stringify(bands || {}), isDefault === true, userId || null]
+               created_by AS "createdBy", created_at AS "createdAt", updated_at AS "updatedAt",
+               campus_id AS "campusId"`,
+    [name || 'Default', academicYear || '', JSON.stringify(bands || {}), isDefault === true, userId || null, campusId || null]
   );
   if (rows[0]?.isDefault) {
     await setDefault(rows[0].id);

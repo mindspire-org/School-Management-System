@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -29,9 +30,10 @@ import { SearchIcon } from '@chakra-ui/icons';
 import { MdPeople, MdChevronRight, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import { parentsApi } from '../../../../services/api';
-import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function ParentsList() {
+  const { campusId } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,7 @@ export default function ParentsList() {
   const refresh = async () => {
     try {
       setLoading(true);
-      const data = await parentsApi.list({ q, pageSize: 100 });
+      const data = await parentsApi.list({ q, pageSize: 100, campusId });
       setRows(data?.rows || data?.items || []);
       setTotal(data?.total ?? (data?.rows?.length || 0));
     } catch (e) {

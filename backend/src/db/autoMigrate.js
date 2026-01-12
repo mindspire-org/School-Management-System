@@ -173,3 +173,59 @@ export async function ensureParentsSchema() {
     CREATE INDEX IF NOT EXISTS idx_students_family_number ON students (family_number);
   `);
 }
+
+export async function ensureCampusSchema() {
+  await query(`
+    -- 1. Create campuses table if not exists
+    CREATE TABLE IF NOT EXISTS campuses (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      address TEXT,
+      phone TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    -- 2. Ensure at least one default campus exists (bootstrap)
+    INSERT INTO campuses (name) 
+    SELECT 'Main Campus' 
+    WHERE NOT EXISTS (SELECT 1 FROM campuses LIMIT 1);
+
+    -- 3. Add campus_id to core tables
+    DO $$
+    DECLARE
+      tables TEXT[] := ARRAY[
+        'users', 'students', 'teachers', 'drivers', 'parents', 
+        'class_sections', 'exams', 'syllabus_items', 'assignments',
+        'buses', 'routes', 'finance_invoices', 'finance_payments', 
+        'finance_receipts', 'expenses', 'announcements', 'alerts', 
+        'notifications', 'attendance_records', 'grading_schemes', 'subjects',
+        'exam_results', 'assignment_submissions', 'rfid_logs', 
+        'teacher_attendance', 'teacher_payrolls', 'teacher_performance_reviews',
+        'teacher_schedules', 'teacher_subject_assignments', 'class_subjects',
+        'student_transport', 'bus_assignments'
+      ];
+      t TEXT;
+      default_campus_id INTEGER;
+    BEGIN
+      SELECT id INTO default_campus_id FROM campuses LIMIT 1;
+      
+      FOREACH t IN ARRAY tables
+      LOOP
+        -- Add campus_id column if missing
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = t) THEN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = t AND column_name = 'campus_id') THEN
+            EXECUTE 'ALTER TABLE ' || t || ' ADD COLUMN campus_id INTEGER REFERENCES campuses(id)';
+            -- For existing rows, assign to default campus
+            IF default_campus_id IS NOT NULL THEN
+              EXECUTE 'UPDATE ' || t || ' SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+            END IF;
+            -- Make it mandatory after update
+            EXECUTE 'ALTER TABLE ' || t || ' ALTER COLUMN campus_id SET NOT NULL';
+          END IF;
+          -- Add index for performance
+          EXECUTE 'CREATE INDEX IF NOT EXISTS idx_' || t || '_campus_id ON ' || t || '(campus_id)';
+        END IF;
+      END LOOP;
+    END $$;
+  `);
+}

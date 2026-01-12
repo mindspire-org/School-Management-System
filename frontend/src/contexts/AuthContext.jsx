@@ -12,11 +12,12 @@ const AuthContext = createContext({
   loading: true,
   isAuthenticated: false,
   error: null,
-  login: () => {},
-  logout: () => {},
-  updateUser: () => {},
+  login: () => { },
+  logout: () => { },
+  updateUser: () => { },
   moduleAccess: null,
-  refreshModuleAccess: () => {},
+  refreshModuleAccess: () => { },
+  campusId: null,
 });
 
 // Auth Provider Component
@@ -26,7 +27,20 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState(null);
   const [moduleAccess, setModuleAccess] = useState(null);
+  const [selectedCampusId, setSelectedCampusId] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.SELECTED_CAMPUS_ID) || null;
+  });
   const navigate = useNavigate();
+
+  const setCampusId = useCallback((id) => {
+    const cid = id ? String(id) : null;
+    setSelectedCampusId(cid);
+    if (cid) {
+      localStorage.setItem(STORAGE_KEYS.SELECTED_CAMPUS_ID, cid);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.SELECTED_CAMPUS_ID);
+    }
+  }, []);
 
   // Logout function
   const logout = useCallback(async ({ skipRemote = false } = {}) => {
@@ -35,15 +49,17 @@ export const AuthProvider = ({ children }) => {
       if (!skipRemote) {
         await authApi.logout();
       }
-    } catch (_) {}
+    } catch (_) { }
     // Clear both storages to fully sign out
     sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
     sessionStorage.removeItem(STORAGE_KEYS.USER_DATA);
     localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
     localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+    localStorage.removeItem(STORAGE_KEYS.SELECTED_CAMPUS_ID);
     setAuthToken(null);
     setUser(null);
     setIsAuthenticated(false);
+    setSelectedCampusId(null);
     navigate('/auth/sign-in');
   }, [navigate]);
 
@@ -143,11 +159,11 @@ export const AuthProvider = ({ children }) => {
       if (config.ENABLE_DEMO_AUTH) {
         const roleFromEmail =
           email.includes('admin@') ? 'admin' :
-          email.includes('teacher@') ? 'teacher' :
-          email.includes('student@') ? 'student' :
-          email.includes('driver@') ? 'driver' :
-          email.includes('parent@') ? 'parent' :
-          email.includes('@mindspire.org') ? 'owner' : 'student';
+            email.includes('teacher@') ? 'teacher' :
+              email.includes('student@') ? 'student' :
+                email.includes('driver@') ? 'driver' :
+                  email.includes('parent@') ? 'parent' :
+                    email.includes('@mindspire.org') ? 'owner' : 'student';
         token = 'demo-token-' + Date.now();
         userData = { email, role: roleFromEmail, name: roleFromEmail.toUpperCase(), id: roleFromEmail + '-001' };
       } else {
@@ -201,7 +217,20 @@ export const AuthProvider = ({ children }) => {
 
   const clearError = () => setError(null);
 
-  const value = { user, loading, isAuthenticated, error, login, logout, updateUser, clearError, moduleAccess, refreshModuleAccess };
+  const value = {
+    user,
+    loading,
+    isAuthenticated,
+    error,
+    login,
+    logout,
+    updateUser,
+    clearError,
+    moduleAccess,
+    refreshModuleAccess,
+    campusId: selectedCampusId || user?.campusId || null,
+    setCampusId,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -209,11 +238,11 @@ export const AuthProvider = ({ children }) => {
 // Custom hook to use Auth Context
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
+
   return context;
 };
 

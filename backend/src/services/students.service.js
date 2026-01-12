@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ page = 1, pageSize = 50, q, class: cls, section }) => {
+export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, familyNumber, campusId }) => {
   const offset = (page - 1) * pageSize;
   const where = [];
   const params = [];
@@ -16,9 +16,17 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section }) 
     params.push(section);
     where.push(`section = $${params.length}`);
   }
+  if (familyNumber) {
+    params.push(familyNumber);
+    where.push(`family_number = $${params.length}`);
+  }
+  if (campusId) {
+    params.push(campusId);
+    where.push(`s.campus_id = $${params.length}`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  const countSql = `SELECT COUNT(*)::int AS count FROM students ${whereSql}`;
+  const countSql = `SELECT COUNT(*)::int AS count FROM students s ${whereSql.replace(/s\.campus_id/g, 'campus_id')}`; // Adjust alias for count query
   const { rows: countRows } = await query(countSql, params);
   const total = countRows[0]?.count || 0;
 
@@ -73,12 +81,12 @@ export const create = async (data) => {
   const {
     name, email, rollNumber, class: cls, section, rfidTag, attendance, feeStatus,
     busNumber, busAssigned, parentName, parentPhone, status = 'active', admissionDate, avatar,
-    personal, academic, parent, transport, fee, familyNumber, userId
+    personal, academic, parent, transport, fee, familyNumber, userId, campusId
   } = data;
   const { rows } = await query(
-    `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status, admission_date, avatar, personal, academic, parent, transport, fee, family_number, user_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
-     RETURNING id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee`,
+    `INSERT INTO students (name, email, roll_number, class, section, rfid_tag, attendance, fee_status, bus_number, bus_assigned, parent_name, parent_phone, status, admission_date, avatar, personal, academic, parent, transport, fee, family_number, user_id, campus_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+     RETURNING id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee, campus_id AS "campusId"`,
     [
       name,
       email || null,
@@ -102,6 +110,7 @@ export const create = async (data) => {
       fee ? JSON.stringify(fee) : '{}',
       familyNumber || null,
       userId || null,
+      campusId || null,
     ]
   );
   return rows[0];
@@ -112,12 +121,12 @@ export const update = async (id, data) => {
   const values = [];
   const map = {
     name: 'name', email: 'email', rollNumber: 'roll_number', class: 'class', section: 'section', rfidTag: 'rfid_tag', attendance: 'attendance', feeStatus: 'fee_status', busNumber: 'bus_number', busAssigned: 'bus_assigned', parentName: 'parent_name', parentPhone: 'parent_phone', status: 'status', admissionDate: 'admission_date', avatar: 'avatar',
-    personal: 'personal', academic: 'academic', parent: 'parent', transport: 'transport', fee: 'fee', familyNumber: 'family_number', userId: 'user_id'
+    personal: 'personal', academic: 'academic', parent: 'parent', transport: 'transport', fee: 'fee', familyNumber: 'family_number', userId: 'user_id', campusId: 'campus_id'
   };
   Object.entries(data || {}).forEach(([k, v]) => {
     if (map[k] !== undefined) {
       // Stringify JSONB fields
-      if (['personal','academic','parent','transport','fee'].includes(k) && v !== undefined) {
+      if (['personal', 'academic', 'parent', 'transport', 'fee'].includes(k) && v !== undefined) {
         values.push(v ? JSON.stringify(v) : null);
       } else {
         values.push(v);
@@ -310,4 +319,109 @@ export const updateTransport = async (studentId, { routeId, busId, pickupStopId,
     await query('INSERT INTO student_transport (student_id, route_id, bus_id, pickup_stop_id, drop_stop_id) VALUES ($1,$2,$3,$4,$5)', [studentId, routeId || null, busId || null, pickupStopId || null, dropStopId || null]);
   }
   return await getTransport(studentId);
+};
+
+export const getDashboardStats = async (studentId) => {
+  const stats = {
+    todaysClasses: 0,
+    attendance: 0,
+    pendingAssignments: 0,
+    upcomingExams: 0,
+    notifications: 0
+  };
+
+  try {
+    // Get student details first (class, section, user_id)
+    const { rows: studentRows } = await query('SELECT id, class, section, attendance, user_id FROM students WHERE id = $1', [studentId]);
+    if (!studentRows.length) return stats;
+    const student = studentRows[0];
+
+    stats.attendance = Number(student.attendance || 0);
+
+    // 1. Today's Classes
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    // Normalize day to 1-7
+    let dayIdx = null;
+    const lowerDay = today.toLowerCase();
+    const idx = dayNames.findIndex(d => d.toLowerCase() === lowerDay);
+    if (idx >= 0) dayIdx = idx + 1;
+
+    if (dayIdx && student.class) {
+      const { rows: classRows } = await query(
+        `SELECT COUNT(*)::int as count FROM teacher_schedules 
+         WHERE class = $1 AND (section IS NULL OR section = $2) AND day_of_week = $3`,
+        [student.class, student.section, dayIdx]
+      );
+      stats.todaysClasses = classRows[0]?.count || 0;
+    }
+
+    // 2. Pending Assignments
+    if (student.class) {
+      const { rows: assignRows } = await query(
+        `SELECT COUNT(*)::int as count 
+         FROM assignments a
+         WHERE a.class = $1 AND (a.section IS NULL OR a.section = $2)
+           AND a.due_date >= NOW()
+           AND NOT EXISTS (
+             SELECT 1 FROM assignment_submissions s 
+             WHERE s.assignment_id = a.id AND s.student_id = $3
+           )`,
+        [student.class, student.section, studentId]
+      );
+      stats.pendingAssignments = assignRows[0]?.count || 0;
+    }
+
+    // 3. Upcoming Exams
+    if (student.class) {
+      const { rows: examRows } = await query(
+        `SELECT COUNT(*)::int as count FROM exams 
+         WHERE class = $1 AND (section IS NULL OR section = $2) AND exam_date >= CURRENT_DATE`,
+        [student.class, student.section]
+      );
+      stats.upcomingExams = examRows[0]?.count || 0;
+    }
+
+    // 4. Notifications
+    if (student.user_id) {
+      const { rows: notifRows } = await query(
+        `SELECT COUNT(*)::int as count FROM notifications WHERE user_id = $1 AND is_read = false`,
+        [student.user_id]
+      );
+      stats.notifications = notifRows[0]?.count || 0;
+    }
+
+  } catch (err) {
+    console.error('Error fetching student dashboard stats:', err);
+  }
+  return stats;
+};
+
+export const getAttendanceTrend = async (studentId) => {
+  // Returns attendance % for the last 5 weeks
+  const { rows } = await query(`
+    WITH weeks AS (
+      SELECT 
+        date_trunc('week', current_date) - (n * interval '1 week') as week_start,
+        date_trunc('week', current_date) - (n * interval '1 week') + interval '6 days' as week_end,
+        5 - n as week_num
+      FROM generate_series(0, 4) n
+    )
+    SELECT 
+      w.week_num,
+      COUNT(ar.id) as total_days,
+      COUNT(CASE WHEN ar.status = 'present' THEN 1 END) as present_days
+    FROM weeks w
+    LEFT JOIN attendance_records ar ON ar.student_id = $1 
+      AND ar.date >= w.week_start AND ar.date <= w.week_end
+    GROUP BY w.week_num
+    ORDER BY w.week_num ASC
+  `, [studentId]);
+
+  return rows.map(r => {
+    const total = Number(r.total_days);
+    const present = Number(r.present_days);
+    return total > 0 ? Math.round((present / total) * 100) : 0;
+  });
 };

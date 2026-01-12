@@ -2,7 +2,7 @@ import { getOverview, getAttendanceWeekly, getFeesMonthly } from '../services/da
 
 export const overview = async (req, res, next) => {
   try {
-    const data = await getOverview();
+    const data = await getOverview(req.user?.campusId);
     return res.json({ success: true, data });
   } catch (err) {
     return next(err);
@@ -11,7 +11,7 @@ export const overview = async (req, res, next) => {
 
 export const attendanceWeekly = async (req, res, next) => {
   try {
-    const data = await getAttendanceWeekly();
+    const data = await getAttendanceWeekly(req.user?.campusId);
     return res.json({ success: true, data });
   } catch (err) {
     return next(err);
@@ -20,7 +20,7 @@ export const attendanceWeekly = async (req, res, next) => {
 
 export const feesMonthly = async (req, res, next) => {
   try {
-    const data = await getFeesMonthly();
+    const data = await getFeesMonthly(req.user?.campusId);
     return res.json({ success: true, data });
   } catch (err) {
     return next(err);

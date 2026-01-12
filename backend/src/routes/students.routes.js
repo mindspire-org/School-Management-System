@@ -22,6 +22,22 @@ router.get(
 );
 
 router.get(
+  '/:id/attendance-trend',
+  authenticate,
+  [param('id').isInt()],
+  validate,
+  studentController.getAttendanceTrend
+);
+
+router.get(
+  '/:id/dashboard-stats',
+  authenticate,
+  [param('id').isInt()],
+  validate,
+  studentController.getDashboardStats
+);
+
+router.get(
   '/:id',
   authenticate,
   [param('id').isInt()],

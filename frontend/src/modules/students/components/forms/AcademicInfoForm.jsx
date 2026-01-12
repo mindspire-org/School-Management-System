@@ -23,55 +23,95 @@ import {
   selectStudentFormData,
 } from '../../../../redux/features/students/studentSlice';
 import useClassOptions from '../../../../hooks/useClassOptions';
+import { campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 function AcademicInfoForm() {
+  const { campusId: activeCampusId } = useAuth();
   const dispatch = useAppDispatch();
   const formData = useAppSelector(selectStudentFormData);
   const academicInfo = formData.academic;
-  const { classOptions, sectionsByClass, sectionOptions, loading } = useClassOptions({ selectedClass: academicInfo.class || null });
-  
+  const { classOptions, sectionsByClass, sectionOptions, loading: classLoading } = useClassOptions({ selectedClass: academicInfo.class || null });
+  const [campuses, setCampuses] = React.useState([]);
+  const [campusLoading, setCampusLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    setCampusLoading(true);
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err))
+      .finally(() => setCampusLoading(false));
+  }, []);
+
+  // Default campusId from auth context if not set
+  React.useEffect(() => {
+    if (!academicInfo.campusId && activeCampusId) {
+      dispatch(updateFormData({
+        step: 'academic',
+        data: { campusId: activeCampusId }
+      }));
+    }
+  }, [academicInfo.campusId, activeCampusId, dispatch]);
+
   // Handle input changes
   const handleInputChange = (field, value) => {
-    dispatch(updateFormData({ 
+    dispatch(updateFormData({
       step: 'academic',
       data: { [field]: value }
     }));
   };
-  
+
   // Handle previous education fields
   const handlePreviousEducationChange = (field, value) => {
     const updatedPreviousEducation = {
       ...academicInfo.previousEducation,
       [field]: value
     };
-    
+
     dispatch(updateFormData({
       step: 'academic',
       data: { previousEducation: updatedPreviousEducation }
     }));
   };
-  
+
   // Generate current year and next few years for academic year dropdown
   const getCurrentAcademicYears = () => {
     const currentYear = new Date().getFullYear();
     const years = [];
-    
+
     for (let i = 0; i < 5; i++) {
       const year = currentYear + i;
       const nextYear = year + 1;
       years.push(`${year}-${nextYear}`);
     }
-    
+
     return years;
   };
-  
+
   const academicYears = getCurrentAcademicYears();
-  
+
   return (
     <Box>
       <Text fontSize="xl" fontWeight="600" mb={6}>
         Academic Information
       </Text>
+
+      {/* Campus Selection */}
+      <FormControl id="campusId" isRequired mb={6}>
+        <FormLabel>Campus</FormLabel>
+        <Select
+          value={academicInfo.campusId || ''}
+          onChange={(e) => handleInputChange('campusId', e.target.value)}
+          placeholder="Select campus"
+          isDisabled={campusLoading}
+        >
+          {campusLoading && <option disabled>Loading campuses...</option>}
+          {campuses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </Select>
+        <FormHelperText>Associate student with a specific school campus</FormHelperText>
+      </FormControl>
 
       {/* Current Academic Information */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
@@ -86,7 +126,7 @@ function AcademicInfoForm() {
             />
           </InputGroup>
         </FormControl>
-        
+
         <FormControl id="rollNumber" isRequired>
           <FormLabel>Roll Number</FormLabel>
           <InputGroup>
@@ -98,7 +138,7 @@ function AcademicInfoForm() {
             />
           </InputGroup>
         </FormControl>
-        
+
         <FormControl id="academicYear" isRequired>
           <FormLabel>Academic Year</FormLabel>
           <Select
@@ -129,9 +169,9 @@ function AcademicInfoForm() {
               }
             }}
             placeholder="Select class"
-            isDisabled={loading}
+            isDisabled={classLoading}
           >
-            {loading && classOptions.length === 0 && (
+            {classLoading && classOptions.length === 0 && (
               <option value="" disabled>Loading classes...</option>
             )}
             {classOptions.map((c) => (
@@ -139,21 +179,21 @@ function AcademicInfoForm() {
             ))}
           </Select>
         </FormControl>
-        
+
         <FormControl id="section" isRequired>
           <FormLabel>Section</FormLabel>
           <Select
             value={academicInfo.section || ''}
             onChange={(e) => handleInputChange('section', e.target.value)}
             placeholder="Select section"
-            isDisabled={loading || !academicInfo.class}
+            isDisabled={classLoading || !academicInfo.class}
           >
             {sectionOptions.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </Select>
         </FormControl>
-        
+
         <FormControl id="stream">
           <FormLabel>Stream/Group</FormLabel>
           <Select
@@ -214,7 +254,7 @@ function AcademicInfoForm() {
             placeholder="Enter previous school name"
           />
         </FormControl>
-        
+
         <FormControl id="previousClass">
           <FormLabel>Previous Class/Grade</FormLabel>
           <Input
@@ -234,7 +274,7 @@ function AcademicInfoForm() {
             onChange={(e) => handlePreviousEducationChange('lastAttendedDate', e.target.value)}
           />
         </FormControl>
-        
+
         <FormControl id="transferCertificate">
           <FormLabel>Transfer Certificate No.</FormLabel>
           <Input

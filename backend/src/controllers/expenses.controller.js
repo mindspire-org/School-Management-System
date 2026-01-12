@@ -2,14 +2,14 @@ import * as service from '../services/expenses.service.js';
 
 export const listExpenses = async (req, res, next) => {
     try {
-        const result = await service.listExpenses(req.query);
+        const result = await service.listExpenses({ ...req.query, campusId: req.user?.campusId });
         res.json(result);
     } catch (e) { next(e); }
 };
 
 export const getExpenseStats = async (req, res, next) => {
     try {
-        const result = await service.getExpenseStats();
+        const result = await service.getExpenseStats({ campusId: req.user?.campusId });
         res.json(result);
     } catch (e) { next(e); }
 };
@@ -24,7 +24,7 @@ export const getExpenseById = async (req, res, next) => {
 
 export const createExpense = async (req, res, next) => {
     try {
-        const result = await service.createExpense(req.body, req.user?.id);
+        const result = await service.createExpense({ ...req.body, campusId: req.user?.campusId }, req.user?.id);
         res.status(201).json(result);
     } catch (e) { next(e); }
 };

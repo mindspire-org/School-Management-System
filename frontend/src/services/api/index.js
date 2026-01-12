@@ -9,4 +9,5 @@ export * as settingsApi from './settings';
 export * as parentsApi from './parents';
 export * as driversApi from './drivers';
 export * as alertsApi from './alerts';
+export * as campusesApi from './campuses';
 export { http, setAuthToken, setUnauthorizedHandler } from '../http';

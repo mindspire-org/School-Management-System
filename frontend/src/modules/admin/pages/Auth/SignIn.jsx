@@ -3,6 +3,7 @@ import { Box, Flex, Heading, Text, Button, Input, InputGroup, InputLeftElement, 
 import { MdEmail, MdLock, MdLogin } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function SignIn({ redirectTo = '/admin/dashboard' }) {
   const [email, setEmail] = useState('admin@school.com');
@@ -12,6 +13,9 @@ export default function SignIn({ redirectTo = '/admin/dashboard' }) {
   const navigate = useNavigate();
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const heroBg = useColorModeValue('linear-gradient(135deg, #6a85f1 0%, #53c0f0 50%, #7f53f0 100%)', 'linear-gradient(135deg, #4b5bc7 0%, #3b9ec9 50%, #6f3bc9 100%)');
+
+  // Use Auth Context for real login
+  const { login: authLogin } = useAuth(); // Renamed to avoid confusion with internal function name if any
 
   const roleCreds = {
     admin: { email: 'admin@school.com', password: 'password' },
@@ -27,14 +31,30 @@ export default function SignIn({ redirectTo = '/admin/dashboard' }) {
     setPassword(c.password);
   };
 
-  const handleSignIn = () => {
-    setLoading(true);
-    toast({ title: 'Signing in...', status: 'info', duration: 1200, isClosable: true });
-    setTimeout(() => {
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      toast({ title: 'Error', description: 'Please enter email and password', status: 'error', duration: 3000 });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast({ title: 'Signing in...', status: 'info', duration: 1000, isClosable: true });
+
+      const res = await authLogin(email, password, true); // true = remember me
+
+      if (res.success) {
+        toast({ title: 'Welcome back!', description: `Logged in as ${res.user.role}`, status: 'success', duration: 2000, isClosable: true });
+        // Navigation is handled by authLogin
+      } else {
+        toast({ title: 'Login Failed', description: res.error, status: 'error', duration: 3000, isClosable: true });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'An unexpected error occurred', status: 'error', duration: 3000 });
+    } finally {
       setLoading(false);
-      toast({ title: 'Welcome back!', status: 'success', duration: 1500, isClosable: true });
-      navigate(redirectTo);
-    }, 1500);
+    }
   };
 
   return (
@@ -50,10 +70,10 @@ export default function SignIn({ redirectTo = '/admin/dashboard' }) {
               <Text fontWeight='700'>Demo Credentials:</Text>
               <Text color={textColorSecondary} fontSize='sm'>Click on a role to auto-fill credentials</Text>
               <HStack spacing={2} wrap='wrap'>
-                <Badge as='button' onClick={()=>fillRole('admin')} colorScheme='blue' px={3} py={1} borderRadius='full'>ADMIN</Badge>
-                <Badge as='button' onClick={()=>fillRole('teacher')} colorScheme='green' px={3} py={1} borderRadius='full'>TEACHER</Badge>
-                <Badge as='button' onClick={()=>fillRole('student')} colorScheme='purple' px={3} py={1} borderRadius='full'>STUDENT</Badge>
-                <Badge as='button' onClick={()=>fillRole('driver')} colorScheme='orange' px={3} py={1} borderRadius='full'>DRIVER</Badge>
+                <Badge as='button' onClick={() => fillRole('admin')} colorScheme='blue' px={3} py={1} borderRadius='full'>ADMIN</Badge>
+                <Badge as='button' onClick={() => fillRole('teacher')} colorScheme='green' px={3} py={1} borderRadius='full'>TEACHER</Badge>
+                <Badge as='button' onClick={() => fillRole('student')} colorScheme='purple' px={3} py={1} borderRadius='full'>STUDENT</Badge>
+                <Badge as='button' onClick={() => fillRole('driver')} colorScheme='orange' px={3} py={1} borderRadius='full'>DRIVER</Badge>
               </HStack>
             </VStack>
           </Card>
@@ -66,7 +86,7 @@ export default function SignIn({ redirectTo = '/admin/dashboard' }) {
                   <InputLeftElement pointerEvents='none'>
                     <Icon as={MdEmail} color='gray.400' />
                   </InputLeftElement>
-                  <Input type='email' value={email} onChange={(e)=>setEmail(e.target.value)} placeholder='Enter your email' />
+                  <Input type='email' value={email} onChange={(e) => setEmail(e.target.value)} placeholder='Enter your email' />
                 </InputGroup>
               </FormControl>
               <FormControl>
@@ -75,7 +95,7 @@ export default function SignIn({ redirectTo = '/admin/dashboard' }) {
                   <InputLeftElement pointerEvents='none'>
                     <Icon as={MdLock} color='gray.400' />
                   </InputLeftElement>
-                  <Input type='password' value={password} onChange={(e)=>setPassword(e.target.value)} placeholder='Enter your password' />
+                  <Input type='password' value={password} onChange={(e) => setPassword(e.target.value)} placeholder='Enter your password' />
                 </InputGroup>
               </FormControl>
               <Flex align='center' justify='space-between'>

@@ -29,6 +29,7 @@ export const list = async (req, res, next) => {
       subject: coerceString(req.query.subject),
       teacherId: coerceNumber(req.query.teacherId),
       search: coerceString(req.query.q ?? req.query.search),
+      campusId: req.user?.campusId,
     };
     const rows = await syllabus.list(filters);
     return res.json(rows);
@@ -54,6 +55,7 @@ export const create = async (req, res, next) => {
       covered: coerceNumber(req.body.covered) ?? 0,
       dueDate: toIsoDate(req.body.dueDate),
       notes: coerceString(req.body.notes),
+      campusId: req.user?.campusId,
     };
     const created = await syllabus.create(payload);
     return res.status(201).json(created);

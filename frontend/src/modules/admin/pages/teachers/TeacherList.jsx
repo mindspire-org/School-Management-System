@@ -51,11 +51,13 @@ import {
   MdPersonAdd,
 } from 'react-icons/md';
 import useApi from '../../../../hooks/useApi';
-import { teachersApi } from '../../../../services/api';
+import { teachersApi, campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 import TeacherDetailsModal from './TeacherDetailsModal';
 import TeacherEditModal from './TeacherEditModal';
 
 function TeacherList() {
+  const { campusId } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
@@ -71,6 +73,7 @@ function TeacherList() {
   const deleteDisclosure = useDisclosure();
   const editDisclosure = useDisclosure();
   const cancelDeleteRef = useRef();
+  const [campuses, setCampuses] = useState([]);
   const toast = useToast();
 
   // Color mode values
@@ -94,11 +97,14 @@ function TeacherList() {
   } = useApi((id, payload) => teachersApi.update(id, payload));
 
   const refreshTeachers = useCallback(() => {
-    fetchTeachers({ page: 1, pageSize: 200 });
-  }, [fetchTeachers]);
+    fetchTeachers({ page: 1, pageSize: 200, campusId });
+  }, [fetchTeachers, campusId]);
 
   useEffect(() => {
     refreshTeachers();
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err));
   }, [refreshTeachers]);
 
   const teachers = useMemo(() => teachersResponse?.rows || [], [teachersResponse]);
@@ -239,6 +245,7 @@ function TeacherList() {
     city: teacher?.city || '',
     state: teacher?.state || '',
     postalCode: teacher?.postalCode || '',
+    campusId: teacher?.campusId || '',
   }), []);
 
   const handleEditChange = (e) => {
@@ -357,6 +364,7 @@ function TeacherList() {
     assign('city', editForm.city.trim() || undefined);
     assign('state', editForm.state.trim() || undefined);
     assign('postalCode', editForm.postalCode.trim() || undefined);
+    assign('campusId', editForm.campusId || undefined);
 
     assign('subjects', parseListField(editForm.subjects));
     assign('classes', parseListField(editForm.classes));
@@ -726,6 +734,7 @@ function TeacherList() {
         isSubmitting={updatingTeacher}
         avatarPreview={editAvatarPreview}
         onAvatarChange={handleEditAvatarChange}
+        campusOptions={campuses}
       />
 
       <AlertDialog

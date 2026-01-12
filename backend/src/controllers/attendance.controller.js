@@ -3,7 +3,10 @@ import * as attendanceService from '../services/attendance.service.js';
 export const list = async (req, res, next) => {
   try {
     const { studentId, startDate, endDate, page, pageSize } = req.query;
-    const rows = await attendanceService.list({ studentId, startDate, endDate, page, pageSize });
+    const rows = await attendanceService.list({
+      studentId, startDate, endDate, page, pageSize,
+      campusId: req.user?.campusId
+    });
     res.json({ items: rows });
   } catch (e) {
     next(e);
@@ -24,7 +27,10 @@ export const create = async (req, res, next) => {
   try {
     const { studentId, date, status, remarks } = req.body;
     const createdBy = req.user?.id;
-    const row = await attendanceService.create({ studentId, date, status, remarks, createdBy });
+    const row = await attendanceService.create({
+      studentId, date, status, remarks, createdBy,
+      campusId: req.user?.campusId
+    });
     res.status(201).json(row);
   } catch (e) {
     next(e);
@@ -55,7 +61,10 @@ export const listDaily = async (req, res, next) => {
   try {
     const { date, class: cls, section, q } = req.query;
     if (!date) return res.status(400).json({ message: 'date is required' });
-    const rows = await attendanceService.listDaily({ date, class: cls, section, q });
+    const rows = await attendanceService.listDaily({
+      date, class: cls, section, q,
+      campusId: req.user?.campusId
+    });
     res.json({ items: rows });
   } catch (e) {
     next(e);
@@ -68,7 +77,10 @@ export const upsertDaily = async (req, res, next) => {
     const { date, records } = req.body || {};
     if (!date || !Array.isArray(records)) return res.status(400).json({ message: 'date and records[] are required' });
     const createdBy = req.user?.id;
-    const result = await attendanceService.upsertDaily({ date, records, createdBy });
+    const result = await attendanceService.upsertDaily({
+      date, records, createdBy,
+      campusId: req.user?.campusId
+    });
     res.json(result);
   } catch (e) {
     next(e);

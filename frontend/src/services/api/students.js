@@ -24,3 +24,6 @@ export const updateInvoice = (id, invoiceId, data) => http.put(`/students/${id}/
 // Transport
 export const getTransport = (id) => http.get(`/students/${id}/transport`);
 export const updateTransport = (id, data) => http.put(`/students/${id}/transport`, data);
+export const getDashboardStats = (id) => http.get(`/students/${id}/dashboard-stats`);
+export const getAttendanceTrend = (id) => http.get(`/students/${id}/attendance-trend`);
+export const listSchedules = (params) => http.get('/teachers/schedules', { params });

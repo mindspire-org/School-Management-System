@@ -2,14 +2,14 @@ import * as grading from '../services/grading.service.js';
 
 export const listSchemes = async (req, res, next) => {
   try {
-    const items = await grading.listSchemes();
+    const items = await grading.listSchemes(req.user?.campusId);
     res.json({ items });
   } catch (e) { next(e); }
 };
 
 export const getDefaultScheme = async (req, res, next) => {
   try {
-    const item = await grading.getDefaultScheme();
+    const item = await grading.getDefaultScheme(req.user?.campusId);
     res.json(item || {});
   } catch (e) { next(e); }
 };
@@ -30,6 +30,7 @@ export const create = async (req, res, next) => {
       bands: req.body.bands || {},
       isDefault: !!req.body.isDefault,
       userId: req.user?.id,
+      campusId: req.user?.campusId,
     };
     const created = await grading.create(payload);
     res.status(201).json(created);
@@ -73,7 +74,7 @@ export const compute = async (req, res, next) => {
       const scheme = await grading.getById(Number(schemeId));
       bands = scheme?.bands || {};
     } else {
-      const def = await grading.getDefaultScheme();
+      const def = await grading.getDefaultScheme(req.user?.campusId);
       bands = def?.bands || {};
     }
     const grade = grading.computeGrade(pct, bands);

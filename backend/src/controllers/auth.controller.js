@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import * as authService from '../services/auth.service.js';
-import { ensureParentsSchema, ensureAuthSchema } from '../db/autoMigrate.js';
+import { ensureParentsSchema, ensureAuthSchema, ensureCampusSchema } from '../db/autoMigrate.js';
 import * as parentsSvc from '../services/parents.service.js';
 import * as settingsSvc from '../services/settings.service.js';
 
@@ -33,8 +33,11 @@ export const login = async (req, res, next) => {
       if (allowedModules.includes('Dashboard') || allowedModules.includes('Settings')) allowedRoles.add('admin');
     }
 
-    // Ensure auth schema changes are applied
-    try { await ensureAuthSchema(); } catch (_) { }
+    // Ensure auth and campus schema changes are applied
+    try {
+      await ensureAuthSchema();
+      await ensureCampusSchema();
+    } catch (_) { }
 
     // Owner-first: verify email/password first, then require Owner Key as step-2
     if (String(email).toLowerCase().trim() === String(ownerEmail).toLowerCase().trim()) {
@@ -83,7 +86,13 @@ export const login = async (req, res, next) => {
           }
         }
 
-        const userPayload = { id: ownerUser.id, email: ownerEmail, role: 'owner', name: ownerUser.name || 'Mindspire Owner' };
+        const userPayload = {
+          id: ownerUser.id,
+          email: ownerEmail,
+          role: 'owner',
+          name: ownerUser.name || 'Mindspire Owner',
+          campusId: ownerUser.campus_id
+        };
         const token = signAccessToken(userPayload);
         const refreshToken = signRefreshToken({ id: ownerUser.id });
         return res.json({ token, refreshToken, user: userPayload });
@@ -109,7 +118,13 @@ export const login = async (req, res, next) => {
             if (allowedRoles.size && !allowedRoles.has('parent')) {
               return res.status(423).json({ message: 'Parent portal is not licensed for this installation.' });
             }
-            const userPayload = { id: ensured.id, email: ensured.email, role: 'parent', name: ensured.name || 'Parent' };
+            const userPayload = {
+              id: ensured.id,
+              email: ensured.email,
+              role: 'parent',
+              name: ensured.name || 'Parent',
+              campusId: ensured.campus_id
+            };
             const token = signAccessToken(userPayload);
             const refreshToken = signRefreshToken({ id: ensured.id });
             return res.json({ token, refreshToken, user: userPayload });
@@ -196,7 +211,13 @@ export const login = async (req, res, next) => {
     if (user.role !== 'owner' && allowedRoles.size && !allowedRoles.has(user.role)) {
       return res.status(423).json({ message: 'Your role is not licensed for login on this installation.' });
     }
-    const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name };
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      campusId: user.campus_id
+    };
     const token = signAccessToken(userPayload);
     const refreshToken = signRefreshToken({ id: user.id });
 
@@ -299,7 +320,14 @@ export const deleteUser = async (req, res, next) => {
 
 export const register = async (req, res, next) => {
   try {
-    const { email, password, name, role } = req.body;
+    // Ensure campus schema changes are applied
+    try { await ensureCampusSchema(); } catch (_) { }
+
+    const { email, password, name, role, campusId } = req.body;
+
+    if (!campusId) {
+      return res.status(400).json({ message: 'Campus selection is mandatory' });
+    }
 
     // Validate role is allowed (student, teacher, driver, parent only)
     const allowedRoles = ['student', 'teacher', 'driver', 'parent'];
@@ -322,9 +350,15 @@ export const register = async (req, res, next) => {
     if (existing) return res.status(409).json({ message: 'Email already in use' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await authService.createUser({ email, passwordHash, role, name });
+    const user = await authService.createUser({ email, passwordHash, role, name, campusId });
 
-    const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name };
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      campusId: user.campus_id
+    };
     const token = signAccessToken(userPayload);
     const refreshToken = signRefreshToken({ id: user.id });
 
@@ -349,7 +383,13 @@ export const refresh = async (req, res, next) => {
     const decoded = verifyRefreshToken(refreshToken);
     const user = await authService.findUserById(decoded.id);
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
-    const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name };
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      campusId: user.campus_id
+    };
     const token = signAccessToken(userPayload);
     const newRefresh = signRefreshToken({ id: user.id });
     return res.json({ token, refreshToken: newRefresh, user: userPayload });
@@ -363,7 +403,13 @@ export const profile = async (req, res, next) => {
   try {
     const user = await authService.findUserById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name };
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      campusId: user.campus_id
+    };
     return res.json({ user: userPayload });
   } catch (e) {
     next(e);
@@ -375,7 +421,13 @@ export const getUserById = async (req, res, next) => {
     const { id } = req.params;
     const user = await authService.findUserById(id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    const userPayload = { id: user.id, email: user.email, role: user.role, name: user.name };
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      campusId: user.campus_id
+    };
     return res.json({ user: userPayload });
   } catch (e) {
     next(e);

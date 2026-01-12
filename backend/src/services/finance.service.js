@@ -23,7 +23,7 @@ export const checkUsersExist = async () => {
   };
 };
 
-export const getDashboardAnalytics = async ({ userType, days = 14 } = {}) => {
+export const getDashboardAnalytics = async ({ userType, days = 14, campusId } = {}) => {
   const u = userType || null;
   const safeDays = Math.max(1, Math.min(60, Number(days) || 14));
 
@@ -48,10 +48,11 @@ export const getDashboardAnalytics = async ({ userType, days = 14 } = {}) => {
       FROM finance_payments
       WHERE paid_at >= $2::date
         AND ($1::text IS NULL OR user_type = $1::text)
+        AND ($3::int IS NULL OR campus_id = $3::int)
       GROUP BY DATE(paid_at)
       ORDER BY day ASC
     `,
-    [u, startDate]
+    [u, startDate, campusId || null]
   );
 
   const trendMap = new Map();
@@ -285,14 +286,20 @@ export const getDashboardStats = async ({ userType } = {}) => {
 // ========================================
 
 // List unified invoices
-export const listUnifiedInvoices = async ({ userType, userId, status, invoiceType, page = 1, pageSize = 50 }) => {
+export const listUnifiedInvoices = async ({ userType, userId, userIds, status, invoiceType, page = 1, pageSize = 50, campusId }) => {
   const params = [];
   const where = [];
 
   if (userType) { params.push(userType); where.push(`user_type = $${params.length}`); }
   if (userId) { params.push(userId); where.push(`user_id = $${params.length}`); }
+  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+    const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(',');
+    where.push(`user_id IN (${placeholders})`);
+    params.push(...userIds);
+  }
   if (status) { params.push(status); where.push(`status = $${params.length}`); }
   if (invoiceType) { params.push(invoiceType); where.push(`invoice_type = $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
@@ -302,7 +309,7 @@ export const listUnifiedInvoices = async ({ userType, userId, status, invoiceTyp
     SELECT id, invoice_number AS "invoiceNumber", user_type AS "userType", user_id AS "userId",
            invoice_type AS "invoiceType", description, amount, tax, discount, total, balance,
            status, due_date AS "dueDate", period_month AS "periodMonth", issued_at AS "issuedAt",
-           created_at AS "createdAt"
+           created_at AS "createdAt", campus_id AS "campusId"
     FROM finance_invoices ${whereSql}
     ORDER BY created_at DESC
     LIMIT $${params.length - 1} OFFSET $${params.length}
@@ -340,7 +347,7 @@ async function getUserName(userType, userId) {
 export const createUnifiedInvoice = async (data, createdBy = null) => {
   const {
     userType, userId, invoiceType, description, amount, tax = 0,
-    discount = 0, dueDate, periodMonth
+    discount = 0, dueDate, periodMonth, campusId
   } = data;
 
   // Validate user exists
@@ -359,14 +366,15 @@ export const createUnifiedInvoice = async (data, createdBy = null) => {
   const { rows } = await query(`
     INSERT INTO finance_invoices (
       invoice_number, user_type, user_id, invoice_type, description,
-      amount, tax, discount, total, balance, due_date, period_month, created_by
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      amount, tax, discount, total, balance, due_date, period_month, created_by, campus_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
     RETURNING id, invoice_number AS "invoiceNumber", user_type AS "userType", user_id AS "userId",
               invoice_type AS "invoiceType", description, amount, tax, discount, total, balance,
-              status, due_date AS "dueDate", period_month AS "periodMonth", issued_at AS "issuedAt"
+              status, due_date AS "dueDate", period_month AS "periodMonth", issued_at AS "issuedAt",
+              created_at AS "createdAt", campus_id AS "campusId"
   `, [
     invoiceNumber, userType, userId, invoiceType, description || null,
-    amount, tax, discount, total, balance, dueDate || null, periodMonth || null, createdBy
+    amount, tax, discount, total, balance, dueDate || null, periodMonth || null, createdBy, campusId || null
   ]);
 
   const invoice = rows[0];
@@ -490,12 +498,18 @@ export const createUnifiedPayment = async (data, receivedBy = null) => {
 // ========================================
 
 // List receipts
-export const listReceipts = async ({ userType, userId, page = 1, pageSize = 50 }) => {
+export const listReceipts = async ({ userType, userId, userIds, campusId, page = 1, pageSize = 50 }) => {
   const params = [];
   const where = [];
 
   if (userType) { params.push(userType); where.push(`fr.user_type = $${params.length}`); }
   if (userId) { params.push(userId); where.push(`fr.user_id = $${params.length}`); }
+  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+    const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(',');
+    where.push(`fr.user_id IN (${placeholders})`);
+    params.push(...userIds);
+  }
+  if (campusId) { params.push(campusId); where.push(`fi.campus_id = $${params.length}`); }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
@@ -555,12 +569,20 @@ export const createReceipt = async (paymentId, createdBy = null) => {
 // OUTSTANDING FEES
 // ========================================
 
-export const getOutstandingFees = async ({ userType, page = 1, pageSize = 50 }) => {
+export const getOutstandingFees = async ({ userType, userIds, campusId, page = 1, pageSize = 50 }) => {
   const params = [];
   const where = ["status != 'paid'", "status != 'cancelled'", "balance > 0"];
 
   if (userType) { params.push(userType); where.push(`user_type = $${params.length}`); }
-
+  if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+    const placeholders = userIds.map((_, i) => `$${params.length + i + 1}`).join(',');
+    where.push(`user_id IN (${placeholders})`);
+    params.push(...userIds);
+  }
+  if (campusId) {
+    params.push(campusId);
+    where.push(`campus_id = $${params.length}`);
+  }
   const whereSql = `WHERE ${where.join(' AND ')}`;
   const offset = (Number(page) - 1) * Number(pageSize);
   params.push(pageSize, offset);

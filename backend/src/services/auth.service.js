@@ -16,29 +16,29 @@ const normalizePkPhone = (raw) => {
 };
 
 export const findUserByEmail = async (email) => {
-  const { rows } = await query('SELECT id, email, password_hash, role, name FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))', [email]);
+  const { rows } = await query('SELECT id, email, password_hash, role, name, campus_id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))', [email]);
   return rows[0] || null;
 };
 
 export const findUserByUsername = async (username) => {
-  const { rows } = await query('SELECT id, username, email, password_hash, role, name FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))', [username]);
+  const { rows } = await query('SELECT id, username, email, password_hash, role, name, campus_id FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))', [username]);
   return rows[0] || null;
 };
 
 export const findUserById = async (id) => {
-  const { rows } = await query('SELECT id, email, role, name FROM users WHERE id = $1', [id]);
+  const { rows } = await query('SELECT id, email, role, name, campus_id FROM users WHERE id = $1', [id]);
   return rows[0] || null;
 };
 
 // Create new user (admin only)
-export const createUser = async ({ email, passwordHash, role = 'student', name }) => {
+export const createUser = async ({ email, passwordHash, role = 'student', name, campusId }) => {
   // Validate role is in allowed list
   if (!ALLOWED_USER_ROLES.includes(role)) {
     throw new Error(`Invalid role: ${role}. Allowed roles are: ${ALLOWED_USER_ROLES.join(', ')}`);
   }
   const { rows } = await query(
-    'INSERT INTO users (email, password_hash, role, name) VALUES ($1,$2,$3,$4) RETURNING id, email, role, name',
-    [email, passwordHash, role, name || email]
+    'INSERT INTO users (email, password_hash, role, name, campus_id) VALUES ($1,$2,$3,$4,$5) RETURNING id, email, role, name, campus_id',
+    [email, passwordHash, role, name || email, campusId]
   );
   return rows[0];
 };
@@ -73,17 +73,17 @@ export const deleteUser = async (id) => {
   return rowCount > 0;
 };
 
-export const createUserWith = async ({ email = null, username = null, passwordHash, role = 'student', name }) => {
+export const createUserWith = async ({ email = null, username = null, passwordHash, role = 'student', name, campusId }) => {
   // Validate role is in allowed list
   if (!ALLOWED_USER_ROLES.includes(role)) {
     throw new Error(`Invalid role: ${role}. Allowed roles are: ${ALLOWED_USER_ROLES.join(', ')}`);
   }
-  const columns = ['password_hash', 'role', 'name'];
-  const values = [passwordHash, role, name || email || username];
+  const columns = ['password_hash', 'role', 'name', 'campus_id'];
+  const values = [passwordHash, role, name || email || username, campusId];
   if (email !== null && email !== undefined) { columns.unshift('email'); values.unshift(email); }
   if (username !== null && username !== undefined) { columns.unshift('username'); values.unshift(username); }
   const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
-  const { rows } = await query(`INSERT INTO users (${columns.join(',')}) VALUES (${placeholders}) RETURNING id, username, email, role, name`, values);
+  const { rows } = await query(`INSERT INTO users (${columns.join(',')}) VALUES (${placeholders}) RETURNING id, username, email, role, name, campus_id`, values);
   return rows[0];
 };
 

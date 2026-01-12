@@ -152,7 +152,13 @@ export const list = async (req, res, next) => {
       return res.json({ rows: self ? [self] : [], total: self ? 1 : 0, page: 1, pageSize: 1 });
     }
     const { page = 1, pageSize = 50, q } = req.query;
-    const result = await teachers.list({ page: Number(page), pageSize: Number(pageSize), q });
+    const campusId = req.user?.campusId;
+    const result = await teachers.list({
+      page: Number(page),
+      pageSize: Number(pageSize),
+      q,
+      campusId
+    });
     return res.json(result);
   } catch (e) {
     next(e);
@@ -200,11 +206,22 @@ export const create = async (req, res, next) => {
         const username = await authSvc.generateUniqueUsername({ base: payload.name || payload.email || 'teacher', role: 'teacher' });
         const password = authSvc.generateRandomPassword(12);
         const passwordHash = await bcrypt.hash(password, 10);
-        user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'teacher', name: payload.name || username });
+        user = await authSvc.createUserWith({
+          email: payload.email || null,
+          username,
+          passwordHash,
+          role: 'teacher',
+          name: payload.name || username,
+          campusId: req.user?.campusId || payload.campusId
+        });
         credentials = { username, password };
       }
       if (user) payload.userId = user.id;
     }
+
+    if (!payload.campusId) payload.campusId = req.user?.campusId;
+    if (!payload.campusId) return res.status(400).json({ message: 'Campus ID is required' });
+
     const created = await teachers.create(payload);
     const resp = credentials ? { ...created, credentials } : created;
     return res.status(201).json(resp);
@@ -236,7 +253,7 @@ export const remove = async (req, res, next) => {
 
 export const listSchedules = async (req, res, next) => {
   try {
-    let { teacherId, day, dayOfWeek } = req.query;
+    let { teacherId, day, dayOfWeek, className, section } = req.query;
     if (req.user?.role === 'teacher') {
       const self = await teachers.getByUserId(req.user.id);
       teacherId = self?.id;
@@ -244,6 +261,8 @@ export const listSchedules = async (req, res, next) => {
     const schedules = await teachers.listSchedules({
       teacherId: teacherId ? Number(teacherId) : undefined,
       dayOfWeek: day ?? dayOfWeek,
+      className,
+      section,
     });
     return res.json(schedules);
   } catch (e) {
@@ -310,12 +329,12 @@ export const saveAttendance = async (req, res, next) => {
   try {
     const entries = Array.isArray(req.body.entries)
       ? req.body.entries.map((entry) => ({
-          teacherId: Number(entry.teacherId),
-          status: entry.status,
-          checkInTime: entry.checkInTime,
-          checkOutTime: entry.checkOutTime,
-          remarks: entry.remarks,
-        }))
+        teacherId: Number(entry.teacherId),
+        status: entry.status,
+        checkInTime: entry.checkInTime,
+        checkOutTime: entry.checkOutTime,
+        remarks: entry.remarks,
+      }))
       : [];
     const records = await teachers.upsertAttendanceEntries({
       date: req.body.date,
@@ -524,6 +543,28 @@ export const removeSubjectAssignment = async (req, res, next) => {
     const ok = await teachers.removeSubjectAssignment(Number(req.params.assignmentId));
     if (!ok) return res.status(404).json({ message: 'Subject assignment not found' });
     return res.json({ success: true });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getDashboardStats = async (req, res, next) => {
+  try {
+    let teacherId = req.params.id ? Number(req.params.id) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      if (!self) return res.status(404).json({ message: 'Teacher profile not found' });
+      // If asking for a specific ID that isn't their own, forbid
+      if (teacherId && teacherId !== self.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      teacherId = self.id;
+    }
+
+    if (!teacherId) return res.status(400).json({ message: 'Teacher ID required' });
+
+    const stats = await teachers.getDashboardStats(teacherId);
+    return res.json(stats);
   } catch (e) {
     next(e);
   }

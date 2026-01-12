@@ -1,9 +1,10 @@
 ﻿import { query } from '../config/db.js';
 
-export const list = async ({ studentId, startDate, endDate, page = 1, pageSize = 50 }) => {
+export const list = async ({ studentId, startDate, endDate, page = 1, pageSize = 50, campusId }) => {
   const params = [];
   const where = [];
   if (studentId) { params.push(studentId); where.push(`student_id = $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
   if (startDate) { params.push(startDate); where.push(`date >= $${params.length}`); }
   if (endDate) { params.push(endDate); where.push(`date <= $${params.length}`); }
   const offset = (Number(page) - 1) * Number(pageSize);
@@ -36,13 +37,13 @@ export const getById = async (id) => {
   return rows[0] || null;
 };
 
-export const create = async ({ studentId, date, status, remarks, createdBy }) => {
+export const create = async ({ studentId, date, status, remarks, createdBy, campusId }) => {
   // Upsert logic:
   // - On first mark of the day (no existing row): set check_in_time = NOW() for present/late, else null
   // - On subsequent mark for same day (existing row): if check_in_time is set and check_out_time is NULL, set check_out_time = NOW()
   const { rows } = await query(
-    `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time)
-     VALUES ($1, $2, $3, $4, $5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END)
+    `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
+     VALUES ($1, $2, $3, $4, $5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END, $6)
      ON CONFLICT (student_id, date)
      DO UPDATE SET
        status = EXCLUDED.status,
@@ -61,7 +62,7 @@ export const create = async ({ studentId, date, status, remarks, createdBy }) =>
                check_out_time AS "checkOutTime",
                created_by AS "createdBy",
                created_at AS "createdAt"`,
-    [studentId, date, status, remarks || null, createdBy || null]
+    [studentId, date, status, remarks || null, createdBy || null, campusId || null]
   );
   return rows[0];
 };
@@ -80,7 +81,7 @@ export const remove = async (id) => {
 };
 
 // Daily admin view: list students with attendance for a specific date (by class/section/q)
-export const listDaily = async ({ date, class: cls, section, q }) => {
+export const listDaily = async ({ date, class: cls, section, q, campusId }) => {
   const params = [date];
   const where = [];
   if (cls) { params.push(cls); where.push(`s.class = $${params.length}`); }
@@ -89,6 +90,7 @@ export const listDaily = async ({ date, class: cls, section, q }) => {
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(s.name) LIKE $${params.length} OR LOWER(s.roll_number) LIKE $${params.length})`);
   }
+  if (campusId) { params.push(campusId); where.push(`s.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT s.id,
@@ -114,7 +116,7 @@ export const listDaily = async ({ date, class: cls, section, q }) => {
 };
 
 // Bulk upsert attendance for a date
-export const upsertDaily = async ({ date, records, createdBy }) => {
+export const upsertDaily = async ({ date, records, createdBy, campusId }) => {
   // Expect records: [{ studentId, status, remarks? }]
   await query('BEGIN');
   try {
@@ -122,8 +124,8 @@ export const upsertDaily = async ({ date, records, createdBy }) => {
       // Sanitize status to allowed values
       const status = ['present', 'absent', 'late'].includes(r.status) ? r.status : 'present';
       await query(
-        `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time)
-         VALUES ($1,$2,$3,$4,$5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END)
+        `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
+         VALUES ($1,$2,$3,$4,$5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END, $6)
          ON CONFLICT (student_id, date)
          DO UPDATE SET
            status = EXCLUDED.status,
@@ -131,7 +133,7 @@ export const upsertDaily = async ({ date, records, createdBy }) => {
            created_by = EXCLUDED.created_by,
            check_in_time = COALESCE(attendance_records.check_in_time,
                                     CASE WHEN EXCLUDED.status IN ('present','late') THEN NOW()::time ELSE attendance_records.check_in_time END)`,
-        [Number(r.studentId), date, status, r.remarks || null, createdBy || null]
+        [Number(r.studentId), date, status, r.remarks || null, createdBy || null, campusId || null]
       );
     }
     await query('COMMIT');

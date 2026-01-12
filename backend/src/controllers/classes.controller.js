@@ -39,6 +39,7 @@ const normalizeClassPayload = (raw = {}, { partial = false } = {}) => {
   assignNumber('classTeacherId');
   assignNumber('capacity');
   assignNumber('enrolledStudents');
+  assignNumber('campusId');
 
   const strength = coerceNumber(raw.strength);
   if (strength !== undefined) data.enrolledStudents = strength;
@@ -81,6 +82,7 @@ export const list = async (req, res, next) => {
       academicYear,
       status,
       teacherId: filterTeacherId ? Number(filterTeacherId) : undefined,
+      campusId: req.user?.campusId,
     });
     return res.json(result);
   } catch (e) {
@@ -100,7 +102,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const payload = normalizeClassPayload(req.body, { partial: false });
+    const payload = normalizeClassPayload({ ...req.body, campusId: req.user?.campusId }, { partial: false });
     const created = await classService.create(payload);
     return res.status(201).json(created);
   } catch (e) {

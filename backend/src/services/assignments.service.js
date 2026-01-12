@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ page = 1, pageSize = 50, q }) => {
+export const list = async ({ page = 1, pageSize = 50, q, campusId }) => {
   const offset = (page - 1) * pageSize;
   const params = [];
   const where = [];
@@ -8,27 +8,28 @@ export const list = async ({ page = 1, pageSize = 50, q }) => {
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(title) LIKE $${params.length} OR LOWER(description) LIKE $${params.length})`);
   }
+  if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM assignments ${whereSql}`, params);
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy" FROM assignments ${whereSql} ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    `SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId" FROM assignments ${whereSql} ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );
   return { rows, total, page, pageSize };
 };
 
 export const getById = async (id) => {
-  const { rows } = await query('SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy" FROM assignments WHERE id = $1', [id]);
+  const { rows } = await query('SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId" FROM assignments WHERE id = $1', [id]);
   return rows[0] || null;
 };
 
-export const create = async ({ title, description, dueDate, class: cls, section }, user) => {
+export const create = async ({ title, description, dueDate, class: cls, section, campusId }, user) => {
   const { rows } = await query(
-    'INSERT INTO assignments (title, description, due_date, class, section, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy"',
-    [title, description || null, dueDate || null, cls || null, section || null, user?.id || null]
+    'INSERT INTO assignments (title, description, due_date, class, section, created_by, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId"',
+    [title, description || null, dueDate || null, cls || null, section || null, user?.id || null, campusId || null]
   );
   return rows[0];
 };
@@ -68,13 +69,20 @@ export const listByTeacher = async (teacherId, { page = 1, pageSize = 50, q }) =
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(a.title) LIKE $${params.length} OR LOWER(a.description) LIKE $${params.length})`);
   }
+  // Data isolation check: Ensure we only list assignments for the same campus as the teacher
+  const { rows: tRows } = await query('SELECT campus_id FROM teachers WHERE id = $1', [teacherId]);
+  const teacherCampusId = tRows[0]?.campus_id;
+  if (teacherCampusId) {
+    params.push(teacherCampusId);
+    where.push(`a.campus_id = $${params.length}`);
+  }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM assignments a ${whereSql}`, params);
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy" 
+    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy", a.campus_id AS "campusId" 
      FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );
@@ -100,6 +108,10 @@ export const listByStudent = async (student, { page = 1, pageSize = 50, q }) => 
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(a.title) LIKE $${params.length} OR LOWER(a.description) LIKE $${params.length})`);
   }
+  if (student.campusId || student.campus_id) {
+    params.push(student.campusId || student.campus_id);
+    where.push(`a.campus_id = $${params.length}`);
+  }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -107,7 +119,7 @@ export const listByStudent = async (student, { page = 1, pageSize = 50, q }) => 
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy" 
+    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy", a.campus_id AS "campusId" 
      FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );

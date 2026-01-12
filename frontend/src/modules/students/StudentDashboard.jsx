@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Flex, SimpleGrid, Text, Button, HStack, VStack, Badge, Icon, useColorModeValue } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/card/Card';
@@ -7,19 +7,60 @@ import IconBox from '../../components/icons/IconBox';
 import { MdClass, MdCheckCircle, MdAssignment, MdOutlineEvent, MdNotificationsActive, MdLogin } from 'react-icons/md';
 import BarChart from '../../components/charts/BarChart';
 import LineAreaChart from '../../components/charts/LineAreaChart';
+import { useAuth } from '../../contexts/AuthContext';
+import * as studentsApi from '../../services/api/students';
 import { mockTodayClasses } from '../../utils/mockData';
 
 export default function StudentDashboard() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const stats = {
-    todaysClasses: mockTodayClasses.length,
-    attendance: 92,
-    pendingAssignments: 2,
-    upcomingExams: 1,
-    notifications: 3,
-  };
+  const [stats, setStats] = useState({
+    todaysClasses: 0,
+    attendance: 0,
+    pendingAssignments: 0,
+    upcomingExams: 0,
+    notifications: 0,
+  });
+  const [schedules, setSchedules] = useState([]);
+  const [attendanceTrend, setAttendanceTrend] = useState([0, 0, 0, 0, 0]);
+
+  useEffect(() => {
+    const fetchStatsAndSchedule = async () => {
+      try {
+        if (user?.role === 'student') {
+          // list() returns specific student if logged in
+          const { rows } = await studentsApi.list({});
+          if (rows && rows.length > 0) {
+            const me = rows[0];
+
+            // Fetch stats
+            const data = await studentsApi.getDashboardStats(me.id);
+            setStats(data);
+
+            // Fetch trend
+            const trend = await studentsApi.getAttendanceTrend(me.id);
+            setAttendanceTrend(trend);
+
+            // Fetch schedule for today
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            const schedData = await studentsApi.listSchedules({
+              className: me.class,
+              section: me.section,
+              day: today
+            });
+            setSchedules(schedData);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch student dashboard data', err);
+      }
+    };
+    if (user?.role === 'student') {
+      fetchStatsAndSchedule();
+    }
+  }, [user]);
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
@@ -28,7 +69,7 @@ export default function StudentDashboard() {
           <Text fontSize='2xl' fontWeight='bold' mb='4px'>Student Dashboard</Text>
           <Text fontSize='md' color={textSecondary}>Your classes, assignments and updates</Text>
         </Box>
-        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={()=>navigate('/auth/sign-in')}>Sign In</Button>
+        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={() => navigate('/auth/sign-in')}>Sign In</Button>
       </Flex>
 
       <Box mb='20px'>
@@ -38,7 +79,7 @@ export default function StudentDashboard() {
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#4481EB 0%,#04BEFE 100%)' icon={<Icon as={MdClass} w='22px' h='22px' color='white' />} />}
             name="Today's Classes"
             value={String(stats.todaysClasses)}
-            trendData={[2,3,4,5,5]}
+            trendData={[2, 3, 4, 5, 5]}
             trendColor='#4481EB'
           />
           <MiniStatistics
@@ -46,16 +87,16 @@ export default function StudentDashboard() {
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#01B574 0%,#51CB97 100%)' icon={<Icon as={MdCheckCircle} w='22px' h='22px' color='white' />} />}
             name='Attendance %'
             value={`${stats.attendance}%`}
-            trendData={[88,90,91,92,92]}
+            trendData={[88, 90, 91, 92, 92]}
             trendColor='#01B574'
-            trendFormatter={(v)=>`${v}%`}
+            trendFormatter={(v) => `${v}%`}
           />
           <MiniStatistics
             compact
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#FFB36D 0%,#FD7853 100%)' icon={<Icon as={MdAssignment} w='22px' h='22px' color='white' />} />}
             name='Pending Assignments'
             value={String(stats.pendingAssignments)}
-            trendData={[1,2,2,2,2]}
+            trendData={[1, 2, 2, 2, 2]}
             trendColor='#FD7853'
           />
           <MiniStatistics
@@ -63,7 +104,7 @@ export default function StudentDashboard() {
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#667eea 0%,#764ba2 100%)' icon={<Icon as={MdOutlineEvent} w='22px' h='22px' color='white' />} />}
             name='Upcoming Exams'
             value={String(stats.upcomingExams)}
-            trendData={[0,1,1,1,1]}
+            trendData={[0, 1, 1, 1, 1]}
             trendColor='#667eea'
           />
           <MiniStatistics
@@ -71,7 +112,7 @@ export default function StudentDashboard() {
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdNotificationsActive} w='22px' h='22px' color='white' />} />}
             name='Notifications'
             value={String(stats.notifications)}
-            trendData={[1,2,2,3,3]}
+            trendData={[1, 2, 2, 3, 3]}
             trendColor='#f5576c'
           />
         </Flex>
@@ -81,17 +122,19 @@ export default function StudentDashboard() {
         <Card p='20px'>
           <Text fontSize='lg' fontWeight='bold' mb='16px'>Today’s Schedule</Text>
           <VStack align='stretch' spacing={3}>
-            {mockTodayClasses.map((c) => (
-              <Flex key={c.id} justify='space-between' p='10px' bg={useColorModeValue('gray.50','gray.700')} borderRadius='8px'>
+            {schedules.length > 0 ? schedules.map((c) => (
+              <Flex key={c.id} justify='space-between' p='10px' bg={useColorModeValue('gray.50', 'gray.700')} borderRadius='8px'>
                 <Text fontWeight='600' isTruncated maxW='60%'>
-                  {c.subject} - {c.topic || c.className}
+                  {c.subjectName} - {c.topic || c.className}
                 </Text>
                 <HStack>
-                  <Badge colorScheme='blue'>{c.time}</Badge>
-                  <Badge>{c.room}</Badge>
+                  <Badge colorScheme='blue'>{c.startTime} - {c.endTime}</Badge>
+                  <Badge>{c.room || 'N/A'}</Badge>
                 </HStack>
               </Flex>
-            ))}
+            )) : (
+              <Text color={textSecondary} textAlign='center' py={4}>No classes scheduled for today.</Text>
+            )}
           </VStack>
         </Card>
 
@@ -111,16 +154,16 @@ export default function StudentDashboard() {
         <Card p='16px'>
           <Text fontSize='lg' fontWeight='bold' mb='12px'>Attendance Trend</Text>
           <LineAreaChart
-            chartData={[{ name: 'Attendance %', data: [88, 90, 91, 92, 92] }]}
+            chartData={[{ name: 'Attendance %', data: attendanceTrend }]}
             chartOptions={{
               chart: { toolbar: { show: false } },
               stroke: { curve: 'smooth', width: 3 },
               fill: { type: 'gradient', gradient: { shadeIntensity: 0.2, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
-              xaxis: { categories: ['W1','W2','W3','W4','W5'] },
+              xaxis: { categories: ['W1', 'W2', 'W3', 'W4', 'W5'] },
               colors: ['#01B574'],
               dataLabels: { enabled: false },
               grid: { padding: { left: 12, right: 12 } },
-              tooltip: { enabled: true, shared: true, intersect: false, y: { formatter: (v)=>`${v}%` } },
+              tooltip: { enabled: true, shared: true, intersect: false, y: { formatter: (v) => `${v}%` } },
             }}
           />
         </Card>
@@ -128,7 +171,7 @@ export default function StudentDashboard() {
           <Text fontSize='lg' fontWeight='bold' mb='12px'>Study Overview</Text>
           <BarChart
             chartData={[{ name: 'Assignments Completed', data: [3, 4, 5, 6, 7] }, { name: 'Exams Attempted', data: [1, 1, 2, 2, 3] }]}
-            chartOptions={{ xaxis: { categories: ['Jan','Feb','Mar','Apr','May'] }, colors: ['#4481EB', '#667eea'], dataLabels: { enabled: false }, legend: { position: 'top' } }}
+            chartOptions={{ xaxis: { categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May'] }, colors: ['#4481EB', '#667eea'], dataLabels: { enabled: false }, legend: { position: 'top' } }}
             height={220}
           />
         </Card>

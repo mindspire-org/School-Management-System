@@ -600,6 +600,12 @@ export const getSMSRoutes = () => {
           component: lazy(() => import('./modules/admin/pages/Settings/Licensing')),
         },
         {
+          name: 'Campuses',
+          layout: '/admin',
+          path: '/settings/campuses',
+          component: lazy(() => import('./modules/admin/pages/Settings/Campuses')),
+        },
+        {
           name: 'Role Management',
           layout: '/admin',
           path: '/settings/roles',
@@ -641,6 +647,33 @@ export const getSMSRoutes = () => {
       component: lazy(() => import('./modules/admin/pages/Notifications/Notifications')),
     },
     */
+    // Parent Portal - For logged in parents
+    {
+      name: 'Parent Portal',
+      layout: '/admin',
+      icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'My Children',
+          layout: '/admin',
+          path: '/parent/students',
+          component: lazy(() => import('./modules/admin/pages/Students/StudentsList')),
+        },
+        {
+          name: 'Alerts',
+          layout: '/admin',
+          path: '/parent/alerts',
+          component: <ParentAlerts />,
+        },
+        {
+          name: 'Fees & Payments',
+          layout: '/admin',
+          path: '/parent/fees',
+          component: lazy(() => import('./modules/admin/pages/Finance/OutstandingFees')),
+        },
+      ],
+    },
   ];
 
   return adminMenu;

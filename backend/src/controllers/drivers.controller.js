@@ -5,12 +5,13 @@ import * as authSvc from '../services/auth.service.js';
 // List all drivers
 export const listDrivers = async (req, res, next) => {
     try {
-        const { status, busId, page, pageSize } = req.query;
+        const { status, busId, page, pageSize, q } = req.query;
         if (req.user?.role === 'driver') {
             const self = await service.getDriverByUserId(req.user.id);
             return res.json({ items: self ? [self] : [], total: self ? 1 : 0 });
         }
-        const result = await service.listDrivers({ status, busId, page, pageSize });
+        const campusId = req.user?.campusId;
+        const result = await service.listDrivers({ status, busId, page, pageSize, q, campusId });
         res.json(result);
     } catch (e) { next(e); }
 };
@@ -45,11 +46,22 @@ export const createDriver = async (req, res, next) => {
                 const username = await authSvc.generateUniqueUsername({ base, role: 'driver' });
                 const password = authSvc.generateRandomPassword(12);
                 const passwordHash = await bcrypt.hash(password, 10);
-                user = await authSvc.createUserWith({ email: payload.email || null, username, passwordHash, role: 'driver', name: payload.name || username });
+                user = await authSvc.createUserWith({
+                    email: payload.email || null,
+                    username,
+                    passwordHash,
+                    role: 'driver',
+                    name: payload.name || username,
+                    campusId: req.user?.campusId || payload.campusId
+                });
                 credentials = { username, password };
             }
             if (user) payload.userId = user.id;
         }
+
+        if (!payload.campusId) payload.campusId = req.user?.campusId;
+        if (!payload.campusId) return res.status(400).json({ message: 'Campus ID is required' });
+
         const driver = await service.createDriver(payload);
         const resp = credentials ? { ...driver, credentials } : driver;
         res.status(201).json(resp);
@@ -129,4 +141,25 @@ export const countDrivers = async (req, res, next) => {
         const count = await service.countDrivers();
         res.json({ count });
     } catch (e) { next(e); }
+};
+
+export const getDashboardStats = async (req, res, next) => {
+    try {
+        let driverId = req.params.id ? Number(req.params.id) : undefined;
+        if (req.user?.role === 'driver') {
+            const self = await service.getDriverByUserId(req.user.id);
+            if (!self) return res.status(404).json({ message: 'Driver profile not found' });
+            if (driverId && driverId !== self.id) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+            driverId = self.id;
+        }
+
+        if (!driverId) return res.status(400).json({ message: 'Driver ID required' });
+
+        const stats = await service.getDashboardStats(driverId);
+        res.json(stats);
+    } catch (e) {
+        next(e);
+    }
 };

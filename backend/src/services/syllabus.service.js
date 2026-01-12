@@ -53,6 +53,10 @@ export const list = async (filters = {}) => {
     params.push(`%${filters.search}%`);
     where.push(`(si.class_name ILIKE $${params.length} OR si.section ILIKE $${params.length} OR si.subject ILIKE $${params.length})`);
   }
+  if (filters.campusId) {
+    params.push(filters.campusId);
+    where.push(`si.campus_id = $${params.length}`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT ${selectColumns}
@@ -86,10 +90,11 @@ export const create = async (payload = {}) => {
     payload.covered ?? 0,
     payload.dueDate ?? null,
     payload.notes ?? null,
+    payload.campusId ?? null,
   ];
   const { rows } = await query(
-    `INSERT INTO syllabus_items (class_name, section, subject, teacher_id, chapters, covered, due_date, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `INSERT INTO syllabus_items (class_name, section, subject, teacher_id, chapters, covered, due_date, notes, campus_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING id`,
     values
   );

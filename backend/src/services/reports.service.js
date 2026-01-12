@@ -1,11 +1,12 @@
 import { query } from '../config/db.js';
 
-const getOverview = async () => {
+const getOverview = async ({ campusId }) => {
+  const whereSql = campusId ? `WHERE campus_id = ${campusId}` : '';
   const [students, teachers, assignments, invoices] = await Promise.all([
-    query('SELECT COUNT(*)::int AS count FROM students'),
-    query('SELECT COUNT(*)::int AS count FROM teachers'),
-    query('SELECT COUNT(*)::int AS count FROM assignments'),
-    query("SELECT SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END)::int AS paid, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END)::int AS pending, SUM(CASE WHEN status='overdue' THEN 1 ELSE 0 END)::int AS overdue FROM fee_invoices"),
+    query(`SELECT COUNT(*)::int AS count FROM students ${whereSql}`),
+    query(`SELECT COUNT(*)::int AS count FROM teachers ${whereSql}`),
+    query(`SELECT COUNT(*)::int AS count FROM assignments ${whereSql}`),
+    query(`SELECT SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END)::int AS paid, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END)::int AS pending, SUM(CASE WHEN status='overdue' THEN 1 ELSE 0 END)::int AS overdue FROM fee_invoices ${whereSql}`),
   ]);
 
   return {
@@ -16,12 +17,13 @@ const getOverview = async () => {
   };
 };
 
-const getAttendanceHeatmap = async ({ fromDate, toDate, klass, section, location }) => {
+const getAttendanceHeatmap = async ({ fromDate, toDate, klass, section, location, campusId }) => {
   // Determine denominator: total students in scope
   const scopeParams = [];
   const scopeWhere = [];
   if (klass) { scopeParams.push(klass); scopeWhere.push(`class = $${scopeParams.length}`); }
   if (section) { scopeParams.push(section); scopeWhere.push(`section = $${scopeParams.length}`); }
+  if (campusId) { scopeParams.push(campusId); scopeWhere.push(`campus_id = $${scopeParams.length}`); }
   const scopeSql = scopeWhere.length ? `WHERE ${scopeWhere.join(' AND ')}` : '';
   const totalStudentsRes = await query(`SELECT COUNT(*)::int AS c FROM students ${scopeSql}`, scopeParams);
   const denom = Number(totalStudentsRes.rows?.[0]?.c || 0) || 0;
@@ -31,9 +33,9 @@ const getAttendanceHeatmap = async ({ fromDate, toDate, klass, section, location
   const where = ["rl.student_id IS NOT NULL"]; // only mapped scans
   if (fromDate) { params.push(fromDate); where.push(`rl.scan_time::date >= $${params.length}`); }
   if (toDate) { params.push(toDate); where.push(`rl.scan_time::date <= $${params.length}`); }
-  if (klass) { params.push(klass); where.push(`s.class = $${params.length}`); }
   if (section) { params.push(section); where.push(`s.section = $${params.length}`); }
   if (location) { params.push(location); where.push(`rl.location = $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`rl.campus_id = $${params.length}`); }
   // Only Mon..Sat (1..6)
   where.push(`EXTRACT(DOW FROM rl.scan_time) BETWEEN 1 AND 6`);
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -58,7 +60,7 @@ const getAttendanceHeatmap = async ({ fromDate, toDate, klass, section, location
   return { denom, items };
 };
 
-const getAttendanceByClass = async ({ fromDate, toDate, klass, section, roll }) => {
+const getAttendanceByClass = async ({ fromDate, toDate, klass, section, roll, campusId }) => {
   const params = [];
   const where = ['ar.student_id IS NOT NULL'];
   if (fromDate) { params.push(fromDate); where.push(`ar.date >= $${params.length}`); }
@@ -66,6 +68,7 @@ const getAttendanceByClass = async ({ fromDate, toDate, klass, section, roll }) 
   if (klass) { params.push(klass); where.push(`s.class = $${params.length}`); }
   if (section) { params.push(section); where.push(`s.section = $${params.length}`); }
   if (roll) { params.push(roll); where.push(`LOWER(s.roll_number) = LOWER($${params.length})`); }
+  if (campusId) { params.push(campusId); where.push(`ar.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT s.class, s.section,
@@ -83,7 +86,7 @@ const getAttendanceByClass = async ({ fromDate, toDate, klass, section, roll }) 
   return rows;
 };
 
-const getAttendanceSummary = async ({ fromDate, toDate, klass, section, roll }) => {
+const getAttendanceSummary = async ({ fromDate, toDate, klass, section, roll, campusId }) => {
   const params = [];
   const where = ['ar.student_id IS NOT NULL'];
   if (fromDate) { params.push(fromDate); where.push(`ar.date >= $${params.length}`); }
@@ -91,6 +94,7 @@ const getAttendanceSummary = async ({ fromDate, toDate, klass, section, roll }) 
   if (klass) { params.push(klass); where.push(`s.class = $${params.length}`); }
   if (section) { params.push(section); where.push(`s.section = $${params.length}`); }
   if (roll) { params.push(roll); where.push(`LOWER(s.roll_number) = LOWER($${params.length})`); }
+  if (campusId) { params.push(campusId); where.push(`ar.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT ar.status, COUNT(*)::int AS count
@@ -111,11 +115,12 @@ const getAttendanceSummary = async ({ fromDate, toDate, klass, section, roll }) 
   return { counts, total, pct };
 };
 
-const getFinanceSummary = async ({ fromDate, toDate }) => {
+const getFinanceSummary = async ({ fromDate, toDate, campusId }) => {
   const params = [];
   const where = [];
   if (fromDate) { params.push(fromDate); where.push(`issued_at >= $${params.length}`); }
   if (toDate) { params.push(toDate); where.push(`issued_at <= $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const [agg, payments] = await Promise.all([
     query(
@@ -128,7 +133,8 @@ const getFinanceSummary = async ({ fromDate, toDate }) => {
       params
     ),
     query(
-      `SELECT SUM(amount)::numeric AS paidTotal FROM fee_payments` // total paid overall
+      `SELECT SUM(amount)::numeric AS paidTotal FROM fee_payments ${whereSql}`,
+      params
     ),
   ]);
 
@@ -143,13 +149,15 @@ const getFinanceSummary = async ({ fromDate, toDate }) => {
   };
 };
 
-const getExamPerformance = async ({ examId }) => {
+const getExamPerformance = async ({ examId, campusId }) => {
   const params = [];
-  let where = '';
-  if (examId) { params.push(examId); where = `WHERE er.exam_id = $1`; }
+  const where = [];
+  if (examId) { params.push(examId); where.push(`er.exam_id = $${params.length}`); }
+  if (campusId) { params.push(campusId); where.push(`er.campus_id = $${params.length}`); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT er.exam_id AS "examId", er.subject, AVG(er.marks)::numeric(5,2) AS avgMarks
-     FROM exam_results er ${where}
+     FROM exam_results er ${whereSql}
      GROUP BY er.exam_id, er.subject
      ORDER BY subject ASC`,
     params

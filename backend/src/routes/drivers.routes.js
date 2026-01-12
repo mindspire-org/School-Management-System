@@ -32,6 +32,15 @@ router.get(
     controller.getDriverById
 );
 
+// Get driver dashboard stats
+router.get(
+    '/:id/dashboard-stats',
+    authenticate,
+    [param('id').isInt()],
+    validate,
+    controller.getDashboardStats
+);
+
 // Create driver
 router.post(
     '/',

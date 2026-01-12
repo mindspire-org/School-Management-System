@@ -3,7 +3,13 @@ import * as service from '../services/notifications.service.js';
 export const list = async (req, res, next) => {
   try {
     const { userId, isRead, page, pageSize } = req.query;
-    const items = await service.list({ userId, isRead: typeof isRead !== 'undefined' ? isRead === 'true' : undefined, page, pageSize });
+    const items = await service.list({
+      userId,
+      isRead: typeof isRead !== 'undefined' ? isRead === 'true' : undefined,
+      page,
+      pageSize,
+      campusId: req.user?.campusId
+    });
     res.json({ items });
   } catch (e) { next(e); }
 };
@@ -18,7 +24,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body);
+    const item = await service.create({ ...req.body, campusId: req.user?.campusId });
     res.status(201).json(item);
   } catch (e) { next(e); }
 };

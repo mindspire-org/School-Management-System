@@ -3,7 +3,8 @@ import * as rfid from '../services/rfid.service.js';
 export const list = async (req, res, next) => {
   try {
     const { q, status, location, bus, date, startDate, endDate, page, pageSize } = req.query;
-    const data = await rfid.list({ q, status, location, bus, date, startDate, endDate, page, pageSize });
+    const campusId = req.user?.campusId;
+    const data = await rfid.list({ q, status, location, bus, date, startDate, endDate, campusId, page, pageSize });
     res.json(data);
   } catch (e) { next(e); }
 };

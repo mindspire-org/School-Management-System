@@ -425,6 +425,14 @@ router.get(
 );
 
 router.get(
+  '/:id/dashboard-stats',
+  authenticate,
+  [param('id').isInt()],
+  validate,
+  teacherController.getDashboardStats
+);
+
+router.get(
   '/:id',
   authenticate,
   [param('id').isInt()],

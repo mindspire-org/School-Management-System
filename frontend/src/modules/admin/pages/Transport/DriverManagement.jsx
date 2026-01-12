@@ -48,6 +48,7 @@ import IconBox from '../../../../components/icons/IconBox';
 import StatCard from '../../../../components/card/StatCard';
 import * as driversApi from '../../../../services/api/drivers';
 import * as transportApi from '../../../../services/api/transport';
+import { campusesApi } from '../../../../services/api';
 
 const normalize = (d) => ({
   id: d.id,
@@ -69,9 +70,10 @@ export default function DriverManagement() {
   const [selected, setSelected] = useState(null);
   const viewDisc = useDisclosure();
   const editDisc = useDisclosure();
-  const [form, setForm] = useState({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', rating: 0 });
+  const [form, setForm] = useState({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', busId: '', rating: 0, campusId: '' });
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const [buses, setBuses] = useState([]);
+  const [campuses, setCampuses] = useState([]);
 
   const loadDrivers = async () => {
     try {
@@ -93,7 +95,20 @@ export default function DriverManagement() {
     }
   };
 
-  useEffect(() => { loadDrivers(); loadBuses(); }, []);
+  const loadCampuses = async () => {
+    try {
+      const res = await campusesApi.list({ pageSize: 100 });
+      setCampuses(res?.rows || []);
+    } catch (e) {
+      console.error('Failed to load campuses', e);
+    }
+  };
+
+  useEffect(() => {
+    loadDrivers();
+    loadBuses();
+    loadCampuses();
+  }, []);
 
   const filtered = useMemo(() => {
     return rows.filter((d) => {
@@ -120,7 +135,7 @@ export default function DriverManagement() {
           <Text color={textColorSecondary}>Manage drivers, duty status, and licenses</Text>
         </Box>
         <ButtonGroup>
-          <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', busId: '', rating: 0 }); editDisc.onOpen(); }}>Add Driver</Button>
+          <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', busId: '', rating: 0, campusId: '' }); editDisc.onOpen(); }}>Add Driver</Button>
           <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export CSV</Button>
           <Button leftIcon={<MdPictureAsPdf />} colorScheme='blue'>Export PDF</Button>
         </ButtonGroup>
@@ -182,7 +197,7 @@ export default function DriverManagement() {
                         <Portal>
                           <MenuList zIndex={1500}>
                             <MenuItem onClick={() => { setSelected(d); viewDisc.onOpen(); }}>View Details</MenuItem>
-                            <MenuItem onClick={() => { setSelected(d); setForm({ ...d, busId: d.busId || '' }); editDisc.onOpen(); }}>Edit</MenuItem>
+                            <MenuItem onClick={() => { setSelected(d); setForm({ ...d, busId: d.busId || '', campusId: d.campusId || '' }); editDisc.onOpen(); }}>Edit</MenuItem>
                             <MenuItem color='red.500' onClick={async () => {
                               if (!window.confirm('Delete this driver?')) return;
                               try {
@@ -269,6 +284,14 @@ export default function DriverManagement() {
                 ))}
               </Select>
             </FormControl>
+            <FormControl mb={3} isRequired>
+              <FormLabel>Campus</FormLabel>
+              <Select placeholder='Select campus' value={form.campusId} onChange={(e) => setForm(f => ({ ...f, campusId: e.target.value }))}>
+                {campuses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </FormControl>
             <FormControl>
               <FormLabel>Rating</FormLabel>
               <NumberInput min={0} max={5} step={0.1} value={form.rating} onChange={(v) => setForm(f => ({ ...f, rating: Number(v) || 0 }))}>
@@ -287,6 +310,7 @@ export default function DriverManagement() {
                     licenseNumber: form.license,
                     status: form.status === 'On Duty' ? 'active' : 'inactive',
                     busId: form.busId || null,
+                    campusId: form.campusId || undefined,
                   });
                 } else {
                   await driversApi.create({
@@ -295,6 +319,7 @@ export default function DriverManagement() {
                     licenseNumber: form.license,
                     status: form.status === 'On Duty' ? 'active' : 'inactive',
                     busId: form.busId || null,
+                    campusId: form.campusId,
                   });
                 }
                 await loadDrivers();

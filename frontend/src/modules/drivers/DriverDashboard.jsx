@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Box, Flex, SimpleGrid, Text, Button, HStack, VStack, Badge, Icon, useColorModeValue, Wrap, WrapItem, Tooltip, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useToast, Select, Input, Textarea, Divider } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/card/Card';
@@ -6,6 +6,8 @@ import IconBox from '../../components/icons/IconBox';
 import { MdHome, MdMap, MdGpsFixed, MdPlace, MdDirectionsBus, MdAccessTime, MdReportProblem, MdPlayArrow, MdStop, MdLogin } from 'react-icons/md';
 import SparklineChart from '../../components/charts/SparklineChart';
 import PieChart from '../../components/charts/PieChart';
+import { useAuth } from '../../contexts/AuthContext';
+import * as driversApi from '../../services/api/drivers';
 
 export default function DriverDashboard() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -14,21 +16,44 @@ export default function DriverDashboard() {
   const sosDisc = useDisclosure();
   const incidentDisc = useDisclosure();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const data = {
-    routeName: 'Route A - North Loop',
-    stops: 18,
-    progress: 62, // percent
-    gpsStatus: 'Connected',
-    nextStop: 'Stop #7 - Oak Street',
-    eta: '08:42 AM',
-    vehicleId: 'BUS-12',
-    capacity: '48 seats',
-    shift: { start: '07:30 AM', end: '02:30 PM' },
-    lastUpdate: '1 min ago',
-    speed: '36 km/h',
-    speedTrend: [28, 32, 30, 35, 36, 31, 34, 38, 33, 36, 37, 35],
-  };
+  const [data, setData] = useState({
+    routeName: 'Loading...',
+    stops: 0,
+    progress: 0,
+    gpsStatus: 'Offline',
+    nextStop: '--',
+    eta: '--',
+    vehicleId: 'None',
+    capacity: 'N/A',
+    shift: { start: '08:00 AM', end: '04:00 PM' },
+    lastUpdate: 'Never',
+    speed: '0 km/h',
+    speedTrend: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        if (user?.role === 'driver') {
+          // list() returns specific driver if logged in
+          const resp = await driversApi.list({});
+          const items = resp.items || [];
+          if (items.length > 0) {
+            const me = items[0];
+            const stats = await driversApi.getDashboardStats(me.id);
+            setData(stats);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch driver stats', err);
+      }
+    };
+    if (user?.role === 'driver') {
+      fetchStats();
+    }
+  }, [user]);
 
   const [shiftOn, setShiftOn] = useState(false);
   const [shiftSince, setShiftSince] = useState('');
@@ -45,7 +70,7 @@ export default function DriverDashboard() {
           <Text fontSize='2xl' fontWeight='bold' mb='4px'>Driver Dashboard</Text>
           <Text fontSize='md' color={textSecondary}>Your route, vehicle and shift at a glance</Text>
         </Box>
-        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={()=>navigate('/auth/sign-in')}>Sign In</Button>
+        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={() => navigate('/auth/sign-in')}>Sign In</Button>
       </Flex>
 
       {/* Top KPIs */}
@@ -57,12 +82,12 @@ export default function DriverDashboard() {
                 <IconBox w='44px' h='44px' bg='linear-gradient(90deg,#00b09b 0%,#96c93d 100%)' icon={<Icon as={MdMap} w='22px' h='22px' color='white' />} />
                 <Box>
                   <Text fontWeight='600'>Today’s Route</Text>
-                  <Text fontSize='sm' color={textSecondary} noOfLines={1} maxW={{ base:'160px', md:'220px' }}>{data.routeName}</Text>
+                  <Text fontSize='sm' color={textSecondary} noOfLines={1} maxW={{ base: '160px', md: '220px' }}>{data.routeName}</Text>
                 </Box>
               </HStack>
               <Badge colorScheme='blue' whiteSpace='nowrap' alignSelf='center' size='sm'>{data.stops} stops</Badge>
             </Flex>
-            <Box mt='10px' h='8px' bg={useColorModeValue('gray.200','gray.600')} borderRadius='full'>
+            <Box mt='10px' h='8px' bg={useColorModeValue('gray.200', 'gray.600')} borderRadius='full'>
               <Box h='100%' w={`${data.progress}%`} bg='blue.400' borderRadius='full' />
             </Box>
           </Card>
@@ -87,7 +112,7 @@ export default function DriverDashboard() {
                 <IconBox w='44px' h='44px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdPlace} w='22px' h='22px' color='white' />} />
                 <Box>
                   <Text fontWeight='600'>Next Pickup/Drop</Text>
-                  <Text fontSize='sm' color={textSecondary} noOfLines={1} maxW={{ base:'160px', md:'220px' }}>{data.nextStop}</Text>
+                  <Text fontSize='sm' color={textSecondary} noOfLines={1} maxW={{ base: '160px', md: '220px' }}>{data.nextStop}</Text>
                 </Box>
               </HStack>
               <Badge colorScheme='blue' whiteSpace='nowrap' alignSelf='center' size='sm'>ETA {data.eta}</Badge>
@@ -113,7 +138,7 @@ export default function DriverDashboard() {
       <SimpleGrid columns={{ base: 1, lg: 2 }} spacing='20px'>
         <Card p='16px'>
           <Text fontSize='lg' fontWeight='bold' mb='12px'>Live Tracking</Text>
-          <Box h={{ base: '260px', md: '320px' }} borderRadius='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200','gray.600')} display='flex' alignItems='center' justifyContent='center'>
+          <Box h={{ base: '260px', md: '320px' }} borderRadius='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200', 'gray.600')} display='flex' alignItems='center' justifyContent='center'>
             <VStack spacing={1}>
               <Icon as={MdMap} w='32px' h='32px' color='gray.400' />
               <Text fontSize='sm' color={textSecondary}>Map placeholder — integrate map SDK here</Text>
@@ -135,12 +160,12 @@ export default function DriverDashboard() {
           <Wrap spacing='10px' shouldWrapChildren>
             <WrapItem>
               <Tooltip label='Start your shift and begin tracking'>
-                <Button size='sm' borderRadius='full' leftIcon={<MdPlayArrow />} colorScheme='green' variant='solid' onClick={()=>{ setShiftOn(true); setShiftSince(new Date().toLocaleTimeString()); toast({ status:'success', title:'Shift started' }); }}>Start Shift</Button>
+                <Button size='sm' borderRadius='full' leftIcon={<MdPlayArrow />} colorScheme='green' variant='solid' onClick={() => { setShiftOn(true); setShiftSince(new Date().toLocaleTimeString()); toast({ status: 'success', title: 'Shift started' }); }}>Start Shift</Button>
               </Tooltip>
             </WrapItem>
             <WrapItem>
               <Tooltip label='End your shift and stop tracking'>
-                <Button size='sm' borderRadius='full' leftIcon={<MdStop />} colorScheme='red' variant='outline' onClick={()=>{ if(!shiftOn){ toast({ status:'info', title:'Shift not active' }); return;} setShiftOn(false); toast({ status:'success', title:'Shift ended' }); }}>
+                <Button size='sm' borderRadius='full' leftIcon={<MdStop />} colorScheme='red' variant='outline' onClick={() => { if (!shiftOn) { toast({ status: 'info', title: 'Shift not active' }); return; } setShiftOn(false); toast({ status: 'success', title: 'Shift ended' }); }}>
                   End Shift
                 </Button>
               </Tooltip>
@@ -158,7 +183,7 @@ export default function DriverDashboard() {
           </Wrap>
           <Box mt='14px'>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing='12px'>
-              <Box p='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200','gray.600')} borderRadius='12px'>
+              <Box p='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200', 'gray.600')} borderRadius='12px'>
                 <Text fontSize='xs' fontWeight='700' textTransform='uppercase' letterSpacing='0.6px' color={textSecondary} mb='6px'>Status & Progress</Text>
                 <HStack spacing={2} mb='4px' flexWrap='wrap'>
                   <Badge colorScheme={shiftOn ? 'purple' : 'gray'}>{shiftOn ? 'On Duty' : 'Off Duty'}</Badge>
@@ -177,13 +202,13 @@ export default function DriverDashboard() {
                   <Badge colorScheme='green'>{completedStops}</Badge>
                   <Text fontSize='sm' color={textSecondary}>/ {data.stops}</Text>
                 </HStack>
-                <Box mt='4px' h='8px' bg={useColorModeValue('gray.200','gray.600')} borderRadius='full' position='relative'>
+                <Box mt='4px' h='8px' bg={useColorModeValue('gray.200', 'gray.600')} borderRadius='full' position='relative'>
                   <Box h='100%' w={`${data.progress}%`} bg='green.400' borderRadius='full' />
                   <Text position='absolute' top='-18px' right='0' fontSize='xs' color={textSecondary}>{data.progress}%</Text>
                 </Box>
               </Box>
 
-              <Box p='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200','gray.600')} borderRadius='12px'>
+              <Box p='12px' bg={subtle} borderWidth='1px' borderColor={useColorModeValue('gray.200', 'gray.600')} borderRadius='12px'>
                 <Text fontSize='xs' fontWeight='700' textTransform='uppercase' letterSpacing='0.6px' color={textSecondary} mb='6px'>Next Up</Text>
                 <Text fontSize='sm' color={textSecondary} noOfLines={2}>{data.nextStop}</Text>
                 <HStack spacing={2} mt='6px' flexWrap='wrap'>
@@ -214,12 +239,12 @@ export default function DriverDashboard() {
             <Badge>{data.speed}</Badge>
           </HStack>
           <Box mt='8px'>
-            <SparklineChart data={data.speedTrend} color="#3182CE" height={60} valueFormatter={(v)=>`${v} km/h`} />
+            <SparklineChart data={data.speedTrend} color="#3182CE" height={60} valueFormatter={(v) => `${v} km/h`} />
           </Box>
         </Card>
         <Card p='16px'>
           <Text fontSize='lg' fontWeight='bold' mb='8px'>Stops Status</Text>
-          <PieChart chartData={[completedStops, remainingStops]} chartOptions={{ labels:['Completed','Remaining'], colors:['#38A169','#CBD5E0'], legend:{ show:true, position:'right' } }} />
+          <PieChart chartData={[completedStops, remainingStops]} chartOptions={{ labels: ['Completed', 'Remaining'], colors: ['#38A169', '#CBD5E0'], legend: { show: true, position: 'right' } }} />
         </Card>
       </SimpleGrid>
 
@@ -231,7 +256,7 @@ export default function DriverDashboard() {
           <ModalCloseButton />
           <ModalBody>
             <VStack align='stretch' spacing={3}>
-              <Select value={sosType} onChange={e=>setSosType(e.target.value)}>
+              <Select value={sosType} onChange={e => setSosType(e.target.value)}>
                 <option value='accident'>Accident</option>
                 <option value='medical'>Medical</option>
                 <option value='security'>Security</option>
@@ -242,7 +267,7 @@ export default function DriverDashboard() {
           </ModalBody>
           <ModalFooter>
             <Button mr={3} onClick={sosDisc.onClose}>Cancel</Button>
-            <Button colorScheme='orange' onClick={()=>{ sosDisc.onClose(); toast({ status:'warning', title:`SOS sent (${sosType})` }); }}>Send SOS</Button>
+            <Button colorScheme='orange' onClick={() => { sosDisc.onClose(); toast({ status: 'warning', title: `SOS sent (${sosType})` }); }}>Send SOS</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -255,19 +280,19 @@ export default function DriverDashboard() {
           <ModalCloseButton />
           <ModalBody>
             <VStack align='stretch' spacing={3}>
-              <Select value={incidentType} onChange={e=>setIncidentType(e.target.value)}>
+              <Select value={incidentType} onChange={e => setIncidentType(e.target.value)}>
                 <option value='delay'>Delay</option>
                 <option value='behavior'>Student Behavior</option>
                 <option value='traffic'>Traffic/Route</option>
                 <option value='vehicle'>Vehicle Issue</option>
               </Select>
-              <Textarea placeholder='Describe the incident...' value={incidentNote} onChange={e=>setIncidentNote(e.target.value)} />
+              <Textarea placeholder='Describe the incident...' value={incidentNote} onChange={e => setIncidentNote(e.target.value)} />
               <Input type='file' accept='image/*' />
             </VStack>
           </ModalBody>
           <ModalFooter>
             <Button mr={3} onClick={incidentDisc.onClose}>Cancel</Button>
-            <Button colorScheme='pink' onClick={()=>{ incidentDisc.onClose(); toast({ status:'success', title:'Incident submitted' }); setIncidentNote(''); }}>Submit</Button>
+            <Button colorScheme='pink' onClick={() => { incidentDisc.onClose(); toast({ status: 'success', title: 'Incident submitted' }); setIncidentNote(''); }}>Submit</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

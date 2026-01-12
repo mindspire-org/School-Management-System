@@ -17,7 +17,8 @@ const selectColumns = `
   cs.updated_at AS "updatedAt",
   t.name AS "classTeacherName",
   t.employee_id AS "classTeacherEmployeeId",
-  t.email AS "classTeacherEmail"
+  t.email AS "classTeacherEmail",
+  cs.campus_id AS "campusId"
 `;
 
 const columnMap = {
@@ -32,6 +33,7 @@ const columnMap = {
   shift: 'shift',
   status: 'status',
   notes: 'notes',
+  campusId: 'campus_id',
 };
 
 const mapRow = (row = {}) => {
@@ -73,6 +75,7 @@ export const list = async ({
   academicYear,
   status,
   teacherId,
+  campusId,
 } = {}) => {
   const where = [];
   const params = [];
@@ -100,6 +103,11 @@ export const list = async ({
   if (teacherId) {
     params.push(Number(teacherId));
     where.push(`cs.class_teacher_id = $${params.length}`);
+  }
+
+  if (campusId) {
+    params.push(Number(campusId));
+    where.push(`cs.campus_id = $${params.length}`);
   }
 
   if (search) {

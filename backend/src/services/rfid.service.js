@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ q, status, location, bus, date, startDate, endDate, page = 1, pageSize = 50 }) => {
+export const list = async ({ q, status, location, bus, date, startDate, endDate, campusId, page = 1, pageSize = 50 }) => {
   const params = [];
   const where = [];
   // Filters on rfid_logs
@@ -19,6 +19,11 @@ export const list = async ({ q, status, location, bus, date, startDate, endDate,
     params.push(`%${q.toLowerCase()}%`);
     const idx3 = params.length;
     where.push(`(LOWER(s.name) LIKE $${idx} OR LOWER(s.roll_number) LIKE $${idx2} OR LOWER(rl.card_number) LIKE $${idx3})`);
+  }
+
+  if (campusId) {
+    params.push(campusId);
+    where.push(`rl.campus_id = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
@@ -58,12 +63,12 @@ export const getById = async (id) => {
   return rows[0] || null;
 };
 
-export const create = async ({ studentId, cardNumber, busNumber, status = 'success', location, scanTime }) => {
+export const create = async ({ studentId, cardNumber, busNumber, status = 'success', location, scanTime, campusId }) => {
   const { rows } = await query(
-    `INSERT INTO rfid_logs (student_id, card_number, bus_number, status, location, scan_time)
-     VALUES ($1,$2,$3,LOWER($4),$5,COALESCE($6, NOW()))
-     RETURNING id, student_id AS "studentId", card_number AS "cardNumber", bus_number AS "busNumber", status, location, scan_time AS "scanTime", created_at AS "createdAt"`,
-    [studentId || null, cardNumber || null, busNumber || null, status || 'success', location || null, scanTime || null]
+    `INSERT INTO rfid_logs (student_id, card_number, bus_number, status, location, scan_time, campus_id)
+     VALUES ($1,$2,$3,LOWER($4),$5,COALESCE($6, NOW()), $7)
+     RETURNING id, student_id AS "studentId", card_number AS "cardNumber", bus_number AS "busNumber", status, location, scan_time AS "scanTime", created_at AS "createdAt", campus_id AS "campusId"`,
+    [studentId || null, cardNumber || null, busNumber || null, status || 'success', location || null, scanTime || null, campusId]
   );
   return rows[0];
 };

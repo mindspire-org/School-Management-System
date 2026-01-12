@@ -8,7 +8,8 @@ export const list = async (req, res, next) => {
     // Backfill parents table from students having family_number to ensure legacy data shows up
     try { await parents.backfillFromStudents(); } catch (_) { }
     const { q, page = 1, pageSize = 50 } = req.query;
-    const data = await parents.list({ q, page: Number(page), pageSize: Number(pageSize) });
+    const campusId = req.user?.campusId;
+    const data = await parents.list({ q, page: Number(page), pageSize: Number(pageSize), campusId });
     res.json(data);
   } catch (e) { next(e); }
 };
@@ -25,7 +26,10 @@ export const getById = async (req, res, next) => {
 export const create = async (req, res, next) => {
   try {
     await ensureParentsSchema();
-    const p = await parents.create(req.body || {});
+    const payload = { ...(req.body || {}) };
+    payload.campusId = req.user?.campusId || payload.campusId;
+    if (!payload.campusId) return res.status(400).json({ message: 'Campus ID is required' });
+    const p = await parents.create(payload);
     res.status(201).json(p);
   } catch (e) { next(e); }
 };

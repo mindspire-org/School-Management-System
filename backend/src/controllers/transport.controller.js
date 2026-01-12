@@ -3,7 +3,7 @@ import * as service from '../services/transport.service.js';
 // Buses
 export const listBuses = async (req, res, next) => {
   try {
-    const rows = await service.listBuses();
+    const rows = await service.listBuses(req.user?.campusId);
     res.json({ items: rows });
   } catch (e) { next(e); }
 };
@@ -18,7 +18,7 @@ export const getBusById = async (req, res, next) => {
 
 export const createBus = async (req, res, next) => {
   try {
-    const row = await service.createBus(req.body);
+    const row = await service.createBus({ ...req.body, campusId: req.user?.campusId });
     res.status(201).json(row);
   } catch (e) { next(e); }
 };
@@ -45,7 +45,7 @@ export const listRoutes = async (req, res, next) => {
       const items = await service.listRoutesForDriver(req.user.id);
       return res.json({ items });
     }
-    res.json({ items: await service.listRoutes() });
+    res.json({ items: await service.listRoutes(req.user?.campusId) });
   } catch (e) { next(e); }
 };
 export const getRouteById = async (req, res, next) => {
@@ -61,7 +61,7 @@ export const getRouteById = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 export const createRoute = async (req, res, next) => {
-  try { const row = await service.createRoute(req.body); res.status(201).json(row); } catch (e) { next(e); }
+  try { const row = await service.createRoute({ ...req.body, campusId: req.user?.campusId }); res.status(201).json(row); } catch (e) { next(e); }
 };
 export const updateRoute = async (req, res, next) => {
   try { const row = await service.updateRoute(req.params.id, req.body); if (!row) return res.status(404).json({ message: 'Route not found' }); res.json(row); } catch (e) { next(e); }

@@ -1,27 +1,33 @@
 {
-  "name": "sms-backend",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "src/server.js",
+  "name": "school-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "db:ensure": "node src/db/createDatabase.js",
-    "migrate": "node src/db/migrate.js",
-    "seed": "node src/db/seed.js"
+    "dev": "node index.js",
+    "build": "echo 'Backend is already in JavaScript format'",
+    "start": "node index.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
-    "express": "^4.19.2",
-    "express-validator": "^7.2.0",
+    "express": "^4.21.2",
+    "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "pg": "^8.16.3"
+    "mongoose": "^8.19.3",
+    "morgan": "^1.10.1",
+    "puppeteer": "^22.10.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "@types/bcryptjs": "^2.4.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^20.19.25",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
   }
 }

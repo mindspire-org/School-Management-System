@@ -33,8 +33,8 @@ const request = async (method, url, { params, data, headers } = {}) => {
   // Drop undefined/null query params to avoid sending 'undefined' strings
   const cleanedParams = params
     ? Object.fromEntries(
-        Object.entries(params).filter(([, v]) => v !== undefined && v !== null)
-      )
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null)
+    )
     : undefined;
 
   // Prevent stale 304/no-body responses by cache-busting GETs
@@ -55,6 +55,14 @@ const request = async (method, url, { params, data, headers } = {}) => {
     ...(headers || {}),
   };
   if (authToken) finalHeaders['Authorization'] = `Bearer ${authToken}`;
+
+  // Attach campus override if present
+  try {
+    const selectedCampusId = localStorage.getItem('sms_selected_campus_id');
+    if (selectedCampusId) {
+      finalHeaders['x-campus-id'] = selectedCampusId;
+    }
+  } catch (_) { }
 
   const body = data !== undefined ? JSON.stringify(data) : undefined;
 

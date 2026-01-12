@@ -33,7 +33,8 @@ import {
 import { AddIcon, CheckIcon } from '@chakra-ui/icons';
 import Card from 'components/card/Card.js';
 import useApi from '../../../../hooks/useApi';
-import { teachersApi } from '../../../../services/api';
+import { teachersApi, campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const createInitialFormState = () => ({
   name: '',
@@ -74,6 +75,7 @@ const createInitialFormState = () => ({
   probationEndDate: '',
   contractEndDate: '',
   workHoursPerWeek: '',
+  campusId: '',
 });
 
 /**
@@ -82,21 +84,39 @@ const createInitialFormState = () => ({
 const AddTeacher = () => {
   // Form state
   const [formData, setFormData] = useState(createInitialFormState);
-  
+
   // Additional state for subjects and classes (arrays)
   const [subjects, setSubjects] = useState([]);
   const [classes, setClasses] = useState([]);
   const [newSubject, setNewSubject] = useState('');
   const [newClass, setNewClass] = useState('');
-  const subjectSuggestions = useMemo(() => ['Mathematics','Physics','Chemistry','Biology','English','Computer Science','Urdu','Islamiat'], []);
-  const classSuggestions = useMemo(() => ['9A','9B','10A','10B','11A','11B','12A','12B'], []);
-  
+  const subjectSuggestions = useMemo(() => ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science', 'Urdu', 'Islamiat'], []);
+  const classSuggestions = useMemo(() => ['9A', '9B', '10A', '10B', '11A', '11B', '12A', '12B'], []);
+
   // Form validation state
   const [errors, setErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  
+
+  const [campuses, setCampuses] = useState([]);
+  const [campusLoading, setCampusLoading] = useState(false);
+
+  useEffect(() => {
+    setCampusLoading(true);
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err))
+      .finally(() => setCampusLoading(false));
+  }, []);
+
+  // Default campusId from auth context if not set
+  useEffect(() => {
+    if (!formData.campusId && activeCampusId) {
+      setFormData(prev => ({ ...prev, campusId: activeCampusId }));
+    }
+  }, [formData.campusId, activeCampusId]);
+
   // Color mode values
   const textColor = useColorModeValue('gray.800', 'white');
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -155,12 +175,12 @@ const AddTeacher = () => {
     { key: 'salary', title: 'Salary', sub: 'Compensation' },
     { key: 'review', title: 'Review', sub: 'Verify details' },
   ]), []);
-  
+
   // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    
+
     // Clear error when field is modified
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
@@ -187,7 +207,7 @@ const AddTeacher = () => {
     const url = URL.createObjectURL(f);
     setPhotoPreview(url);
   };
-  
+
   // Add a subject to the list
   const handleAddSubject = () => {
     if (newSubject && !subjects.includes(newSubject)) {
@@ -195,12 +215,12 @@ const AddTeacher = () => {
       setNewSubject('');
     }
   };
-  
+
   // Remove a subject from the list
   const handleRemoveSubject = (subject) => {
     setSubjects(subjects.filter(s => s !== subject));
   };
-  
+
   // Add a class to the list
   const handleAddClass = () => {
     if (newClass && !classes.includes(newClass)) {
@@ -208,30 +228,30 @@ const AddTeacher = () => {
       setNewClass('');
     }
   };
-  
+
   // Remove a class from the list
   const handleRemoveClass = (cls) => {
     setClasses(classes.filter(c => c !== cls));
   };
-  
+
   // Validate the form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Invalid email format';
-    
+
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.qualification.trim()) newErrors.qualification = 'Qualification is required';
     if (!formData.joiningDate) newErrors.joiningDate = 'Joining date is required';
     if (!formData.baseSalary) newErrors.baseSalary = 'Basic salary is required';
     if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.dob) newErrors.dob = 'Date of birth is required';
-    
+
     if (subjects.length === 0) newErrors.subjects = 'At least one subject is required';
     if (classes.length === 0) newErrors.classes = 'At least one class is required';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -279,7 +299,7 @@ const AddTeacher = () => {
     if (validateStep(currentStep)) setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
   };
   const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
-  
+
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -326,7 +346,7 @@ const AddTeacher = () => {
 
     await createTeacher(payload);
   };
-  
+
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       {/* Page Header */}
@@ -474,6 +494,21 @@ const AddTeacher = () => {
                       <option value="fullTime">Full Time</option>
                       <option value="partTime">Part Time</option>
                     </Select>
+                  </FormControl>
+                  <FormControl isRequired isInvalid={errors.campusId}>
+                    <FormLabel>Campus</FormLabel>
+                    <Select
+                      name="campusId"
+                      value={formData.campusId}
+                      onChange={handleChange}
+                      placeholder="Select campus"
+                      isDisabled={campusLoading}
+                    >
+                      {campuses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </Select>
+                    {errors.campusId && <FormErrorMessage>{errors.campusId}</FormErrorMessage>}
                   </FormControl>
                   <FormControl isInvalid={errors.joiningDate}>
                     <FormLabel>Joining Date</FormLabel>

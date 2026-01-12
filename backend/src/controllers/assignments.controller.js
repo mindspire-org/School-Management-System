@@ -26,7 +26,12 @@ export const list = async (req, res, next) => {
     }
 
     // Admin/Owner see all assignments
-    const result = await assignments.list({ page: Number(page), pageSize: Number(pageSize), q });
+    const result = await assignments.list({
+      page: Number(page),
+      pageSize: Number(pageSize),
+      q,
+      campusId: req.user?.campusId
+    });
     return res.json(result);
   } catch (e) { next(e); }
 };
@@ -41,7 +46,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const created = await assignments.create(req.body, req.user);
+    const created = await assignments.create({ ...req.body, campusId: req.user?.campusId }, req.user);
     return res.status(201).json(created);
   } catch (e) { next(e); }
 };

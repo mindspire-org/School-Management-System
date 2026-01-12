@@ -3,7 +3,10 @@ import * as service from '../services/communication.service.js';
 // Announcements
 export const listAnnouncements = async (req, res, next) => {
   try {
-    const items = await service.listAnnouncements({ audience: req.query.audience });
+    const items = await service.listAnnouncements({
+      audience: req.query.audience,
+      campusId: req.user?.campusId
+    });
     res.json({ items });
   } catch (e) { next(e); }
 };
@@ -19,7 +22,11 @@ export const getAnnouncementById = async (req, res, next) => {
 export const createAnnouncement = async (req, res, next) => {
   try {
     const createdBy = req.user?.id;
-    const item = await service.createAnnouncement({ ...req.body, createdBy });
+    const item = await service.createAnnouncement({
+      ...req.body,
+      createdBy,
+      campusId: req.user?.campusId
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 };
@@ -42,7 +49,7 @@ export const deleteAnnouncement = async (req, res, next) => {
 // Alerts
 export const listAlerts = async (req, res, next) => {
   try {
-    res.json({ items: await service.listAlerts() });
+    res.json({ items: await service.listAlerts(req.user?.campusId) });
   } catch (e) { next(e); }
 };
 
@@ -57,7 +64,11 @@ export const getAlertById = async (req, res, next) => {
 export const createAlert = async (req, res, next) => {
   try {
     const createdBy = req.user?.id;
-    const item = await service.createAlert({ ...req.body, createdBy });
+    const item = await service.createAlert({
+      ...req.body,
+      createdBy,
+      campusId: req.user?.campusId
+    });
     res.status(201).json(item);
   } catch (e) { next(e); }
 };

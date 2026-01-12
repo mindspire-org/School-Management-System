@@ -50,11 +50,13 @@ import { getStatusColor } from '../../../../utils/helpers';
 // API
 import * as studentsApi from '../../../../services/api/students';
 import useClassOptions from '../../../../hooks/useClassOptions';
+import { useAuth } from '../../../../contexts/AuthContext';
 // Embedded views
 import StudentProfile from './StudentProfile';
 import EditStudent from './EditStudent';
 
 export default function StudentsList() {
+  const { campusId } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -71,7 +73,7 @@ export default function StudentsList() {
     try {
       setLoading(true);
       setError('');
-      const params = {};
+      const params = { campusId };
       if (searchQuery) params.q = searchQuery;
       if (filterClass !== 'all') params.class = filterClass;
       const payload = await studentsApi.list(params);
@@ -90,14 +92,14 @@ export default function StudentsList() {
 
   // Filter students
   const filteredStudents = students.filter(student => {
-    const matchesSearch = 
+    const matchesSearch =
       student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.rfidTag.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesClass = filterClass === 'all' || student.class === filterClass;
     const matchesStatus = filterStatus === 'all' || student.feeStatus === filterStatus;
-    
+
     return matchesSearch && matchesClass && matchesStatus;
   });
 
@@ -158,7 +160,7 @@ export default function StudentsList() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </InputGroup>
-          
+
           <Select
             w={{ base: '100%', md: '150px' }}
             value={filterClass}
@@ -170,7 +172,7 @@ export default function StudentsList() {
               <option key={c} value={c}>{c}</option>
             ))}
           </Select>
-          
+
           <Select
             w={{ base: '100%', md: '150px' }}
             value={filterStatus}
@@ -247,15 +249,15 @@ export default function StudentsList() {
                           student.attendance >= 90
                             ? 'green'
                             : student.attendance >= 75
-                            ? 'orange'
-                            : 'red'
+                              ? 'orange'
+                              : 'red'
                         }
                       >
                         {student.attendance >= 90
                           ? 'Good'
                           : student.attendance >= 75
-                          ? 'Average'
-                          : 'Low'}
+                            ? 'Average'
+                            : 'Low'}
                       </Badge>
                     </HStack>
                   </Td>

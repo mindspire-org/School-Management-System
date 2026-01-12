@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ examId, studentId, subject, className, section, q, page = 1, pageSize = 50 }) => {
+export const list = async ({ examId, studentId, subject, className, section, q, page = 1, pageSize = 50, campusId }) => {
   const params = [];
   const where = [];
   if (examId) { params.push(examId); where.push(`er.exam_id = $${params.length}`); }
@@ -9,6 +9,7 @@ export const list = async ({ examId, studentId, subject, className, section, q, 
   if (className) { params.push(className); where.push(`s.class = $${params.length}`); }
   if (section) { params.push(section); where.push(`s.section = $${params.length}`); }
   if (q) { params.push(`%${q.toLowerCase()}%`); where.push(`(LOWER(s.name) LIKE $${params.length} OR LOWER(COALESCE(s.roll_number,'')) LIKE $${params.length})`); }
+  if (campusId) { params.push(campusId); where.push(`er.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
   params.push(pageSize, offset);
@@ -55,10 +56,10 @@ export const getById = async (id) => {
   return rows[0] || null;
 };
 
-export const create = async ({ examId, studentId, subject, marks, grade }) => {
+export const create = async ({ examId, studentId, subject, marks, grade, campusId }) => {
   const { rows } = await query(
-    'INSERT INTO exam_results (exam_id, student_id, subject, marks, grade) VALUES ($1,$2,$3,$4,$5) RETURNING id, exam_id AS "examId", student_id AS "studentId", subject, marks, grade',
-    [examId, studentId, subject, marks || null, grade || null]
+    'INSERT INTO exam_results (exam_id, student_id, subject, marks, grade, campus_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, exam_id AS "examId", student_id AS "studentId", subject, marks, grade, campus_id AS "campusId"',
+    [examId, studentId, subject, marks || null, grade || null, campusId || null]
   );
   return rows[0];
 };

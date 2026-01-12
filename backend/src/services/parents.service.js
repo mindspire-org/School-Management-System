@@ -63,16 +63,20 @@ export const backfillFromStudents = async () => {
   return { ok: true };
 };
 
-export const list = async ({ q, page = 1, pageSize = 50 }) => {
+export const list = async ({ q, page = 1, pageSize = 50, campusId }) => {
   const where = [];
   const params = [];
   if (q) {
     params.push(`%${String(q).toLowerCase()}%`);
     where.push(`(LOWER(primary_name) LIKE $${params.length} OR LOWER(father_name) LIKE $${params.length} OR LOWER(mother_name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length} OR LOWER(family_number) LIKE $${params.length})`);
   }
+  if (campusId) {
+    params.push(campusId);
+    where.push(`p.campus_id = $${params.length}`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
-  const countRes = await query(`SELECT COUNT(*)::int AS count FROM parents ${whereSql}`, params);
+  const countRes = await query(`SELECT COUNT(*)::int AS count FROM parents p ${whereSql}`, params);
   const total = countRes.rows[0]?.count || 0;
   const dataRes = await query(
     `SELECT p.id, p.family_number AS "familyNumber", p.primary_name AS "primaryName", p.father_name AS "fatherName", p.mother_name AS "motherName",
@@ -106,16 +110,16 @@ export const ensureByFamilyNumber = async (data) => {
   if (!fam) {
     const generated = await genFamilyNumber();
     const { rows } = await query(
-      'INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, family_number AS "familyNumber"',
-      [generated, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null]
+      'INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, family_number AS "familyNumber"',
+      [generated, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null, data.campusId || null]
     );
     return rows[0];
   }
   const { rows } = await query('SELECT id, family_number AS "familyNumber" FROM parents WHERE family_number = $1', [fam]);
   if (rows[0]) return rows[0];
   const ins = await query(
-    'INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, family_number AS "familyNumber"',
-    [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null]
+    'INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, family_number AS "familyNumber"',
+    [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null, data.campusId || null]
   );
   return ins.rows[0];
 };
@@ -123,8 +127,8 @@ export const ensureByFamilyNumber = async (data) => {
 export const create = async (data) => {
   const fam = data.familyNumber || (await genFamilyNumber());
   const { rows } = await query(
-    `INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address, campus_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT (family_number) DO UPDATE SET primary_name = COALESCE(EXCLUDED.primary_name, parents.primary_name),
        father_name = COALESCE(EXCLUDED.father_name, parents.father_name),
        mother_name = COALESCE(EXCLUDED.mother_name, parents.mother_name),
@@ -132,7 +136,7 @@ export const create = async (data) => {
        email = COALESCE(EXCLUDED.email, parents.email),
        address = COALESCE(EXCLUDED.address, parents.address)
      RETURNING id, family_number AS "familyNumber"`,
-    [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null]
+    [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null, data.campusId || null]
   );
 
   const parent = rows[0];
@@ -151,11 +155,19 @@ export const create = async (data) => {
   return parent;
 };
 
+export const getByUserId = async (userId) => {
+  const { rows } = await query(
+    'SELECT id, family_number AS "familyNumber", primary_name AS "primaryName", email FROM parents WHERE user_id = $1',
+    [userId]
+  );
+  return rows[0];
+};
+
 export const update = async (id, data) => {
   const fields = [];
   const values = [];
   const map = {
-    primaryName: 'primary_name', fatherName: 'father_name', motherName: 'mother_name', whatsappPhone: 'whatsapp_phone', email: 'email', address: 'address'
+    primaryName: 'primary_name', fatherName: 'father_name', motherName: 'mother_name', whatsappPhone: 'whatsapp_phone', email: 'email', address: 'address', campusId: 'campus_id'
   };
   Object.entries(data || {}).forEach(([k, v]) => {
     if (map[k]) { values.push(v); fields.push(`${map[k]} = $${values.length}`); }

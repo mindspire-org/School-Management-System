@@ -83,7 +83,7 @@ export default function UserManagement() {
 
       try {
         setLookupLoading(true);
-        const params = { search: lookupQuery, pageSize: 5 };
+        const params = { q: lookupQuery, pageSize: 5 };
         let res;
 
         switch (formData.role) {
@@ -95,7 +95,7 @@ export default function UserManagement() {
         }
 
         // Handle different API response structures if any
-        const results = res.rows || res.data || [];
+        const results = res.rows || res.data || res.items || [];
         setLookupResults(results);
       } catch (err) {
         console.error('Lookup error:', err);

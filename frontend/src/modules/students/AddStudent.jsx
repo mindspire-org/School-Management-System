@@ -121,7 +121,7 @@ function AddStudent() {
     const hasFormData = Object.values(formData).some(
       section => Object.keys(section).length > 0
     );
-    
+
     if (hasFormData) {
       setIsLeaveAlertOpen(true);
     } else {
@@ -153,6 +153,7 @@ function AddStudent() {
       rollNumber: combinedData.rollNumber,
       class: combinedData.class,
       section: combinedData.section,
+      campusId: combinedData.campusId,
       rfidTag: combinedData.rfidTag,
       attendance: 0,
       feeStatus: 'paid',
@@ -232,29 +233,29 @@ function AddStudent() {
   const validateCurrentStep = () => {
     // In a real app, you would have more detailed validation here
     // This is a simplified validation
-    
+
     switch (currentStep) {
       case 1: // Personal Information
         return formData.personal.name && formData.personal.gender && formData.personal.dateOfBirth;
-      
+
       case 2: // Academic Information
-        return formData.academic.class && formData.academic.section && formData.academic.admissionNumber;
-      
+        return formData.academic.class && formData.academic.section && formData.academic.admissionNumber && formData.academic.campusId;
+
       case 3: // Parent Information
         return formData.parent.father && formData.parent.father.name && formData.parent.father.phone;
-      
+
       case 4: // Transport Information
         // Transport is optional
         return true;
-      
+
       case 5: // Fee Information
         // Basic fee info is required
         return formData.fee.feePlan;
-      
+
       case 6: // Review
         // Review step doesn't need validation
         return true;
-      
+
       default:
         return false;
     }
@@ -295,7 +296,7 @@ function AddStudent() {
           </Heading>
           <Text color="gray.500" fontSize={{ base: 'sm', md: 'md' }}>Enter student information to register</Text>
         </Box>
-        
+
         <Button
           leftIcon={<MdArrowBack />}
           mt={{ base: 2, md: 0 }}

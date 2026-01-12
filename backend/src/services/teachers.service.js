@@ -190,6 +190,7 @@ const columnMap = {
   iban: 'iban',
   avatar: 'avatar',
   userId: 'user_id',
+  campusId: 'campus_id',
 };
 
 const jsonColumns = new Set(['subjects', 'classes']);
@@ -355,13 +356,17 @@ const computePayrollTotal = ({ baseSalary = 0, allowances = 0, deductions = 0, b
   return Math.max(0, Number(total.toFixed(2)));
 };
 
-export const list = async ({ page = 1, pageSize = 50, q }) => {
+export const list = async ({ page = 1, pageSize = 50, q, campusId }) => {
   const offset = (page - 1) * pageSize;
   const params = [];
   const where = [];
   if (q) {
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(LOWER(name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length} OR LOWER(employee_id) LIKE $${params.length})`);
+  }
+  if (campusId) {
+    params.push(campusId);
+    where.push(`campus_id = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -429,6 +434,8 @@ export const create = async (payload = {}) => {
     'avatar',
     // Link to users
     'userId',
+    // Multi-campus
+    'campusId',
   ];
 
   const columns = insertFields.map((field) => columnMap[field]);
@@ -451,8 +458,8 @@ export const create = async (payload = {}) => {
         err.constraint === 'teachers_email_key'
           ? 'Email already in use'
           : err.constraint === 'teachers_employee_id_key'
-          ? 'Employee ID already in use'
-          : 'Duplicate value violates unique constraint'
+            ? 'Employee ID already in use'
+            : 'Duplicate value violates unique constraint'
       );
       e.status = 409;
       throw e;
@@ -504,7 +511,7 @@ export const remove = async (id) => {
   return rowCount > 0;
 };
 
-export const listSchedules = async ({ teacherId, dayOfWeek }) => {
+export const listSchedules = async ({ teacherId, dayOfWeek, className, section }) => {
   const params = [];
   const where = [];
   if (teacherId) {
@@ -516,6 +523,15 @@ export const listSchedules = async ({ teacherId, dayOfWeek }) => {
     params.push(normalizedDay);
     where.push(`ts.day_of_week = $${params.length}`);
   }
+  if (className) {
+    params.push(className);
+    where.push(`ts.class = $${params.length}`);
+  }
+  if (section) {
+    params.push(section);
+    where.push(`ts.section = $${params.length}`);
+  }
+
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT ${scheduleSelect}
@@ -1097,4 +1113,156 @@ export const updateSubjectAssignment = async (id, payload = {}) => {
 export const removeSubjectAssignment = async (id) => {
   const { rowCount } = await query('DELETE FROM teacher_subject_assignments WHERE id = $1', [id]);
   return rowCount > 0;
+};
+// Dashboard Stats
+export const getDashboardStats = async (teacherId) => {
+  const stats = {
+    todaysClasses: 0,
+    students: 0,
+    attendancePending: 0,
+    homeworkDue: 0,
+    alerts: 0,
+    upcomingClass: null,
+    attendanceTrend: {
+      categories: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      series: [{ name: 'Attendance %', data: [0, 0, 0, 0, 0, 0, 0] }]
+    },
+    homeworkStats: {
+      categories: [],
+      series: [
+        { name: 'Submitted', data: [] },
+        { name: 'Pending', data: [] }
+      ]
+    }
+  };
+
+  try {
+    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const dayIdx = normalizeDayOfWeek(todayName);
+
+    // 1. Today's Classes & Upcoming Class
+    if (dayIdx) {
+      const { rows: scheduleRows } = await query(
+        `SELECT class AS "className", section, subject, room, start_time AS "startTime", end_time AS "endTime"
+         FROM teacher_schedules
+         WHERE teacher_id = $1 AND day_of_week = $2
+         ORDER BY start_time ASC`,
+        [teacherId, dayIdx]
+      );
+      stats.todaysClasses = scheduleRows.length;
+
+      const nowTime = new Date().toTimeString().slice(0, 8);
+      stats.upcomingClass = scheduleRows.find(r => r.startTime > nowTime) || null;
+    }
+
+    // 2. Total Students
+    const { rows: classesRows } = await query(
+      `SELECT DISTINCT class, section FROM teacher_schedules WHERE teacher_id = $1`,
+      [teacherId]
+    );
+
+    let studentIds = [];
+    if (classesRows.length > 0) {
+      const conditions = classesRows.map((_, i) => `(class = $${i * 2 + 1} AND section = $${i * 2 + 2})`).join(' OR ');
+      const params = [];
+      classesRows.forEach(r => { params.push(r.class, r.section); });
+
+      const { rows: studentRows } = await query(
+        `SELECT id FROM students WHERE status = 'active' AND (${conditions})`,
+        params
+      );
+      stats.students = studentRows.length;
+      studentIds = studentRows.map(s => s.id);
+    }
+
+    // 3. Attendance Pending (Classes today with no attendance records)
+    if (dayIdx && classesRows.length > 0) {
+      const todayDate = new Date().toISOString().slice(0, 10);
+      let pendingCount = 0;
+      for (const cls of classesRows) {
+        const { rows: attRows } = await query(
+          `SELECT 1 FROM attendance_records ar
+           JOIN students s ON s.id = ar.student_id
+           WHERE s.class = $1 AND s.section = $2 AND ar.date = $3
+           LIMIT 1`,
+          [cls.class, cls.section, todayDate]
+        );
+        if (attRows.length === 0) pendingCount++;
+      }
+      stats.attendancePending = pendingCount;
+    }
+
+    // 4. Homework & Alerts
+    const { rows: teacherUser } = await query('SELECT user_id FROM teachers WHERE id = $1', [teacherId]);
+    if (teacherUser[0]?.user_id) {
+      const userId = teacherUser[0].user_id;
+
+      // Homework Due
+      const { rows: hwRows } = await query(
+        `SELECT COUNT(*)::int as count FROM assignments WHERE created_by = $1 AND due_date >= CURRENT_DATE`,
+        [userId]
+      );
+      stats.homeworkDue = hwRows[0]?.count || 0;
+
+      // Alerts
+      const { rows: alertRows } = await query(
+        `SELECT COUNT(*)::int as count FROM notifications WHERE user_id = $1 AND is_read = false`,
+        [userId]
+      );
+      stats.alerts = alertRows[0]?.count || 0;
+
+      // Homework Stats (Last 5 assignments)
+      const { rows: assignments } = await query(
+        `SELECT id, title FROM assignments WHERE created_by = $1 ORDER BY id DESC LIMIT 5`,
+        [userId]
+      );
+
+      for (const ass of assignments) {
+        const { rows: subCount } = await query(
+          `SELECT COUNT(*)::int as count FROM assignment_submissions WHERE assignment_id = $1`,
+          [ass.id]
+        );
+        const submitted = subCount[0].count;
+        const pending = Math.max(0, stats.students - submitted);
+
+        stats.homeworkStats.categories.push(ass.title.slice(0, 10));
+        stats.homeworkStats.series[0].data.push(submitted);
+        stats.homeworkStats.series[1].data.push(pending);
+      }
+    }
+
+    // 5. Attendance Trend (Last 7 days)
+    if (studentIds.length > 0) {
+      const trendData = [];
+      const trendDays = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+        trendDays.push(dayName);
+
+        const { rows: attStats } = await query(
+          `SELECT
+             COUNT(*) FILTER (WHERE status = 'present') AS present,
+             COUNT(*) AS total
+           FROM attendance_records
+           WHERE student_id = ANY($1) AND date = $2`,
+          [studentIds, dateStr]
+        );
+
+        const present = Number(attStats[0].present);
+        const total = Number(attStats[0].total);
+        const percent = total > 0 ? Math.round((present / total) * 100) : 0;
+        trendData.push(percent);
+      }
+      stats.attendanceTrend.categories = trendDays;
+      stats.attendanceTrend.series[0].data = trendData;
+    }
+
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+  }
+
+  return stats;
 };
