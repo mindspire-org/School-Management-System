@@ -11,12 +11,13 @@ const router = Router();
 // ========================================
 
 // Check if any users exist (students, teachers, drivers)
-router.get('/check-users', authenticate, controller.checkUsersExist);
+router.get('/check-users', authenticate, authorize('admin', 'owner'), controller.checkUsersExist);
 
 // Get users by type for dropdown
 router.get(
   '/users/:type',
   authenticate,
+  authorize('admin', 'owner'),
   [param('type').isIn(['student', 'teacher', 'driver'])],
   validate,
   controller.getUsersByType

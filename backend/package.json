@@ -2,17 +2,20 @@
   "name": "school-backend",
   "version": "0.1.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
-    "dev": "node index.js",
+    "dev": "node src/server.js",
     "build": "echo 'Backend is already in JavaScript format'",
-    "start": "node index.js"
+    "start": "node src/server.js"
   },
   "dependencies": {
+    "pg": "^8.11.5",
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
+    "express-validator": "^7.2.1",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.3",

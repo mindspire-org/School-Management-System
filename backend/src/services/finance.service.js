@@ -5,13 +5,16 @@ import { query } from '../config/db.js';
 // ========================================
 
 // Check if any users exist (students, teachers, or drivers)
-export const checkUsersExist = async () => {
-  const { rows } = await query(`
-    SELECT 
-      (SELECT COUNT(*) FROM students) as students,
-      (SELECT COUNT(*) FROM teachers) as teachers,
-      (SELECT COUNT(*) FROM drivers) as drivers
-  `);
+export const checkUsersExist = async ({ campusId } = {}) => {
+  const { rows } = await query(
+    `
+      SELECT
+        (SELECT COUNT(*) FROM students WHERE ($1::int IS NULL OR campus_id = $1::int)) as students,
+        (SELECT COUNT(*) FROM teachers WHERE ($1::int IS NULL OR campus_id = $1::int)) as teachers,
+        (SELECT COUNT(*) FROM drivers WHERE ($1::int IS NULL OR campus_id = $1::int)) as drivers
+    `,
+    [campusId || null]
+  );
   const counts = rows[0] || { students: 0, teachers: 0, drivers: 0 };
   return {
     hasUsers: (Number(counts.students) + Number(counts.teachers) + Number(counts.drivers)) > 0,
@@ -68,11 +71,12 @@ export const getDashboardAnalytics = async ({ userType, days = 14, campusId } = 
              COALESCE(SUM(amount), 0) AS total
       FROM finance_payments
       WHERE ($1::text IS NULL OR user_type = $1::text)
+        AND ($2::int IS NULL OR campus_id = $2::int)
       GROUP BY COALESCE(NULLIF(TRIM(LOWER(method)), ''), 'unknown')
       ORDER BY total DESC
       LIMIT 10
     `,
-    [u]
+    [u, campusId || null]
   );
 
   const methodLabels = methodRows.map((r) => String(r.method || 'unknown'));
@@ -90,6 +94,7 @@ export const getDashboardAnalytics = async ({ userType, days = 14, campusId } = 
           AND status != 'cancelled'
           AND balance > 0
           AND ($1::text IS NULL OR user_type = $1::text)
+          AND ($2::int IS NULL OR campus_id = $2::int)
       )
       SELECT
         CASE
@@ -103,7 +108,7 @@ export const getDashboardAnalytics = async ({ userType, days = 14, campusId } = 
       FROM inv
       GROUP BY bucket
     `,
-    [u]
+    [u, campusId || null]
   );
 
   const bucketOrder = ['0-7d', '8-14d', '15-30d', '31-60d', '60+d'];
@@ -122,10 +127,11 @@ export const getDashboardAnalytics = async ({ userType, days = 14, campusId } = 
         AND status != 'cancelled'
         AND balance > 0
         AND ($1::text IS NULL OR user_type = $1::text)
+        AND ($2::int IS NULL OR campus_id = $2::int)
       ORDER BY balance DESC
       LIMIT 8
     `,
-    [u]
+    [u, campusId || null]
   );
 
   for (const row of topRows) {
@@ -179,6 +185,33 @@ export const getUsersByType = async (userType) => {
   return rows;
 };
 
+export const getUsersByTypeScoped = async (userType, { campusId } = {}) => {
+  const params = [];
+  const campusWhere = [];
+  if (campusId) {
+    params.push(campusId);
+    campusWhere.push(`campus_id = $${params.length}`);
+  }
+  const whereSql = campusWhere.length ? `WHERE ${campusWhere.join(' AND ')}` : '';
+
+  let sql;
+  switch (userType) {
+    case 'student':
+      sql = `SELECT id, name, email, roll_number AS "rollNumber", class, section FROM students ${whereSql} ORDER BY name`;
+      break;
+    case 'teacher':
+      sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation FROM teachers ${whereSql} ORDER BY name`;
+      break;
+    case 'driver':
+      sql = `SELECT id, name, email, license_number AS "licenseNumber", phone FROM drivers ${whereSql} ORDER BY name`;
+      break;
+    default:
+      throw new Error('Invalid user type');
+  }
+  const { rows } = await query(sql, params);
+  return rows;
+};
+
 // Validate user exists
 export const validateUserExists = async (userType, userId) => {
   let sql;
@@ -203,53 +236,53 @@ export const validateUserExists = async (userType, userId) => {
 // DASHBOARD STATISTICS
 // ========================================
 
-export const getDashboardStats = async ({ userType } = {}) => {
+export const getDashboardStats = async ({ userType, campusId } = {}) => {
   const u = userType || null;
   const { rows } = await query(`
     SELECT
       -- Student fees (shown for all or student)
       CASE WHEN $1::text IS NULL OR $1::text = 'student' THEN
-        COALESCE((SELECT SUM(total) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee'), 0)
+        COALESCE((SELECT SUM(total) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "studentFeesTotal",
       CASE WHEN $1::text IS NULL OR $1::text = 'student' THEN
-        COALESCE((SELECT SUM(balance) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee' AND status != 'paid'), 0)
+        COALESCE((SELECT SUM(balance) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee' AND status != 'paid' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "studentFeesOutstanding",
       CASE WHEN $1::text IS NULL OR $1::text = 'student' THEN
-        COALESCE((SELECT SUM(total) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee' AND status = 'paid'), 0)
+        COALESCE((SELECT SUM(total) FROM finance_invoices WHERE user_type = 'student' AND invoice_type = 'fee' AND status = 'paid' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "studentFeesPaid",
       
       -- Teacher payroll (shown for all or teacher)
       CASE WHEN $1::text IS NULL OR $1::text = 'teacher' THEN
-        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls), 0)
+        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls WHERE ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "teacherPayrollTotal",
       CASE WHEN $1::text IS NULL OR $1::text = 'teacher' THEN
-        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls WHERE status = 'paid'), 0)
+        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls WHERE status = 'paid' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "teacherPayrollPaid",
       CASE WHEN $1::text IS NULL OR $1::text = 'teacher' THEN
-        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls WHERE status = 'pending'), 0)
+        COALESCE((SELECT SUM(total_amount) FROM teacher_payrolls WHERE status = 'pending' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "teacherPayrollPending",
       
       -- Driver payroll (shown for all or driver)
       CASE WHEN $1::text IS NULL OR $1::text = 'driver' THEN
-        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls), 0)
+        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls WHERE ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "driverPayrollTotal",
       CASE WHEN $1::text IS NULL OR $1::text = 'driver' THEN
-        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls WHERE status = 'paid'), 0)
+        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls WHERE status = 'paid' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "driverPayrollPaid",
       CASE WHEN $1::text IS NULL OR $1::text = 'driver' THEN
-        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls WHERE status = 'pending'), 0)
+        COALESCE((SELECT SUM(total_amount) FROM driver_payrolls WHERE status = 'pending' AND ($2::int IS NULL OR campus_id = $2::int)), 0)
       ELSE 0 END AS "driverPayrollPending",
       
       -- Invoice counts by status (scoped by userType when provided)
-      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'pending' AND ($1::text IS NULL OR user_type = $1::text)) AS "invoicesPending",
-      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'paid' AND ($1::text IS NULL OR user_type = $1::text)) AS "invoicesPaid",
-      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'overdue' AND ($1::text IS NULL OR user_type = $1::text)) AS "invoicesOverdue",
+      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'pending' AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)) AS "invoicesPending",
+      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'paid' AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)) AS "invoicesPaid",
+      (SELECT COUNT(*) FROM finance_invoices WHERE status = 'overdue' AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)) AS "invoicesOverdue",
 
       -- Recent collections (scoped by userType when provided)
-      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE paid_at >= NOW() - INTERVAL '30 days' AND ($1::text IS NULL OR user_type = $1::text)), 0) AS "collectionsLast30Days",
-      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE paid_at >= NOW() - INTERVAL '7 days' AND ($1::text IS NULL OR user_type = $1::text)), 0) AS "collectionsLast7Days",
-      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE DATE(paid_at) = CURRENT_DATE AND ($1::text IS NULL OR user_type = $1::text)), 0) AS "collectionsToday"
-  `, [u]);
+      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE paid_at >= NOW() - INTERVAL '30 days' AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)), 0) AS "collectionsLast30Days",
+      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE paid_at >= NOW() - INTERVAL '7 days' AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)), 0) AS "collectionsLast7Days",
+      COALESCE((SELECT SUM(amount) FROM finance_payments WHERE DATE(paid_at) = CURRENT_DATE AND ($1::text IS NULL OR user_type = $1::text) AND ($2::int IS NULL OR campus_id = $2::int)), 0) AS "collectionsToday"
+  `, [u, campusId || null]);
 
   const stats = rows[0] || {};
   return {
@@ -431,13 +464,15 @@ export const deleteUnifiedInvoice = async (id) => {
 // ========================================
 
 // List payments
-export const listUnifiedPayments = async ({ userType, userId, invoiceId, page = 1, pageSize = 50 }) => {
+export const listUnifiedPayments = async ({ userType, userId, invoiceId, campusId, page = 1, pageSize = 50 }) => {
   const params = [];
   const where = [];
 
   if (userType) { params.push(userType); where.push(`fp.user_type = $${params.length}`); }
   if (userId) { params.push(userId); where.push(`fp.user_id = $${params.length}`); }
   if (invoiceId) { params.push(invoiceId); where.push(`fp.invoice_id = $${params.length}`); }
+
+  if (campusId) { params.push(campusId); where.push(`fp.campus_id = $${params.length}`); }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
@@ -610,7 +645,7 @@ export const getOutstandingFees = async ({ userType, userIds, campusId, page = 1
 // PAYROLL (Teachers + Drivers combined)
 // ========================================
 
-export const getPayrollSummary = async ({ role, periodMonth, status, page = 1, pageSize = 50 }) => {
+export const getPayrollSummary = async ({ role, periodMonth, status, campusId, page = 1, pageSize = 50 }) => {
   const results = [];
   const offset = (Number(page) - 1) * Number(pageSize);
 
@@ -620,6 +655,7 @@ export const getPayrollSummary = async ({ role, periodMonth, status, page = 1, p
     const tWhere = [];
     if (periodMonth) { tParams.push(periodMonth); tWhere.push(`period_month = $${tParams.length}`); }
     if (status) { tParams.push(status); tWhere.push(`status = $${tParams.length}`); }
+    if (campusId) { tParams.push(campusId); tWhere.push(`t.campus_id = $${tParams.length}`); }
     const tWhereSql = tWhere.length ? `WHERE ${tWhere.join(' AND ')}` : '';
 
     const { rows: teacherRows } = await query(`
@@ -641,6 +677,7 @@ export const getPayrollSummary = async ({ role, periodMonth, status, page = 1, p
     const dWhere = [];
     if (periodMonth) { dParams.push(periodMonth); dWhere.push(`period_month = $${dParams.length}`); }
     if (status) { dParams.push(status); dWhere.push(`status = $${dParams.length}`); }
+    if (campusId) { dParams.push(campusId); dWhere.push(`d.campus_id = $${dParams.length}`); }
     const dWhereSql = dWhere.length ? `WHERE ${dWhere.join(' AND ')}` : '';
 
     const { rows: driverRows } = await query(`

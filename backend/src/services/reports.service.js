@@ -1,12 +1,28 @@
 import { query } from '../config/db.js';
 
 const getOverview = async ({ campusId }) => {
-  const whereSql = campusId ? `WHERE campus_id = ${campusId}` : '';
+  const baseParams = [];
+  const where = [];
+  if (campusId) {
+    baseParams.push(Number(campusId));
+    where.push(`campus_id = $${baseParams.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
   const [students, teachers, assignments, invoices] = await Promise.all([
-    query(`SELECT COUNT(*)::int AS count FROM students ${whereSql}`),
-    query(`SELECT COUNT(*)::int AS count FROM teachers ${whereSql}`),
-    query(`SELECT COUNT(*)::int AS count FROM assignments ${whereSql}`),
-    query(`SELECT SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END)::int AS paid, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END)::int AS pending, SUM(CASE WHEN status='overdue' THEN 1 ELSE 0 END)::int AS overdue FROM fee_invoices ${whereSql}`),
+    query(`SELECT COUNT(*)::int AS count FROM students ${whereSql}`, baseParams),
+    query(`SELECT COUNT(*)::int AS count FROM teachers ${whereSql}`, baseParams),
+    query(`SELECT COUNT(*)::int AS count FROM assignments ${whereSql}`, baseParams),
+    query(
+      `SELECT
+         SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)::int AS paid,
+         SUM(CASE WHEN status IN ('pending','partial') THEN 1 ELSE 0 END)::int AS pending,
+         SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END)::int AS overdue
+       FROM finance_invoices
+       WHERE user_type = 'student' AND invoice_type = 'fee'
+       ${campusId ? `AND campus_id = $1` : ''}`,
+      baseParams
+    ),
   ]);
 
   return {
@@ -116,25 +132,36 @@ const getAttendanceSummary = async ({ fromDate, toDate, klass, section, roll, ca
 };
 
 const getFinanceSummary = async ({ fromDate, toDate, campusId }) => {
-  const params = [];
-  const where = [];
-  if (fromDate) { params.push(fromDate); where.push(`issued_at >= $${params.length}`); }
-  if (toDate) { params.push(toDate); where.push(`issued_at <= $${params.length}`); }
-  if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const invParams = [];
+  const invWhere = ["user_type = 'student'", "invoice_type = 'fee'"];
+  if (fromDate) { invParams.push(fromDate); invWhere.push(`issued_at::date >= $${invParams.length}`); }
+  if (toDate) { invParams.push(toDate); invWhere.push(`issued_at::date <= $${invParams.length}`); }
+  if (campusId) { invParams.push(Number(campusId)); invWhere.push(`campus_id = $${invParams.length}`); }
+  const invWhereSql = invWhere.length ? `WHERE ${invWhere.join(' AND ')}` : '';
+
+  const payParams = [];
+  const payWhere = ["fi.user_type = 'student'", "fi.invoice_type = 'fee'"];
+  if (fromDate) { payParams.push(fromDate); payWhere.push(`fp.paid_at::date >= $${payParams.length}`); }
+  if (toDate) { payParams.push(toDate); payWhere.push(`fp.paid_at::date <= $${payParams.length}`); }
+  if (campusId) { payParams.push(Number(campusId)); payWhere.push(`fp.campus_id = $${payParams.length}`); }
+  const payWhereSql = payWhere.length ? `WHERE ${payWhere.join(' AND ')}` : '';
+
   const [agg, payments] = await Promise.all([
     query(
-      `SELECT 
-         SUM(CASE WHEN status='paid' THEN amount ELSE 0 END)::numeric AS paidAmount,
-         SUM(CASE WHEN status='pending' THEN amount ELSE 0 END)::numeric AS pendingAmount,
-         SUM(CASE WHEN status='overdue' THEN amount ELSE 0 END)::numeric AS overdueAmount,
-         SUM(amount)::numeric AS totalAmount
-       FROM fee_invoices ${whereSql}`,
-      params
+      `SELECT
+         SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END)::numeric AS paidAmount,
+         SUM(CASE WHEN status IN ('pending','partial') THEN balance ELSE 0 END)::numeric AS pendingAmount,
+         SUM(CASE WHEN status = 'overdue' THEN balance ELSE 0 END)::numeric AS overdueAmount,
+         SUM(total)::numeric AS totalAmount
+       FROM finance_invoices ${invWhereSql}`,
+      invParams
     ),
     query(
-      `SELECT SUM(amount)::numeric AS paidTotal FROM fee_payments ${whereSql}`,
-      params
+      `SELECT SUM(fp.amount)::numeric AS paidTotal
+       FROM finance_payments fp
+       JOIN finance_invoices fi ON fp.invoice_id = fi.id
+       ${payWhereSql}`,
+      payParams
     ),
   ]);
 

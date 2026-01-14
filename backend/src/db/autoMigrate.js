@@ -185,6 +185,13 @@ export async function ensureCampusSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
+    ALTER TABLE campuses
+      ADD COLUMN IF NOT EXISTS email TEXT,
+      ADD COLUMN IF NOT EXISTS capacity INTEGER,
+      ADD COLUMN IF NOT EXISTS status TEXT;
+
+    UPDATE campuses SET status = 'active' WHERE status IS NULL;
+
     -- 2. Ensure at least one default campus exists (bootstrap)
     INSERT INTO campuses (name) 
     SELECT 'Main Campus' 

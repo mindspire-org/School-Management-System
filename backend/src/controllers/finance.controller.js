@@ -1,4 +1,8 @@
 import * as service from '../services/finance.service.js';
+import * as studentsSvc from '../services/students.service.js';
+import * as teachersSvc from '../services/teachers.service.js';
+import * as driversSvc from '../services/drivers.service.js';
+import * as parentsSvc from '../services/parents.service.js';
 
 // ========================================
 // USER CHECKS
@@ -7,7 +11,7 @@ import * as service from '../services/finance.service.js';
 // Check if any users exist
 export const checkUsersExist = async (req, res, next) => {
   try {
-    const result = await service.checkUsersExist();
+    const result = await service.checkUsersExist({ campusId: req.user?.campusId });
     res.json(result);
   } catch (e) { next(e); }
 };
@@ -15,7 +19,7 @@ export const checkUsersExist = async (req, res, next) => {
 // Get users by type
 export const getUsersByType = async (req, res, next) => {
   try {
-    const users = await service.getUsersByType(req.params.type);
+    const users = await service.getUsersByTypeScoped(req.params.type, { campusId: req.user?.campusId });
     res.json({ items: users });
   } catch (e) { next(e); }
 };
@@ -27,7 +31,10 @@ export const getUsersByType = async (req, res, next) => {
 // Get dashboard statistics
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const { userType } = req.query;
+    let { userType } = req.query;
+    if (req.user?.role === 'student') userType = 'student';
+    if (req.user?.role === 'teacher') userType = 'teacher';
+    if (req.user?.role === 'driver') userType = 'driver';
     const stats = await service.getDashboardStats({ userType, campusId: req.user?.campusId });
     res.json(stats);
   } catch (e) { next(e); }
@@ -35,7 +42,10 @@ export const getDashboardStats = async (req, res, next) => {
 
 export const getDashboardAnalytics = async (req, res, next) => {
   try {
-    const { userType, days } = req.query;
+    let { userType, days } = req.query;
+    if (req.user?.role === 'student') userType = 'student';
+    if (req.user?.role === 'teacher') userType = 'teacher';
+    if (req.user?.role === 'driver') userType = 'driver';
     const analytics = await service.getDashboardAnalytics({ userType, days, campusId: req.user?.campusId });
     res.json(analytics);
   } catch (e) { next(e); }
@@ -51,10 +61,27 @@ export const listUnifiedInvoices = async (req, res, next) => {
     let { userType, userId, status, invoiceType, page, pageSize } = req.query;
     let userIds = undefined;
 
+    // Self-only access for non-admin/owner
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      userType = 'student';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'teacher') {
+      const self = await teachersSvc.getByUserId(req.user.id);
+      userType = 'teacher';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'driver') {
+      const self = await driversSvc.getDriverByUserId(req.user.id);
+      userType = 'driver';
+      userId = self?.id;
+    }
+
     if (req.user?.role === 'parent') {
       const parent = await parentsSvc.getByUserId(req.user.id);
       if (parent) {
-        const kids = await students.list({ familyNumber: parent.familyNumber });
+        const kids = await studentsSvc.list({ familyNumber: parent.familyNumber, pageSize: 1000, campusId: req.user?.campusId });
         userIds = kids.rows.map(k => k.id);
         userType = 'student';
       }
@@ -81,7 +108,7 @@ export const getUnifiedInvoiceById = async (req, res, next) => {
 export const createUnifiedInvoice = async (req, res, next) => {
   try {
     // Check if users exist first
-    const { hasUsers } = await service.checkUsersExist();
+    const { hasUsers } = await service.checkUsersExist({ campusId: req.user?.campusId });
     if (!hasUsers) {
       return res.status(400).json({
         message: 'Please add a Student, Teacher, or Driver before creating financial records.',
@@ -118,8 +145,26 @@ export const deleteUnifiedInvoice = async (req, res, next) => {
 // List unified payments
 export const listUnifiedPayments = async (req, res, next) => {
   try {
-    const { userType, userId, invoiceId, page, pageSize } = req.query;
-    const result = await service.listUnifiedPayments({ userType, userId, invoiceId, page, pageSize });
+    let { userType, userId, invoiceId, page, pageSize } = req.query;
+
+    // Self-only access for non-admin/owner
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      userType = 'student';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'teacher') {
+      const self = await teachersSvc.getByUserId(req.user.id);
+      userType = 'teacher';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'driver') {
+      const self = await driversSvc.getDriverByUserId(req.user.id);
+      userType = 'driver';
+      userId = self?.id;
+    }
+
+    const result = await service.listUnifiedPayments({ userType, userId, invoiceId, campusId: req.user?.campusId, page, pageSize });
     res.json(result);
   } catch (e) { next(e); }
 };
@@ -139,8 +184,36 @@ export const createUnifiedPayment = async (req, res, next) => {
 // List receipts
 export const listReceipts = async (req, res, next) => {
   try {
-    const { userType, userId, page, pageSize } = req.query;
-    const result = await service.listReceipts({ userType, userId, page, pageSize });
+    let { userType, userId, page, pageSize } = req.query;
+    let userIds = undefined;
+
+    // Self-only access for non-admin/owner
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      userType = 'student';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'teacher') {
+      const self = await teachersSvc.getByUserId(req.user.id);
+      userType = 'teacher';
+      userId = self?.id;
+    }
+    if (req.user?.role === 'driver') {
+      const self = await driversSvc.getDriverByUserId(req.user.id);
+      userType = 'driver';
+      userId = self?.id;
+    }
+
+    if (req.user?.role === 'parent') {
+      const parent = await parentsSvc.getByUserId(req.user.id);
+      if (parent) {
+        const kids = await studentsSvc.list({ familyNumber: parent.familyNumber, pageSize: 1000, campusId: req.user?.campusId });
+        userIds = kids.rows.map(k => k.id);
+        userType = 'student';
+      }
+    }
+
+    const result = await service.listReceipts({ userType, userId, userIds, campusId: req.user?.campusId, page, pageSize });
     res.json(result);
   } catch (e) { next(e); }
 };
@@ -162,10 +235,27 @@ export const getOutstandingFees = async (req, res, next) => {
     let { userType, page, pageSize } = req.query;
     let userIds = undefined;
 
+    // Self-only access for non-admin/owner
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      userType = 'student';
+      userIds = self?.id ? [self.id] : [];
+    }
+    if (req.user?.role === 'teacher') {
+      const self = await teachersSvc.getByUserId(req.user.id);
+      userType = 'teacher';
+      userIds = self?.id ? [self.id] : [];
+    }
+    if (req.user?.role === 'driver') {
+      const self = await driversSvc.getDriverByUserId(req.user.id);
+      userType = 'driver';
+      userIds = self?.id ? [self.id] : [];
+    }
+
     if (req.user?.role === 'parent') {
       const parent = await parentsSvc.getByUserId(req.user.id);
       if (parent) {
-        const kids = await students.list({ familyNumber: parent.familyNumber });
+        const kids = await studentsSvc.list({ familyNumber: parent.familyNumber, pageSize: 1000, campusId: req.user?.campusId });
         userIds = kids.rows.map(k => k.id);
         userType = 'student';
       }
@@ -183,7 +273,7 @@ export const getOutstandingFees = async (req, res, next) => {
 export const getPayrollSummary = async (req, res, next) => {
   try {
     const { role, periodMonth, status, page, pageSize } = req.query;
-    const result = await service.getPayrollSummary({ role, periodMonth, status, page, pageSize });
+    const result = await service.getPayrollSummary({ role, periodMonth, status, page, pageSize, campusId: req.user?.campusId });
     res.json(result);
   } catch (e) { next(e); }
 };

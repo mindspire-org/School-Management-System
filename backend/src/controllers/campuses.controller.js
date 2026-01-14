@@ -22,18 +22,32 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
     try {
-        const { name, address, phone } = req.body;
+        const { name, address, phone, email, capacity, status } = req.body;
         if (!name) return res.status(400).json({ message: 'Name is required' });
-        const campus = await campusSvc.create({ name, address, phone });
+        const campus = await campusSvc.create({
+            name,
+            address,
+            phone,
+            email,
+            capacity: capacity === '' || capacity === undefined ? null : Number(capacity),
+            status
+        });
         return res.status(201).json(campus);
     } catch (e) { next(e); }
 };
 
 export const update = async (req, res, next) => {
     try {
-        const { name, address, phone } = req.body;
+        const { name, address, phone, email, capacity, status } = req.body;
         if (!name) return res.status(400).json({ message: 'Name is required' });
-        const campus = await campusSvc.update(req.params.id, { name, address, phone });
+        const campus = await campusSvc.update(req.params.id, {
+            name,
+            address,
+            phone,
+            email,
+            capacity: capacity === '' || capacity === undefined ? null : Number(capacity),
+            status
+        });
         if (!campus) return res.status(404).json({ message: 'Campus not found' });
         return res.json(campus);
     } catch (e) { next(e); }

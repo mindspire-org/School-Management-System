@@ -11,7 +11,10 @@ export const authenticate = (req, res, next) => {
     // Support campus override for administrators
     const campusHeader = req.headers['x-campus-id'];
     if (campusHeader && (payload.role === 'admin' || payload.role === 'owner')) {
-      payload.campusId = campusHeader;
+      const parsed = Number(String(campusHeader).trim());
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        payload.campusId = parsed;
+      }
     }
 
     req.user = payload;
