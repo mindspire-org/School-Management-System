@@ -230,11 +230,32 @@ export const login = async (req, res, next) => {
 // Get all users with pagination and filtering
 export const getAllUsers = async (req, res, next) => {
   try {
+    // Non-admin/owner users can only see their own user record
+    if (req.user?.role !== 'admin' && req.user?.role !== 'owner') {
+      const self = await authService.findUserById(req.user.id);
+      const userPayload = self
+        ? {
+          id: self.id,
+          email: self.email,
+          role: self.role,
+          name: self.name,
+          campusId: self.campus_id,
+        }
+        : null;
+      return res.json({ rows: userPayload ? [userPayload] : [], total: userPayload ? 1 : 0, page: 1, pageSize: 1 });
+    }
+
     const { page = 1, pageSize = 50, role, search } = req.query;
     const offset = (page - 1) * pageSize;
 
     const where = [];
     const params = [];
+
+    // Admin/Owner: scope by campusId (auth middleware may override via x-campus-id for admin/owner)
+    if (req.user?.campusId) {
+      params.push(Number(req.user.campusId));
+      where.push(`campus_id = $${params.length}`);
+    }
 
     if (role && role !== 'all') {
       params.push(role);
@@ -325,7 +346,8 @@ export const register = async (req, res, next) => {
 
     const { email, password, name, role, campusId } = req.body;
 
-    if (!campusId) {
+    const finalCampusId = Number(campusId || req.user?.campusId) || null;
+    if (!finalCampusId) {
       return res.status(400).json({ message: 'Campus selection is mandatory' });
     }
 
@@ -350,19 +372,53 @@ export const register = async (req, res, next) => {
     if (existing) return res.status(409).json({ message: 'Email already in use' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await authService.createUser({ email, passwordHash, role, name, campusId });
+    const user = await authService.createUser({ email, passwordHash, role, name, campusId: finalCampusId });
 
+    // If this user corresponds to an existing domain record, link it so self-only views work.
+    // (UserManagement UI often creates users by reusing the domain email.)
+    try {
+      if (user?.id && user?.email && role === 'student') {
+        await query(
+          `UPDATE students
+           SET user_id = $1
+           WHERE user_id IS NULL
+             AND campus_id = $2
+             AND LOWER(COALESCE(email,'')) = LOWER($3)`,
+          [user.id, finalCampusId, user.email]
+        );
+      }
+      if (user?.id && user?.email && role === 'teacher') {
+        await query(
+          `UPDATE teachers
+           SET user_id = $1
+           WHERE user_id IS NULL
+             AND campus_id = $2
+             AND LOWER(COALESCE(email,'')) = LOWER($3)`,
+          [user.id, finalCampusId, user.email]
+        );
+      }
+      if (user?.id && user?.email && role === 'driver') {
+        await query(
+          `UPDATE drivers
+           SET user_id = $1
+           WHERE user_id IS NULL
+             AND campus_id = $2
+             AND LOWER(COALESCE(email,'')) = LOWER($3)`,
+          [user.id, finalCampusId, user.email]
+        );
+      }
+    } catch (_) {}
+
+    // Admin/Owner is creating an account; do not issue auth tokens for the created user
     const userPayload = {
       id: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
-      campusId: user.campus_id
+      campusId: user.campus_id,
     };
-    const token = signAccessToken(userPayload);
-    const refreshToken = signRefreshToken({ id: user.id });
 
-    return res.status(201).json({ token, refreshToken, user: userPayload });
+    return res.status(201).json({ user: userPayload });
   } catch (e) {
     next(e);
   }
@@ -419,8 +475,19 @@ export const profile = async (req, res, next) => {
 export const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    // Non-admin/owner can only read themselves
+    if (req.user?.role !== 'admin' && req.user?.role !== 'owner') {
+      if (Number(id) !== Number(req.user.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const user = await authService.findUserById(id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Admin/Owner: enforce campus scope
+    if ((req.user?.role === 'admin' || req.user?.role === 'owner') && req.user?.campusId) {
+      if (Number(user.campus_id) !== Number(req.user.campusId)) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+    }
     const userPayload = {
       id: user.id,
       email: user.email,

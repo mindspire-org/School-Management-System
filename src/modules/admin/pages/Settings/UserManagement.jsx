@@ -12,6 +12,7 @@ import { MdPeople, MdAdminPanelSettings, MdSecurity, MdFileDownload, MdAdd, MdRe
 import Card from '../../../../components/card/Card';
 import StatCard from '../../../../components/card/StatCard';
 import { authApi, studentsApi, teachersApi, driversApi, parentsApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const roleDisplayMap = {
   student: 'Student',
@@ -23,6 +24,7 @@ const roleDisplayMap = {
 };
 
 export default function UserManagement() {
+  const { campusId } = useAuth();
   const [role, setRole] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -432,7 +434,8 @@ export default function UserManagement() {
                   name: formData.name,
                   email: formData.email,
                   password: formData.password,
-                  role: formData.role
+                  role: formData.role,
+                  campusId: campusId || undefined
                 });
 
                 toast({
@@ -451,7 +454,7 @@ export default function UserManagement() {
               } catch (error) {
                 toast({
                   title: 'Error',
-                  description: error.response?.data?.message || 'Failed to create user',
+                  description: error?.data?.message || error?.message || 'Failed to create user',
                   status: 'error',
                   duration: 5000,
                   isClosable: true,

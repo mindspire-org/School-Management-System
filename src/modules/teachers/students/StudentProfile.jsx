@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -21,7 +21,7 @@ import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import LineChart from '../../../components/charts/LineChart';
 import PieChart from '../../../components/charts/PieChart';
-import { mockStudents, mockAttendanceStats } from '../../../utils/mockData';
+import * as studentsApi from '../../../services/api/students';
 
 export default function StudentProfile() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -31,36 +31,66 @@ export default function StudentProfile() {
   const [q, setQ] = useState('');
   const [id, setId] = useState('');
 
-  const classes = useMemo(() => Array.from(new Set(mockStudents.map(s => s.class))).sort(), []);
-  const sections = useMemo(() => Array.from(new Set(mockStudents.map(s => s.section))).sort(), []);
-  const candidates = useMemo(() => mockStudents.filter(s =>
-    (!cls || s.class === cls) && (!section || s.section === section) && (!q || s.name.toLowerCase().includes(q.toLowerCase()) || s.rollNumber.toLowerCase().includes(q.toLowerCase()))
-  ), [cls, section, q]);
+  const [students, setStudents] = useState([]);
+  const [trend, setTrend] = useState([0, 0, 0, 0, 0]);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const data = await studentsApi.list({ page: 1, pageSize: 1000 });
+        setStudents(Array.isArray(data?.rows) ? data.rows : []);
+      } catch (e) {
+        setStudents([]);
+        // eslint-disable-next-line no-console
+        console.error('Failed to fetch students', e);
+      }
+    };
+    fetchStudents();
+  }, []);
+
+  const classes = useMemo(() => Array.from(new Set(students.map(s => s.class))).filter(Boolean).sort(), [students]);
+  const sections = useMemo(() => Array.from(new Set(students.map(s => s.section))).filter(Boolean).sort(), [students]);
+  const candidates = useMemo(() => students.filter(s =>
+    (!cls || s.class === cls) && (!section || s.section === section) && (!q || String(s.name || '').toLowerCase().includes(q.toLowerCase()) || String(s.rollNumber || '').toLowerCase().includes(q.toLowerCase()))
+  ), [students, cls, section, q]);
 
   const selected = useMemo(() => {
-    if (id) return mockStudents.find(s => String(s.id) === String(id));
-    return candidates[0] || mockStudents[0];
-  }, [id, candidates]);
+    if (id) return students.find(s => String(s.id) === String(id));
+    return candidates[0] || students[0];
+  }, [id, candidates, students]);
 
-  const chartData = useMemo(() => ([{ name: 'Attendance %', data: mockAttendanceStats.map(x => x.percentage) }]), []);
+  useEffect(() => {
+    const fetchTrend = async () => {
+      try {
+        if (!selected?.id) return;
+        const t = await studentsApi.getAttendanceTrend(selected.id);
+        setTrend(Array.isArray(t) && t.length ? t : [0, 0, 0, 0, 0]);
+      } catch (e) {
+        setTrend([0, 0, 0, 0, 0]);
+      }
+    };
+    fetchTrend();
+  }, [selected?.id]);
+
+  const chartData = useMemo(() => ([{ name: 'Attendance %', data: trend }]), [trend]);
   const chartOptions = useMemo(() => ({
     chart: { toolbar: { show: false } },
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 3 },
-    xaxis: { categories: mockAttendanceStats.map(x => x.day) },
+    xaxis: { categories: ['W1', 'W2', 'W3', 'W4', 'W5'] },
     colors: ['#3182CE'],
     grid: { borderColor: gridColor },
   }), [gridColor]);
 
   const attendanceBuckets = useMemo(() => {
     const buckets = { '≥90%': 0, '80-89%': 0, '<80%': 0 };
-    mockAttendanceStats.forEach(x => {
-      if (x.percentage >= 90) buckets['≥90%'] += 1;
-      else if (x.percentage >= 80) buckets['80-89%'] += 1;
+    trend.forEach(v => {
+      if (v >= 90) buckets['≥90%'] += 1;
+      else if (v >= 80) buckets['80-89%'] += 1;
       else buckets['<80%'] += 1;
     });
     return { labels: Object.keys(buckets), values: Object.values(buckets) };
-  }, []);
+  }, [trend]);
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>

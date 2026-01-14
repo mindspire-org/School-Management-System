@@ -8,8 +8,8 @@ export const login = async ({ email, username, password, ownerKey }) => {
   return http.post('/auth/login', payload);
 };
 
-export const register = async ({ email, password, name, role }) => {
-  return http.post('/auth/register', { email, password, name, role });
+export const register = async ({ email, password, name, role, campusId }) => {
+  return http.post('/auth/register', { email, password, name, role, campusId });
 };
 
 export const status = async () => {

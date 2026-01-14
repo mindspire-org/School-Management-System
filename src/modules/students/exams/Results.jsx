@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Select, Flex } from '@chakra-ui/react';
 import { MdFileDownload, MdPrint, MdLibraryBooks, MdAssessment, MdPercent, MdCheckCircle } from 'react-icons/md';
 import Card from '../../../components/card/Card';
@@ -6,44 +6,87 @@ import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents, mockExamResults } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as resultsApi from '../../../services/api/results';
 
 export default function Results(){
   const textSecondary = useColorModeValue('gray.600','gray.400');
   const { user } = useAuth();
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
+  const [student, setStudent] = useState(null);
+  const [items, setItems] = useState([]);
+  const [examKey, setExamKey] = useState('');
 
-  const [examKey, setExamKey] = useState(mockExamResults[0]?.id || 1);
-  const exam = useMemo(()=> mockExamResults.find(e=>String(e.id)===String(examKey)) || mockExamResults[0], [examKey]);
+  useEffect(() => {
+    const fetchSelf = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const data = await studentsApi.list({});
+        const me = Array.isArray(data?.rows) && data.rows.length ? data.rows[0] : null;
+        setStudent(me);
+      } catch (e) {
+        setStudent(null);
+      }
+    };
+    fetchSelf();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        if (!student?.id) return;
+        const data = await resultsApi.list({ page: 1, pageSize: 2000, studentId: student.id });
+        const list = Array.isArray(data?.items) ? data.items : [];
+        setItems(list);
+        if (!examKey) {
+          const first = list[0]?.examId;
+          if (first) setExamKey(String(first));
+        }
+      } catch (e) {
+        setItems([]);
+      }
+    };
+    fetchResults();
+  }, [student?.id, examKey]);
+
+  const exams = useMemo(() => {
+    const byId = new Map();
+    items.forEach((r) => {
+      if (!r.examId) return;
+      if (!byId.has(String(r.examId))) byId.set(String(r.examId), r.examTitle || `Exam ${r.examId}`);
+    });
+    return Array.from(byId.entries()).map(([id, title]) => ({ id, title }));
+  }, [items]);
+
+  const examRows = useMemo(() => items.filter((r) => String(r.examId) === String(examKey)), [items, examKey]);
 
   const totals = useMemo(()=>{
-    const subs = exam.subjects || [];
-    const totalScore = subs.reduce((a,s)=>a + (s.score||0), 0);
-    const totalPossible = subs.reduce((a,s)=>a + (s.total||0), 0);
-    const percent = totalPossible ? Math.round((totalScore/totalPossible)*100) : 0;
-    const passCount = subs.filter(s=> (s.score||0) >= (s.total*0.4)).length;
-    return { totalScore, totalPossible, percent, passCount, subjects: subs.length };
-  }, [exam]);
+    const subs = examRows;
+    const totalScore = subs.reduce((a,s)=>a + (Number(s.marks) || 0), 0);
+    const subjects = subs.length;
+    const totalPossible = subjects * 100;
+    const percent = subjects ? Math.round(totalScore / subjects) : 0;
+    const passCount = subs.filter(s=> (Number(s.marks) || 0) >= 40).length;
+    return { totalScore, totalPossible, percent, passCount, subjects };
+  }, [examRows]);
 
-  const chartData = useMemo(()=> ([{ name:'Score', data:(exam.subjects||[]).map(s=>s.score) }]), [exam]);
-  const chartOptions = useMemo(()=> ({ xaxis:{ categories:(exam.subjects||[]).map(s=>s.name) }, colors:['#3182CE'], dataLabels:{ enabled:false } }), [exam]);
-  const lineData = useMemo(()=> ([{ name:'% Across Exams', data: mockExamResults.map(e => Math.round((e.totalScore||e.subjects.reduce((a,s)=>a+(s.score||0),0)) / (e.totalPossible||e.subjects.reduce((a,s)=>a+(s.total||0),0)) * 100)) }]), []);
-  const lineOptions = useMemo(()=> ({ xaxis:{ categories: mockExamResults.map(e=>e.exam) }, colors:['#01B574'], dataLabels:{ enabled:false }, stroke:{ curve:'smooth', width:3 } }), []);
+  const chartData = useMemo(()=> ([{ name:'Score', data: examRows.map(s=>Number(s.marks) || 0) }]), [examRows]);
+  const chartOptions = useMemo(()=> ({ xaxis:{ categories: examRows.map(s=>s.subject) }, colors:['#3182CE'], dataLabels:{ enabled:false } }), [examRows]);
+  const lineData = useMemo(()=> {
+    const data = exams.map((e) => {
+      const rows = items.filter((r) => String(r.examId) === String(e.id));
+      if (!rows.length) return 0;
+      const total = rows.reduce((a, r) => a + (Number(r.marks) || 0), 0);
+      return Math.round(total / rows.length);
+    });
+    return [{ name:'% Across Exams', data }];
+  }, [items, exams]);
+  const lineOptions = useMemo(()=> ({ xaxis:{ categories: exams.map(e=>e.title) }, colors:['#01B574'], dataLabels:{ enabled:false }, stroke:{ curve:'smooth', width:3 } }), [exams]);
 
   const exportCSV = () => {
     const header = ['Exam','Subject','Score','Total','Grade'];
-    const rows = (exam.subjects||[]).map(s => [exam.exam, s.name, s.score, s.total, s.grade]);
+    const rows = examRows.map(s => [String(exams.find(e=>String(e.id)===String(examKey))?.title || ''), s.subject, s.marks, 100, s.grade]);
     const csv = [header, ...rows].map(r=> r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='student_results.csv'; a.click(); URL.revokeObjectURL(url);
@@ -52,14 +95,14 @@ export default function Results(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Results</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'} • Roll {student?.rollNumber || '-'} • Class {student?.class || '-'}{student?.section || ''}</Text>
 
       <Card p='16px' mb='16px'>
         <HStack justify='space-between' flexWrap='wrap' rowGap={3}>
           <HStack>
             <Text fontWeight='600'>Select Exam:</Text>
             <Select size='sm' value={examKey} onChange={e=>setExamKey(e.target.value)} maxW='220px'>
-              {mockExamResults.map(e => <option key={e.id} value={e.id}>{e.exam}</option>)}
+              {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
             </Select>
           </HStack>
           <HStack>
@@ -121,12 +164,12 @@ export default function Results(){
         <Table size='sm' variant='striped' colorScheme='gray'>
           <Thead><Tr><Th>Subject</Th><Th>Score</Th><Th>Total</Th><Th>Grade</Th></Tr></Thead>
           <Tbody>
-            {(exam.subjects||[]).map((s,i)=> (
-              <Tr key={i}>
-                <Td>{s.name}</Td>
-                <Td>{s.score}</Td>
-                <Td>{s.total}</Td>
-                <Td><Badge colorScheme='purple'>{s.grade}</Badge></Td>
+            {examRows.map((s,i)=> (
+              <Tr key={`${s.id || i}`}>
+                <Td>{s.subject}</Td>
+                <Td>{s.marks}</Td>
+                <Td>100</Td>
+                <Td><Badge colorScheme='purple'>{s.grade || '-'}</Badge></Td>
               </Tr>
             ))}
           </Tbody>

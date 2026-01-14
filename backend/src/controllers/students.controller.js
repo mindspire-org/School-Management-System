@@ -5,6 +5,7 @@ import cloudinary from '../config/cloudinary.js';
 import { ensureStudentExtendedColumns, ensureFinanceConstraints, ensureParentsSchema } from '../db/autoMigrate.js';
 import * as parentsSvc from '../services/parents.service.js';
 import { upsertParentUserForPhone } from '../services/auth.service.js';
+import * as teachersSvc from '../services/teachers.service.js';
 
 export const list = async (req, res, next) => {
   try {
@@ -25,6 +26,15 @@ export const list = async (req, res, next) => {
     }
 
     const campusId = req.user?.campusId;
+
+    let allowedClassSections;
+    if (req.user?.role === 'teacher') {
+      allowedClassSections = await teachersSvc.getTeachingScopesByUserId(req.user.id);
+      if (!allowedClassSections.length) {
+        return res.json({ rows: [], total: 0, page: Number(page), pageSize: Number(pageSize) });
+      }
+    }
+
     const result = await students.list({
       page: Number(page),
       pageSize: Number(pageSize),
@@ -32,7 +42,8 @@ export const list = async (req, res, next) => {
       class: cls,
       section,
       familyNumber,
-      campusId
+      campusId,
+      allowedClassSections
     });
     return res.json(result);
   } catch (e) { next(e); }
@@ -48,6 +59,19 @@ export const getById = async (req, res, next) => {
     }
     const student = await students.getById(Number(req.params.id));
     if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    // Teacher: only allow access to students in teacher's scheduled classes/sections
+    if (req.user?.role === 'teacher') {
+      const scopes = await teachersSvc.getTeachingScopesByUserId(req.user.id);
+      const ok = scopes.some((s) => {
+        if (!s?.className) return false;
+        if (String(s.className) !== String(student.class)) return false;
+        if (s.section) return String(s.section) === String(student.section);
+        return true;
+      });
+      if (!ok) return res.status(403).json({ message: 'Forbidden' });
+    }
+
     return res.json(student);
   } catch (e) { next(e); }
 };
@@ -179,6 +203,18 @@ export const listAttendance = async (req, res, next) => {
       const self = await students.getByUserId(req.user.id);
       if (!self || self.id !== studentId) return res.status(403).json({ message: 'Forbidden' });
     }
+    if (req.user?.role === 'teacher') {
+      const st = await students.getById(studentId);
+      if (!st) return res.status(404).json({ message: 'Student not found' });
+      const scopes = await teachersSvc.getTeachingScopesByUserId(req.user.id);
+      const ok = scopes.some((s) => {
+        if (!s?.className) return false;
+        if (String(s.className) !== String(st.class)) return false;
+        if (s.section) return String(s.section) === String(st.section);
+        return true;
+      });
+      if (!ok) return res.status(403).json({ message: 'Forbidden' });
+    }
     const { startDate, endDate, page = 1, pageSize = 50 } = req.query;
     const data = await students.listAttendance(studentId, { startDate, endDate, page: Number(page), pageSize: Number(pageSize) });
     return res.json(data);
@@ -216,6 +252,20 @@ export const getPerformance = async (req, res, next) => {
       const self = await students.getByUserId(req.user.id);
       if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
     }
+
+    if (req.user?.role === 'teacher') {
+      const st = await students.getById(Number(req.params.id));
+      if (!st) return res.status(404).json({ message: 'Student not found' });
+      const scopes = await teachersSvc.getTeachingScopesByUserId(req.user.id);
+      const ok = scopes.some((s) => {
+        if (!s?.className) return false;
+        if (String(s.className) !== String(st.class)) return false;
+        if (s.section) return String(s.section) === String(st.section);
+        return true;
+      });
+      if (!ok) return res.status(403).json({ message: 'Forbidden' });
+    }
+
     const data = await students.getPerformance(Number(req.params.id));
     return res.json(data);
   } catch (e) { next(e); }

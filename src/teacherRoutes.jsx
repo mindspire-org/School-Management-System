@@ -27,34 +27,18 @@ import ClassList from './modules/teachers/classes/ClassList';
 import SubjectWiseStudents from './modules/teachers/classes/SubjectWiseStudents';
 import ClassTimetable from './modules/teachers/classes/ClassTimetable';
 import DailyAttendance from './modules/teachers/attendance/DailyAttendance';
-import AttendanceHistory from './modules/teachers/attendance/AttendanceHistory';
-import MonthlyReport from './modules/teachers/attendance/MonthlyReport';
 import StudentList from './modules/teachers/students/StudentList';
 import StudentProfile from './modules/teachers/students/StudentProfile';
 import StudentPerformance from './modules/teachers/students/StudentPerformance';
-import ParentContacts from './modules/teachers/students/ParentContacts';
 import CreateAssignment from './modules/teachers/assignments/CreateAssignment';
-import Submissions from './modules/teachers/assignments/Submissions';
-import Grading from './modules/teachers/assignments/Grading';
-import LateReport from './modules/teachers/assignments/LateReport';
 import ExamSchedule from './modules/teachers/exams/ExamSchedule';
-import UploadMarks from './modules/teachers/exams/UploadMarks';
-import ResultsAnalytics from './modules/teachers/exams/ResultsAnalytics';
-import UploadNotes from './modules/teachers/materials/UploadNotes';
-import Videos from './modules/teachers/materials/Videos';
-import ManageMaterials from './modules/teachers/materials/ManageMaterials';
-import DailyTimetable from './modules/teachers/schedule/DailyTimetable';
 import WeeklyTimetable from './modules/teachers/schedule/WeeklyTimetable';
-import Announcements from './modules/teachers/communication/Announcements';
-import Messages from './modules/teachers/communication/Messages';
 import ApplyLeave from './modules/teachers/leaves/ApplyLeave';
 import LeaveStatus from './modules/teachers/leaves/LeaveStatus';
 import LeaveHistory from './modules/teachers/leaves/LeaveHistory';
 import MonthlyPayslip from './modules/teachers/salary/MonthlyPayslip';
 import SalaryHistory from './modules/teachers/salary/History';
-import Profile from './modules/teachers/settings/Profile';
 import Password from './modules/teachers/settings/Password';
-import Notifications from './modules/teachers/settings/Notifications';
 import SMSLogin from './modules/authentication/Login';
 
 const teacherRoutes = [
@@ -116,14 +100,14 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/attendance/history',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <AttendanceHistory />,
+        component: <TeacherModulePlaceholder title='Attendance History' subtitle='Coming soon' />,
       },
       {
         name: 'Monthly Report',
         layout: '/teacher',
         path: '/attendance/monthly',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <MonthlyReport />,
+        component: <TeacherModulePlaceholder title='Monthly Report' subtitle='Coming soon' />,
       },
     ],
   },
@@ -161,7 +145,7 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/students/parents',
         icon: <Icon as={MdMessage} width="16px" height="16px" color="inherit" />,
-        component: <ParentContacts />,
+        component: <TeacherModulePlaceholder title='Parent Contacts' subtitle='Coming soon' />,
       },
     ],
   },
@@ -185,21 +169,21 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/assignments/submissions',
         icon: <Icon as={MdAssignment} width="16px" height="16px" color="inherit" />,
-        component: <Submissions />,
+        component: <TeacherModulePlaceholder title='Submissions' subtitle='Coming soon' />,
       },
       {
         name: 'Grading',
         layout: '/teacher',
         path: '/assignments/grading',
         icon: <Icon as={MdGrade} width="16px" height="16px" color="inherit" />,
-        component: <Grading />,
+        component: <TeacherModulePlaceholder title='Grading' subtitle='Coming soon' />,
       },
       {
         name: 'Late Report',
         layout: '/teacher',
         path: '/assignments/late-report',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <LateReport />,
+        component: <TeacherModulePlaceholder title='Late Report' subtitle='Coming soon' />,
       },
     ],
   },
@@ -223,14 +207,14 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/exams/upload-marks',
         icon: <Icon as={MdGrade} width="16px" height="16px" color="inherit" />,
-        component: <UploadMarks />,
+        component: <TeacherModulePlaceholder title='Upload Marks' subtitle='Coming soon' />,
       },
       {
         name: 'Results Analytics',
         layout: '/teacher',
         path: '/exams/analytics',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <ResultsAnalytics />,
+        component: <TeacherModulePlaceholder title='Results Analytics' subtitle='Coming soon' />,
       },
     ],
   },
@@ -247,21 +231,21 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/materials/upload',
         icon: <Icon as={MdUploadFile} width="16px" height="16px" color="inherit" />,
-        component: <UploadNotes />,
+        component: <TeacherModulePlaceholder title='Upload Notes' subtitle='Coming soon' />,
       },
       {
         name: 'Videos',
         layout: '/teacher',
         path: '/materials/videos',
         icon: <Icon as={MdVideoLibrary} width="16px" height="16px" color="inherit" />,
-        component: <Videos />,
+        component: <TeacherModulePlaceholder title='Videos' subtitle='Coming soon' />,
       },
       {
         name: 'Manage Materials',
         layout: '/teacher',
         path: '/materials/manage',
         icon: <Icon as={MdBook} width="16px" height="16px" color="inherit" />,
-        component: <ManageMaterials />,
+        component: <TeacherModulePlaceholder title='Manage Materials' subtitle='Coming soon' />,
       },
     ],
   },
@@ -278,7 +262,7 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/schedule/daily',
         icon: <Icon as={MdSchedule} width="16px" height="16px" color="inherit" />,
-        component: <DailyTimetable />,
+        component: <TeacherModulePlaceholder title='Daily Timetable' subtitle='Coming soon' />,
       },
       {
         name: 'Weekly Timetable',
@@ -383,7 +367,7 @@ const teacherRoutes = [
         layout: '/teacher',
         path: '/settings/profile',
         icon: <Icon as={MdSettings} width="16px" height="16px" color="inherit" />,
-        component: <Profile />,
+        component: <TeacherModulePlaceholder title='Profile' subtitle='Coming soon' />,
       },
       {
         name: 'Password',

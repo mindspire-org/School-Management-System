@@ -2,6 +2,11 @@ import http from 'http';
 import app from './app.js';
 import { loadEnv } from './config/env.js';
 import * as authService from './services/auth.service.js';
+import fs from 'fs';
+import path from 'path';
+import url from 'url';
+import { pool } from './config/db.js';
+import { ensureAuthSchema, ensureCampusSchema } from './db/autoMigrate.js';
 
 loadEnv();
 
@@ -9,7 +14,37 @@ loadEnv();
 const DEFAULT_PORT = 59201;
 let port = Number(process.env.PORT) || DEFAULT_PORT;
 
+async function ensureBaseSchema() {
+  const { rows } = await pool.query("SELECT to_regclass('public.users') AS users");
+  const hasUsers = !!rows?.[0]?.users;
+  if (hasUsers) return;
+
+  const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+  const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+  const sql = fs.readFileSync(schemaPath, 'utf-8');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(sql);
+    await client.query('COMMIT');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 async function boot() {
+  // Ensure base schema + auth + campus schema exists before starting server
+  try {
+    await ensureBaseSchema();
+    await ensureAuthSchema();
+    await ensureCampusSchema();
+  } catch (e) {
+    try { console.error('Auto-migration failed:', e?.stack || e); } catch (_) {}
+  }
+
   // Seed or ensure Owner account exists BEFORE starting server to avoid race
   try {
     const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';

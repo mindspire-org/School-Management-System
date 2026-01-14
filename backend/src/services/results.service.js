@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ examId, studentId, subject, className, section, q, page = 1, pageSize = 50, campusId }) => {
+export const list = async ({ examId, studentId, subject, className, section, q, page = 1, pageSize = 50, campusId, allowedStudentIds, allowedClassSections }) => {
   const params = [];
   const where = [];
   if (examId) { params.push(examId); where.push(`er.exam_id = $${params.length}`); }
@@ -10,6 +10,35 @@ export const list = async ({ examId, studentId, subject, className, section, q, 
   if (section) { params.push(section); where.push(`s.section = $${params.length}`); }
   if (q) { params.push(`%${q.toLowerCase()}%`); where.push(`(LOWER(s.name) LIKE $${params.length} OR LOWER(COALESCE(s.roll_number,'')) LIKE $${params.length})`); }
   if (campusId) { params.push(campusId); where.push(`er.campus_id = $${params.length}`); }
+
+  if (Array.isArray(allowedStudentIds)) {
+    if (!allowedStudentIds.length) return [];
+    params.push(allowedStudentIds.map((v) => Number(v)).filter((v) => Number.isFinite(v)));
+    where.push(`er.student_id = ANY($${params.length}::int[])`);
+  }
+
+  if (Array.isArray(allowedClassSections)) {
+    if (allowedClassSections.length === 0) return [];
+    const parts = [];
+    for (const scope of allowedClassSections) {
+      const cn = scope?.className;
+      const sec = scope?.section;
+      if (!cn) continue;
+      params.push(cn);
+      const classIdx = params.length;
+      if (sec) {
+        params.push(sec);
+        const secIdx = params.length;
+        parts.push(`(s.class = $${classIdx} AND s.section = $${secIdx})`);
+      } else {
+        parts.push(`(s.class = $${classIdx})`);
+      }
+    }
+    if (parts.length) {
+      where.push(`(${parts.join(' OR ')})`);
+    }
+  }
+
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const offset = (Number(page) - 1) * Number(pageSize);
   params.push(pageSize, offset);
@@ -46,7 +75,8 @@ export const getById = async (id) => {
             s.section,
             er.subject,
             er.marks,
-            er.grade
+            er.grade,
+            er.campus_id AS "campusId"
      FROM exam_results er
      LEFT JOIN students s ON s.id = er.student_id
      LEFT JOIN exams e ON e.id = er.exam_id

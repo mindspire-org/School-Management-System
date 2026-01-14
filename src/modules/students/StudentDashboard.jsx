@@ -9,7 +9,6 @@ import BarChart from '../../components/charts/BarChart';
 import LineAreaChart from '../../components/charts/LineAreaChart';
 import { useAuth } from '../../contexts/AuthContext';
 import * as studentsApi from '../../services/api/students';
-import { mockTodayClasses } from '../../utils/mockData';
 
 export default function StudentDashboard() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');

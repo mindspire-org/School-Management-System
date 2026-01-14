@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import http from 'http';
 import path from 'path';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -11,9 +12,41 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_BACKEND_PORT = 59201;
 let backendProcess = null;
 
+let logStream = null;
+
 let mainWindow = null;
 let splashWindow = null;
 let splashClosed = false;
+
+function ensureLogStream() {
+  if (logStream) return logStream;
+  try {
+    const dir = path.join(app.getPath('userData'), 'logs');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'main.log');
+    logStream = fs.createWriteStream(file, { flags: 'a' });
+  } catch (_) {
+    logStream = null;
+  }
+  return logStream;
+}
+
+function logLine(...parts) {
+  const line = `[${new Date().toISOString()}] ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`;
+  try { process.stdout.write(line); } catch (_) {}
+  const s = ensureLogStream();
+  if (s) {
+    try { s.write(line); } catch (_) {}
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  logLine('uncaughtException', err?.stack || String(err));
+});
+
+process.on('unhandledRejection', (err) => {
+  logLine('unhandledRejection', err?.stack || String(err));
+});
 
 function startBackend() {
   const isDev = !app.isPackaged;
@@ -23,6 +56,13 @@ function startBackend() {
     : path.join(process.resourcesPath, 'backend');
   const serverPath = path.join(backendDir, 'src', 'server.js');
 
+  const backendEnvPath = path.join(app.getPath('userData'), 'backend.env');
+
+  if (!fs.existsSync(serverPath)) {
+    logLine('Backend server.js not found at:', serverPath);
+    return null;
+  }
+
   const child = spawn(process.execPath, [serverPath], {
     cwd: backendDir,
     env: {
@@ -30,11 +70,33 @@ function startBackend() {
       PORT: String(backendPort),
       NODE_ENV: isDev ? 'development' : 'production',
       ELECTRON_RUN_AS_NODE: '1',
+      SMS_ENV_PATH: backendEnvPath,
     },
-    stdio: 'inherit',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+
+  try {
+    child.stdout?.on('data', (d) => logLine('backend:stdout', String(d).trimEnd()));
+    child.stderr?.on('data', (d) => logLine('backend:stderr', String(d).trimEnd()));
+    child.on('exit', (code, signal) => logLine('backend:exit', { code, signal }));
+    child.on('error', (e) => logLine('backend:error', e?.stack || String(e)));
+  } catch (_) {}
+
   return child;
+}
+
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      res.resume();
+      resolve(res.statusCode || 0);
+    });
+    req.on('error', reject);
+    req.setTimeout(5000, () => {
+      try { req.destroy(new Error('timeout')); } catch (_) {}
+    });
+  });
 }
 
 async function waitForBackend(port, { timeoutMs = 20000 } = {}) {
@@ -42,8 +104,8 @@ async function waitForBackend(port, { timeoutMs = 20000 } = {}) {
   const url = `http://127.0.0.1:${port}/health`;
   while (Date.now() - start < timeoutMs) {
     try {
-      const res = await fetch(url, { method: 'GET' });
-      if (res.ok) return true;
+      const code = await httpGet(url);
+      if (code >= 200 && code < 300) return true;
     } catch (_) {}
     await new Promise((r) => setTimeout(r, 250));
   }
@@ -85,7 +147,7 @@ function createSplashWindow() {
   splashWindow.loadFile(splashPath);
 }
 
-function createWindow() {
+async function createWindow() {
   const isDev = !app.isPackaged;
   const backendPort = process.env.BACKEND_PORT || DEFAULT_BACKEND_PORT;
   process.env.BACKEND_PORT = String(backendPort);
@@ -106,6 +168,18 @@ function createWindow() {
     if (splashClosed || isDev) {
       try { mainWindow.show(); } catch (_) {}
     }
+
+    if (!isDev && splashWindow && !splashWindow.isDestroyed()) {
+      try { splashWindow.close(); } catch (_) {}
+    }
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_evt, errorCode, errorDescription, validatedURL) => {
+    logLine('did-fail-load', { errorCode, errorDescription, validatedURL });
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_evt, details) => {
+    logLine('render-process-gone', details);
   });
 
   if (isDev) {
@@ -113,8 +187,33 @@ function createWindow() {
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-    mainWindow.loadFile(indexPath, { search: `?backend=${backendPort}` });
+    const candidates = [
+      path.join(app.getAppPath(), 'dist', 'index.html'),
+      path.join(process.resourcesPath, 'app.asar', 'dist', 'index.html'),
+      path.join(process.resourcesPath, 'app', 'dist', 'index.html'),
+    ];
+    const indexPath = candidates.find((p) => {
+      try { return fs.existsSync(p); } catch (_) { return false; }
+    });
+
+    if (!indexPath) {
+      logLine('dist/index.html not found. candidates:', candidates);
+    } else {
+      logLine('Loading renderer index:', indexPath);
+    }
+
+    try {
+      await mainWindow.loadFile(indexPath || candidates[0], { search: `?backend=${backendPort}` });
+    } catch (e) {
+      logLine('loadFile failed', e?.stack || String(e));
+      try {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: 'App Failed to Start',
+          message: 'Frontend failed to load. Please check logs in the app data folder.',
+        });
+      } catch (_) {}
+    }
   }
 
   // open external links in default browser
@@ -273,10 +372,35 @@ if (!gotLock) {
       const backendPort = Number(process.env.BACKEND_PORT) || DEFAULT_BACKEND_PORT;
       process.env.BACKEND_PORT = String(backendPort);
       backendProcess = startBackend();
-      await waitForBackend(backendPort, { timeoutMs: 25000 });
+      if (!backendProcess) {
+        const logPath = path.join(app.getPath('userData'), 'logs', 'main.log');
+        const envPath = path.join(app.getPath('userData'), 'backend.env');
+        try {
+          await dialog.showMessageBox({
+            type: 'error',
+            title: 'Backend Failed to Start',
+            message: 'Backend process could not start. Please check the log file and configure database settings.',
+            detail: `Log: ${logPath}\nConfig: ${envPath}`,
+          });
+        } catch (_) {}
+      }
+      const ok = await waitForBackend(backendPort, { timeoutMs: 25000 });
+      if (!ok) {
+        logLine('Backend did not become healthy within timeout.', { backendPort });
+        const logPath = path.join(app.getPath('userData'), 'logs', 'main.log');
+        const envPath = path.join(app.getPath('userData'), 'backend.env');
+        try {
+          await dialog.showMessageBox({
+            type: 'error',
+            title: 'Backend Not Responding',
+            message: 'Backend did not become healthy. This usually means the database is not reachable on this PC.',
+            detail: `Ensure Postgres is running and DATABASE_URL is correct.\n\nLog: ${logPath}\nConfig: ${envPath}`,
+          });
+        } catch (_) {}
+      }
     }
 
-    createWindow();
+    await createWindow();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

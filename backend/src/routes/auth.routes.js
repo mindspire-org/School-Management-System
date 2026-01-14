@@ -31,11 +31,14 @@ router.get('/status', authController.status);
 
 router.post(
   '/register',
+  authenticate,
+  authorize('admin', 'owner'),
   [
     body('email').isEmail(),
     body('password').isString().isLength({ min: 6 }),
     body('name').optional().isString(),
-    body('role').optional().isIn(['admin', 'teacher', 'student', 'driver']),
+    body('role').optional().isIn(['teacher', 'student', 'driver', 'parent']),
+    body('campusId').optional().isInt({ min: 1 }),
   ],
   validate,
   authController.register
@@ -46,8 +49,8 @@ router.post('/refresh', [body('refreshToken').isString()], validate, authControl
 router.get('/profile', authenticate, authController.profile);
 router.get('/users', authenticate, authController.getAllUsers);
 router.get('/users/:id', authenticate, authController.getUserById);
-router.put('/users/:id', authenticate, authorize('admin'), validate, authController.updateUser);
-router.delete('/users/:id', authenticate, authorize('admin'), authController.deleteUser);
+router.put('/users/:id', authenticate, authorize('admin', 'owner'), validate, authController.updateUser);
+router.delete('/users/:id', authenticate, authorize('admin', 'owner'), authController.deleteUser);
 
 // Create missing user accounts from domain tables by role
 router.post(

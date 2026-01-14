@@ -390,6 +390,22 @@ export const getByUserId = async (userId) => {
   return rows[0] ? mapTeacherRow(rows[0]) : null;
 };
 
+export const getTeachingScopesByUserId = async (userId) => {
+  const { rows } = await query(
+    `SELECT DISTINCT ts.class AS "className", ts.section
+     FROM teacher_schedules ts
+     JOIN teachers t ON t.id = ts.teacher_id
+     WHERE t.user_id = $1
+       AND COALESCE(NULLIF(TRIM(ts.class), ''), '') <> ''
+     ORDER BY ts.class, ts.section`,
+    [Number(userId)]
+  );
+  return rows.map((r) => ({
+    className: r.className,
+    section: r.section || null,
+  }));
+};
+
 export const getSchedule = async (id) => {
   const { rows } = await query(
     `SELECT ${scheduleSelect} FROM teacher_schedules ts

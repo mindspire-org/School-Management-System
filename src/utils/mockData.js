@@ -1,3 +1,5 @@
+import { config } from '../config/env';
+
 // Mock Users for authentication
 export const mockUsers = {
   admin: {
@@ -598,8 +600,8 @@ export const mockNotifications = [
     id: 1,
     type: 'assignment',
     title: 'New Assignment Posted',
-    message: 'Mathematics Problem Set 6 has been posted',
-    time: '10 mins ago',
+    message: 'Mathematics Problem Set 5 has been assigned',
+    time: '30 mins ago',
     read: false,
   },
   {
@@ -627,5 +629,21 @@ export const mockNotifications = [
     read: true,
   },
 ];
+
+if (!config?.ENABLE_DEMO_AUTH) {
+  for (const k of Object.keys(mockUsers || {})) delete mockUsers[k];
+  mockBuses.length = 0;
+  mockAttendanceLogs.length = 0;
+  mockStudents.length = 0;
+  mockTeachers.length = 0;
+  mockTodayClasses.length = 0;
+  mockAssignments.length = 0;
+  mockFeeData.length = 0;
+  mockAttendanceStats.length = 0;
+  mockAlerts.length = 0;
+  mockExamResults.length = 0;
+  mockNotifications.length = 0;
+  for (const k of Object.keys(mockStats || {})) mockStats[k] = 0;
+}
 
 // Attendance records with detailed check-in/out data are now in mockAttendanceData.js

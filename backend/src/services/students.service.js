@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, familyNumber, campusId }) => {
+export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, familyNumber, campusId, allowedClassSections }) => {
   const offset = (page - 1) * pageSize;
   const where = [];
   const params = [];
@@ -23,6 +23,30 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
   if (campusId) {
     params.push(campusId);
     where.push(`s.campus_id = $${params.length}`);
+  }
+
+  if (Array.isArray(allowedClassSections)) {
+    if (allowedClassSections.length === 0) {
+      return { rows: [], total: 0, page, pageSize };
+    }
+    const parts = [];
+    for (const scope of allowedClassSections) {
+      const cn = scope?.className;
+      const sec = scope?.section;
+      if (!cn) continue;
+      params.push(cn);
+      const classIdx = params.length;
+      if (sec) {
+        params.push(sec);
+        const secIdx = params.length;
+        parts.push(`(s.class = $${classIdx} AND s.section = $${secIdx})`);
+      } else {
+        parts.push(`(s.class = $${classIdx})`);
+      }
+    }
+    if (parts.length) {
+      where.push(`(${parts.join(' OR ')})`);
+    }
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 

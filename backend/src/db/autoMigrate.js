@@ -220,14 +220,34 @@ export async function ensureCampusSchema() {
       LOOP
         -- Add campus_id column if missing
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = t) THEN
+          -- Some schemas may have legacy campus column names like "campusid". Normalize them.
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = t AND column_name = 'campus_id')
+             AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = t AND column_name = 'campusid') THEN
+            EXECUTE 'ALTER TABLE ' || t || ' RENAME COLUMN campusid TO campus_id';
+          END IF;
+
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = t AND column_name = 'campus_id') THEN
             EXECUTE 'ALTER TABLE ' || t || ' ADD COLUMN campus_id INTEGER REFERENCES campuses(id)';
             -- For existing rows, assign to default campus
             IF default_campus_id IS NOT NULL THEN
               EXECUTE 'UPDATE ' || t || ' SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
             END IF;
-            -- Make it mandatory after update
+          END IF;
+
+          -- Backfill campus_id even if it already existed
+          IF default_campus_id IS NOT NULL THEN
+            EXECUTE 'UPDATE ' || t || ' SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+          END IF;
+
+          -- Make it mandatory after backfill (best-effort to avoid migration abort)
+          BEGIN
             EXECUTE 'ALTER TABLE ' || t || ' ALTER COLUMN campus_id SET NOT NULL';
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+          -- Ensure future inserts get a default campus_id
+          IF default_campus_id IS NOT NULL THEN
+            EXECUTE 'ALTER TABLE ' || t || ' ALTER COLUMN campus_id SET DEFAULT ' || default_campus_id;
           END IF;
           -- Add index for performance
           EXECUTE 'CREATE INDEX IF NOT EXISTS idx_' || t || '_campus_id ON ' || t || '(campus_id)';
