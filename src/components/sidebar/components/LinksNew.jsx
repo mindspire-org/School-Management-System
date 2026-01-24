@@ -2,12 +2,12 @@
 import React, { useState, useContext } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 // chakra imports
-import { 
-  Box, 
-  Flex, 
-  HStack, 
-  Text, 
-  useColorModeValue, 
+import {
+  Box,
+  Flex,
+  HStack,
+  Text,
+  useColorModeValue,
   Icon,
   Collapse,
   VStack,
@@ -25,7 +25,7 @@ import { MdKeyboardArrowDown, MdKeyboardArrowRight } from "react-icons/md";
 export function SidebarLinks(props) {
   const [openMenus, setOpenMenus] = useState({});
   const [collapsedOpen, setCollapsedOpen] = useState({});
-  
+
   //   Chakra color mode
   let location = useLocation();
   let activeColor = useColorModeValue("gray.700", "white");
@@ -49,7 +49,7 @@ export function SidebarLinks(props) {
   // Check if any child route is active
   const hasActiveChild = (items) => {
     if (!items) return false;
-    return items.some(item => 
+    return items.some(item =>
       item.path && activeRoute(item.path.toLowerCase())
     );
   };
@@ -62,17 +62,67 @@ export function SidebarLinks(props) {
     }));
   };
 
-  // Render sub-menu items
-  const renderSubItems = (items, parentName) => {
+  // Render sub-menu items recursively
+  const renderSubItems = (items, level = 0) => {
     return items.map((item, index) => {
       if (item.hidden) return null;
-      
+
+      // Indentation calculation
+      const paddingStart = `${52 + level * 20}px`;
+
+      // Handle nested dropdowns (collapsible items inside sidebar)
+      if (item.collapse && item.items) {
+        const isOpen = openMenus[item.name] || hasActiveChild(item.items);
+        const hasActive = hasActiveChild(item.items);
+
+        return (
+          <Box key={index} mb="4px">
+            <Box
+              onClick={() => toggleMenu(item.name)}
+              cursor="pointer"
+              _hover={{
+                bg: useColorModeValue("gray.100", "whiteAlpha.100"),
+                borderRadius: "8px"
+              }}
+              py="6px"
+              ps={paddingStart}
+              pe="10px"
+              display={isCollapsed ? "none" : "block"}
+            >
+              <HStack spacing="auto" alignItems="center">
+                <Text
+                  fontSize="sm"
+                  color={hasActive ? activeColor : textColor}
+                  fontWeight={hasActive ? "600" : "600"}
+                >
+                  {item.name}
+                </Text>
+                <Icon
+                  as={isOpen ? MdKeyboardArrowDown : MdKeyboardArrowRight}
+                  color={textColor}
+                  w="16px"
+                  h="16px"
+                />
+              </HStack>
+            </Box>
+            <Collapse in={isOpen} animateOpacity>
+              <VStack align="stretch" spacing="2px">
+                {renderSubItems(item.items, level + 1)}
+              </VStack>
+            </Collapse>
+          </Box>
+        );
+      }
+
+      // Skip items without a path
+      if (!item.path) return null;
+
       return (
         <NavLink key={index} to={item.layout + item.path}>
           <HStack
             spacing="22px"
             py="8px"
-            ps="52px"
+            ps={paddingStart}
             position="relative"
             _hover={{
               bg: useColorModeValue("gray.100", "whiteAlpha.100"),
@@ -118,12 +168,12 @@ export function SidebarLinks(props) {
       if (route.hidden) {
         return null;
       }
-      
+
       // Handle collapsible routes with sub-items
       if (route.collapse && route.items) {
         const isOpen = openMenus[route.name] || hasActiveChild(route.items);
         const hasActive = hasActiveChild(route.items);
-        
+
         // Collapsed: show icon with hover popover listing sub-items
         if (isCollapsed) {
           return (
@@ -251,13 +301,13 @@ export function SidebarLinks(props) {
             </Box>
             <Collapse in={isOpen} animateOpacity>
               <VStack align="stretch" spacing="2px" mt="2px">
-                {renderSubItems(route.items, route.name)}
+                {renderSubItems(route.items)}
               </VStack>
             </Collapse>
           </Box>
         );
       }
-      
+
       // Handle category headers
       if (route.category) {
         return (
@@ -281,7 +331,7 @@ export function SidebarLinks(props) {
           </React.Fragment>
         );
       }
-      
+
       // Handle regular links
       if (
         route.layout === "/admin" ||
@@ -404,7 +454,7 @@ export function SidebarLinks(props) {
       }
     });
   };
-  
+
   //  BRAND
   return createLinks(routes);
 }

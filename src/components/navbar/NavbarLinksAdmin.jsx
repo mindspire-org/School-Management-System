@@ -29,6 +29,7 @@ import { FaEthereum } from 'react-icons/fa';
 import routes from '../../routes';
 import { useAuth } from '../../contexts/AuthContext';
 import { campusesApi } from '../../services/api';
+import CampusSwitcher from './CampusSwitcher';
 
 export default function HeaderLinks(props) {
   const { secondary } = props;
@@ -117,22 +118,7 @@ export default function HeaderLinks(props) {
       </Flex>
       <SidebarResponsive routes={routes} />
 
-      {(user?.role === 'admin' || user?.role === 'owner') && (
-        <Select
-          size="sm"
-          variant="main"
-          maxW="180px"
-          ml="10px"
-          value={campusId || ''}
-          onChange={(e) => setCampusId(e.target.value)}
-          borderRadius="30px"
-          bg={useColorModeValue('secondaryGray.300', 'navy.900')}
-        >
-          {campuses.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </Select>
-      )}
+      <CampusSwitcher />
 
       <Menu>
         <MenuButton p="0px">

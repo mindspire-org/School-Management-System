@@ -74,15 +74,19 @@ function AcademicInfoForm() {
     }));
   };
 
-  // Generate current year and next few years for academic year dropdown
+  // Generate academic years including past years (from 2024) and future years
   const getCurrentAcademicYears = () => {
     const currentYear = new Date().getFullYear();
+    const startYear = 2024; // Start from 2024
     const years = [];
 
-    for (let i = 0; i < 5; i++) {
-      const year = currentYear + i;
+    // Generate years from 2024 to current year + 4
+    for (let year = startYear; year <= currentYear + 4; year++) {
       const nextYear = year + 1;
-      years.push(`${year}-${nextYear}`);
+      // Use short year format (e.g., "24-25")
+      const shortYear = String(year).slice(-2);
+      const shortNextYear = String(nextYear).slice(-2);
+      years.push(`${shortYear}-${shortNextYear}`);
     }
 
     return years;

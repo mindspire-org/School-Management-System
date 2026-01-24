@@ -31,11 +31,17 @@ export const getUsersByType = async (req, res, next) => {
 // Get dashboard statistics
 export const getDashboardStats = async (req, res, next) => {
   try {
-    let { userType } = req.query;
+    let { userType, campusId } = req.query;
     if (req.user?.role === 'student') userType = 'student';
     if (req.user?.role === 'teacher') userType = 'teacher';
     if (req.user?.role === 'driver') userType = 'driver';
-    const stats = await service.getDashboardStats({ userType, campusId: req.user?.campusId });
+
+    // Allow campus override for admins/owners
+    const effectiveCampusId = (req.user?.role === 'admin' || req.user?.role === 'owner') && campusId !== undefined
+      ? (campusId === 'all' ? null : campusId)
+      : req.user?.campusId;
+
+    const stats = await service.getDashboardStats({ userType, campusId: effectiveCampusId });
     res.json(stats);
   } catch (e) { next(e); }
 };
@@ -272,8 +278,14 @@ export const getOutstandingFees = async (req, res, next) => {
 
 export const getPayrollSummary = async (req, res, next) => {
   try {
-    const { role, periodMonth, status, page, pageSize } = req.query;
-    const result = await service.getPayrollSummary({ role, periodMonth, status, page, pageSize, campusId: req.user?.campusId });
+    const { role, periodMonth, status, page, pageSize, campusId } = req.query;
+
+    // Allow campus override for admins/owners
+    const effectiveCampusId = (req.user?.role === 'admin' || req.user?.role === 'owner') && campusId !== undefined
+      ? (campusId === 'all' ? null : campusId)
+      : req.user?.campusId;
+
+    const result = await service.getPayrollSummary({ role, periodMonth, status, page, pageSize, campusId: effectiveCampusId });
     res.json(result);
   } catch (e) { next(e); }
 };

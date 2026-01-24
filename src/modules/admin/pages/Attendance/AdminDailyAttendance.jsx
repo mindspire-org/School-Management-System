@@ -32,7 +32,17 @@ import { useAuth } from '../../../../contexts/AuthContext';
 export default function AdminDailyAttendance() {
   const toast = useToast();
   const { loading: authLoading, isAuthenticated } = useAuth();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Helper to get local date string YYYY-MM-DD
+  const getLocalDateString = (d = new Date()) => {
+    const date = new Date(d);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [date, setDate] = useState(() => getLocalDateString());
   const [cls, setCls] = useState('');
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
@@ -188,7 +198,7 @@ export default function AdminDailyAttendance() {
           <Text fontWeight='600'>Students</Text>
           <HStack>
             <Text fontSize='sm' color='gray.500'>{items.length} found</Text>
-            <Button size='sm' leftIcon={<MdSave />} colorScheme='green' onClick={saveAttendance} isLoading={saving} isDisabled={items.length===0}>Save</Button>
+            <Button size='sm' leftIcon={<MdSave />} colorScheme='green' onClick={saveAttendance} isLoading={saving} isDisabled={items.length === 0}>Save</Button>
           </HStack>
         </Flex>
         <TableContainer>

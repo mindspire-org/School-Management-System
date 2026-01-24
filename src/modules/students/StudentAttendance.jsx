@@ -51,8 +51,8 @@ import {
 } from '@chakra-ui/react';
 
 import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
-import { 
-  MdCalendarToday, MdAccessTime, MdPersonAdd, MdPerson, 
+import {
+  MdCalendarToday, MdAccessTime, MdPersonAdd, MdPerson,
   MdCheck, MdClose, MdOutlineWatchLater, MdDateRange,
   MdFilterList, MdRefresh, MdDownload, MdPrint
 } from 'react-icons/md';
@@ -82,9 +82,18 @@ const StudentAttendance = () => {
     searchTerm: '',
   });
 
+  // Helper to get local date string YYYY-MM-DD
+  const getLocalDateString = (d = new Date()) => {
+    const date = new Date(d);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Get today's attendance status for a student
   function getTodayAttendance(studentId) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
 
     if (attendanceData[studentId] && attendanceData[studentId][today]) {
       return attendanceData[studentId][today];
@@ -92,10 +101,10 @@ const StudentAttendance = () => {
 
     return { status: 'not-marked', checkIn: null, checkOut: null };
   }
-  
+
   // Modal controls
   const { isOpen, onOpen, onClose } = useDisclosure();
-  
+
   // Colors
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -106,7 +115,7 @@ const StudentAttendance = () => {
   const { classOptions, sectionOptions } = useClassOptions({
     selectedClass: filterValues.class !== 'all' ? filterValues.class : null,
   });
-  
+
   // Load students and today's attendance
   useEffect(() => {
     const load = async () => {
@@ -114,7 +123,7 @@ const StudentAttendance = () => {
         const payload = await studentsApi.list({ pageSize: 200 });
         const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
         setStudents((rows || []).slice(0, 100));
-      } catch {}
+      } catch { }
 
       // Load last 7 days attendance for all students (drives charts)
       try {
@@ -129,7 +138,7 @@ const StudentAttendance = () => {
         const map = {};
         rows.forEach(r => {
           if (!map[r.studentId]) map[r.studentId] = {};
-          const d = new Date(r.date || r.day || r.created_at || r.updated_at || Date.now()).toISOString().split('T')[0];
+          const d = getLocalDateString(r.date || r.day || r.created_at || r.updated_at || Date.now());
           map[r.studentId][d] = {
             status: r.status,
             checkIn: r.checkInTime || null,
@@ -137,17 +146,17 @@ const StudentAttendance = () => {
           };
         });
         setAttendanceData(map);
-      } catch {}
+      } catch { }
     };
     load();
   }, []);
-  
+
   // Handle student selection for detail view
   const handleStudentSelect = (student) => {
     setSelectedStudent(student);
     onOpen();
   };
-  
+
   // Calculate attendance statistics
   const calculateStats = (studentId) => {
     // This would normally come from your backend
@@ -156,7 +165,7 @@ const StudentAttendance = () => {
     const present = Math.floor(Math.random() * 25) + 5;
     const absent = Math.floor(Math.random() * (30 - present));
     const leave = total - present - absent;
-    
+
     return {
       total,
       present,
@@ -165,7 +174,7 @@ const StudentAttendance = () => {
       percentage: Math.round((present / total) * 100)
     };
   };
-  
+
   // Generate status badge based on attendance status
   const getStatusBadge = (status) => {
     switch (status) {
@@ -181,12 +190,12 @@ const StudentAttendance = () => {
         return <Badge colorScheme="gray">Not Marked</Badge>;
     }
   };
-  
+
   // Handle date change
   const handleDateChange = (date) => {
     setSelectedDate(date);
   };
-  
+
   // Handle month change in calendar
   const handleMonthChange = (month) => {
     setCurrentMonth(month);
@@ -203,15 +212,15 @@ const StudentAttendance = () => {
         const rows = payload?.items || payload?.rows || (Array.isArray(payload) ? payload : []);
         const map = { ...(attendanceData[selectedStudent.id] || {}) };
         rows.forEach(r => {
-          const d = new Date(r.date).toISOString().split('T')[0];
+          const d = getLocalDateString(r.date);
           map[d] = { status: r.status, checkIn: null, checkOut: null };
         });
         setAttendanceData(prev => ({ ...prev, [selectedStudent.id]: map }));
-      } catch {}
+      } catch { }
     };
     loadMonthly();
   }, [selectedStudent, currentMonth]);
-  
+
   // Handle filter change
   const handleFilterChange = (field, value) => {
     setFilterValues(prev => ({ ...prev, [field]: value }));
@@ -221,10 +230,10 @@ const StudentAttendance = () => {
   const filteredStudents = students.filter(student => {
     let matchesClass = filterValues.class === 'all' || student.class === filterValues.class;
     let matchesSection = filterValues.section === 'all' || student.section === filterValues.section;
-    let matchesSearch = !filterValues.searchTerm || 
-                        student.name.toLowerCase().includes(filterValues.searchTerm.toLowerCase()) ||
-                        student.rollNumber.toLowerCase().includes(filterValues.searchTerm.toLowerCase());
-    
+    let matchesSearch = !filterValues.searchTerm ||
+      student.name.toLowerCase().includes(filterValues.searchTerm.toLowerCase()) ||
+      student.rollNumber.toLowerCase().includes(filterValues.searchTerm.toLowerCase());
+
     return matchesClass && matchesSection && matchesSearch;
   });
 
@@ -244,7 +253,7 @@ const StudentAttendance = () => {
       d.setDate(end.getDate() - (6 - idx));
       return d;
     });
-    const keys = days.map((d) => d.toISOString().split('T')[0]);
+    const keys = days.map((d) => getLocalDateString(d));
     const labels = days.map((d) => d.toLocaleDateString(undefined, { weekday: 'short' }));
 
     const present = [];
@@ -296,11 +305,11 @@ const StudentAttendance = () => {
 
     return { present, absent, leave, notMarked };
   }, [displayedStudents]);
-  
+
   // Export CSV of today's filtered attendance
   const exportCSV = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const headers = ['Student','Roll No.','Class','Status','Check-In','Check-Out'];
+    const today = getLocalDateString();
+    const headers = ['Student', 'Roll No.', 'Class', 'Status', 'Check-In', 'Check-Out'];
     const rows = displayedStudents.map((s) => {
       const a = attendanceData[s.id]?.[today] || { status: 'not-marked', checkIn: '', checkOut: '' };
       return [
@@ -331,7 +340,7 @@ const StudentAttendance = () => {
       const payload = await studentsApi.list({ pageSize: 200 });
       const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
       setStudents((rows || []).slice(0, 100));
-    } catch {}
+    } catch { }
     try {
       const end = new Date();
       const start = new Date();
@@ -344,7 +353,7 @@ const StudentAttendance = () => {
       const map = {};
       rows.forEach(r => {
         if (!map[r.studentId]) map[r.studentId] = {};
-        const d = new Date(r.date || r.day || r.created_at || r.updated_at || Date.now()).toISOString().split('T')[0];
+        const d = getLocalDateString(r.date || r.day || r.created_at || r.updated_at || Date.now());
         map[r.studentId][d] = {
           status: r.status,
           checkIn: r.checkInTime || null,
@@ -352,12 +361,12 @@ const StudentAttendance = () => {
         };
       });
       setAttendanceData(map);
-    } catch {}
+    } catch { }
   };
-  
+
   // Mark attendance for today
   const markAttendance = async (studentId, status, time) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     try {
       const row = await attendanceApi.create({ studentId, date: today, status, remarks: null });
       const updated = { ...attendanceData };
@@ -373,7 +382,7 @@ const StudentAttendance = () => {
       setAttendanceData(updated);
       toast({ title: time === 'checkIn' ? 'Checked in' : 'Checked out', status: 'success', duration: 2000 });
     } catch (e) {
-      const details = Array.isArray(e?.data?.errors) ? e.data.errors.map(x=>`${x.param}: ${x.msg}`).join(', ') : '';
+      const details = Array.isArray(e?.data?.errors) ? e.data.errors.map(x => `${x.param}: ${x.msg}`).join(', ') : '';
       toast({
         title: 'Failed to mark attendance',
         description: (e?.data?.message || e?.message || 'Request failed') + (details ? ` — ${details}` : ''),
@@ -383,7 +392,7 @@ const StudentAttendance = () => {
       });
     }
   };
-  
+
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       {/* Page Header */}
@@ -413,7 +422,7 @@ const StudentAttendance = () => {
           </ButtonGroup>
         </GridItem>
       </Grid>
-      
+
       {/* Stats Cards */}
       <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} spacing='20px' mb='20px'>
         <StatCard
@@ -494,7 +503,7 @@ const StudentAttendance = () => {
           />
         </Card>
       </SimpleGrid>
-      
+
       {/* Filter Panel */}
       <Card mb="20px" p="20px">
         <Flex
@@ -563,7 +572,7 @@ const StudentAttendance = () => {
           </ButtonGroup>
         </Flex>
       </Card>
-      
+
       {/* Main Content Tabs */}
       <Tabs variant="enclosed" colorScheme="blue">
         <TabList>
@@ -571,313 +580,322 @@ const StudentAttendance = () => {
           <Tab>Monthly View</Tab>
           <Tab>Reports</Tab>
         </TabList>
-        
+
         <TabPanels>
           {/* Daily Attendance Tab */}
           <TabPanel p={0} pt={5}>
             <Card p="12px">
               <Table variant="simple" size="sm" sx={{ 'th, td': { whiteSpace: 'nowrap' } }}>
-                  <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
-                    <Tr>
-                      <Th>Student</Th>
-                      <Th>Roll No.</Th>
-                      <Th>Class</Th>
-                      <Th>Today's Status</Th>
-                      <Th>Check-In</Th>
-                      <Th>Check-Out</Th>
-                      <Th>Actions</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {displayedStudents.map(student => {
-                      const todayAttendance = getTodayAttendance(student.id);
-                      
-                      return (
-                        <Tr key={student.id} 
-                          _hover={{ bg: 'gray.50' }} 
-                          cursor="pointer" 
-                          onClick={() => handleStudentSelect(student)}
-                        >
-                          <Td>
-                            <Flex align="center">
-                              <Avatar size="sm" name={student.name} src={student.photo} mr={3} />
-                              <Box>
-                                <Text fontWeight="medium">{student.name}</Text>
-                              </Box>
-                            </Flex>
-                          </Td>
-                          <Td>{student.rollNumber}</Td>
-                          <Td>{student.class}-{student.section}</Td>
-                          <Td>{getStatusBadge(todayAttendance.status)}</Td>
-                          <Td>
-                            {todayAttendance.checkIn ? (
-                              <Text>{todayAttendance.checkIn}</Text>
-                            ) : (
-                              <Button 
-                                size="sm" 
-                                colorScheme="green" 
-                                leftIcon={<MdOutlineWatchLater />}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAttendance(student.id, 'present', 'checkIn');
-                                }}
-                              >
-                                Check In
-                              </Button>
-                            )}
-                          </Td>
-                          <Td>
-                            {todayAttendance.checkOut ? (
-                              <Text>{todayAttendance.checkOut}</Text>
-                            ) : todayAttendance.checkIn ? (
-                              <Button 
-                                size="sm" 
-                                colorScheme="blue" 
-                                leftIcon={<MdOutlineWatchLater />}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAttendance(student.id, todayAttendance.status, 'checkOut');
-                                }}
-                              >
-                                Check Out
-                              </Button>
-                            ) : (
-                              <Text color="gray.400">-</Text>
-                            )}
-                          </Td>
-                          <Td>
-                            <ButtonGroup size="sm" isAttached>
-                              <IconButton 
-                                aria-label="Mark present" 
-                                icon={<MdCheck />} 
-                                colorScheme="green"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAttendance(student.id, 'present', 'checkIn');
-                                }}
-                              />
-                              <IconButton 
-                                aria-label="Mark absent" 
-                                icon={<MdClose />} 
-                                colorScheme="red"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAttendance(student.id, 'absent', 'checkIn');
-                                }}
-                              />
-                              <IconButton 
-                                aria-label="View details" 
-                                icon={<MdPerson />} 
-                                colorScheme="blue"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStudentSelect(student);
-                                }}
-                              />
-                            </ButtonGroup>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
-                  </Tbody>
-                </Table>
+                <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
+                  <Tr>
+                    <Th>Student</Th>
+                    <Th>Roll No.</Th>
+                    <Th>Class</Th>
+                    <Th>Today's Status</Th>
+                    <Th>Check-In</Th>
+                    <Th>Check-Out</Th>
+                    <Th>Actions</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {displayedStudents.map(student => {
+                    const todayAttendance = getTodayAttendance(student.id);
+
+                    return (
+                      <Tr key={student.id}
+                        _hover={{ bg: 'gray.50' }}
+                        cursor="pointer"
+                        onClick={() => handleStudentSelect(student)}
+                      >
+                        <Td>
+                          <Flex align="center">
+                            <Avatar size="sm" name={student.name} src={student.photo} mr={3} />
+                            <Box>
+                              <Text fontWeight="medium">{student.name}</Text>
+                            </Box>
+                          </Flex>
+                        </Td>
+                        <Td>{student.rollNumber}</Td>
+                        <Td>{student.class}-{student.section}</Td>
+                        <Td>{getStatusBadge(todayAttendance.status)}</Td>
+                        <Td>
+                          {todayAttendance.checkIn ? (
+                            <Text>{todayAttendance.checkIn}</Text>
+                          ) : (
+                            <Button
+                              size="sm"
+                              colorScheme="green"
+                              leftIcon={<MdOutlineWatchLater />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAttendance(student.id, 'present', 'checkIn');
+                              }}
+                            >
+                              Check In
+                            </Button>
+                          )}
+                        </Td>
+                        <Td>
+                          {todayAttendance.checkOut ? (
+                            <Text>{todayAttendance.checkOut}</Text>
+                          ) : todayAttendance.checkIn ? (
+                            <Button
+                              size="sm"
+                              colorScheme="blue"
+                              leftIcon={<MdOutlineWatchLater />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAttendance(student.id, todayAttendance.status, 'checkOut');
+                              }}
+                            >
+                              Check Out
+                            </Button>
+                          ) : (
+                            <Text color="gray.400">-</Text>
+                          )}
+                        </Td>
+                        <Td>
+                          <ButtonGroup size="sm" isAttached>
+                            <IconButton
+                              aria-label="Mark present"
+                              icon={<MdCheck />}
+                              colorScheme="green"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAttendance(student.id, 'present', 'checkIn');
+                              }}
+                            />
+                            <IconButton
+                              aria-label="Mark absent"
+                              icon={<MdClose />}
+                              colorScheme="red"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAttendance(student.id, 'absent', 'checkIn');
+                              }}
+                            />
+                            <IconButton
+                              aria-label="Mark on leave"
+                              icon={<MdCalendarToday />}
+                              colorScheme="orange"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAttendance(student.id, 'leave', 'checkIn');
+                              }}
+                            />
+                            <IconButton
+                              aria-label="View details"
+                              icon={<MdPerson />}
+                              colorScheme="blue"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStudentSelect(student);
+                              }}
+                            />
+                          </ButtonGroup>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
             </Card>
           </TabPanel>
-          
+
           {/* Monthly View Tab */}
           <TabPanel p={0} pt={5}>
             <Card p={4}>
-                <Heading size="md" mb={4}>Monthly Attendance Overview</Heading>
-                <Text color="gray.600" mb={4}>
-                  Select a student from the list below to view their detailed attendance for the month.
-                </Text>
-                
-                <Grid templateColumns={{ base: '1fr', lg: '300px 1fr' }} gap={6}>
-                  <GridItem>
-                    <Card p={0} maxH="500px" overflow="auto">
-                      <Box bg="gray.50" p={3} borderBottomWidth="1px">
-                        <Text fontWeight="bold">Students</Text>
+              <Heading size="md" mb={4}>Monthly Attendance Overview</Heading>
+              <Text color="gray.600" mb={4}>
+                Select a student from the list below to view their detailed attendance for the month.
+              </Text>
+
+              <Grid templateColumns={{ base: '1fr', lg: '300px 1fr' }} gap={6}>
+                <GridItem>
+                  <Card p={0} maxH="500px" overflow="auto">
+                    <Box bg="gray.50" p={3} borderBottomWidth="1px">
+                      <Text fontWeight="bold">Students</Text>
+                    </Box>
+                    <Box>
+                      <VStack align="stretch" spacing={0} divider={<Divider />}>
+                        {filteredStudents.map(student => (
+                          <Flex
+                            key={student.id}
+                            p={3}
+                            align="center"
+                            cursor="pointer"
+                            _hover={{ bg: 'gray.50' }}
+                            bg={selectedStudent?.id === student.id ? 'blue.50' : 'transparent'}
+                            onClick={() => setSelectedStudent(student)}
+                          >
+                            <Avatar size="sm" name={student.name} src={student.photo} mr={3} />
+                            <Box>
+                              <Text fontWeight="medium">{student.name}</Text>
+                              <Text fontSize="xs" color="gray.500">{student.rollNumber} | {student.class}-{student.section}</Text>
+                            </Box>
+                          </Flex>
+                        ))}
+                      </VStack>
+                    </Box>
+                  </Card>
+                </GridItem>
+
+                <GridItem>
+                  {selectedStudent ? (
+                    <Card p={0}>
+                      <Box bg="gray.50" p={4} borderBottomWidth="1px">
+                        <Flex justify="space-between" align="center">
+                          <Flex align="center">
+                            <Avatar size="sm" name={selectedStudent.name} src={selectedStudent.photo} mr={3} />
+                            <Box>
+                              <Text fontWeight="bold">{selectedStudent.name}</Text>
+                              <Text fontSize="sm" color="gray.500">
+                                {selectedStudent.rollNumber} | Class {selectedStudent.class}-{selectedStudent.section}
+                              </Text>
+                            </Box>
+                          </Flex>
+                          <HStack>
+                            <IconButton
+                              aria-label="Previous month"
+                              icon={<ChevronLeftIcon />}
+                              variant="ghost"
+                              onClick={() => {
+                                const newMonth = new Date(currentMonth);
+                                newMonth.setMonth(newMonth.getMonth() - 1);
+                                handleMonthChange(newMonth);
+                              }}
+                            />
+                            <Text fontWeight="medium">
+                              {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                            </Text>
+                            <IconButton
+                              aria-label="Next month"
+                              icon={<ChevronRightIcon />}
+                              variant="ghost"
+                              onClick={() => {
+                                const newMonth = new Date(currentMonth);
+                                newMonth.setMonth(newMonth.getMonth() + 1);
+                                handleMonthChange(newMonth);
+                              }}
+                            />
+                          </HStack>
+                        </Flex>
                       </Box>
-                      <Box>
-                        <VStack align="stretch" spacing={0} divider={<Divider />}>
-                          {filteredStudents.map(student => (
-                            <Flex
-                              key={student.id}
-                              p={3}
-                              align="center"
-                              cursor="pointer"
-                              _hover={{ bg: 'gray.50' }}
-                              bg={selectedStudent?.id === student.id ? 'blue.50' : 'transparent'}
-                              onClick={() => setSelectedStudent(student)}
-                            >
-                              <Avatar size="sm" name={student.name} src={student.photo} mr={3} />
-                              <Box>
-                                <Text fontWeight="medium">{student.name}</Text>
-                                <Text fontSize="xs" color="gray.500">{student.rollNumber} | {student.class}-{student.section}</Text>
-                              </Box>
-                            </Flex>
-                          ))}
-                        </VStack>
+                      <Box p={4}>
+                        {/* Monthly Calendar View */}
+                        <AttendanceCalendar
+                          studentId={selectedStudent.id}
+                          month={currentMonth}
+                          attendanceData={attendanceData[selectedStudent.id] || {}}
+                          onDateSelect={handleDateChange}
+                        />
+
+                        {/* Summary Stats */}
+                        <Grid templateColumns="repeat(4, 1fr)" gap={4} mt={4}>
+                          <Card bg="green.50" p={3} borderRadius="md">
+                            <Text fontWeight="bold" color="green.500">Present</Text>
+                            <Heading size="md">22</Heading>
+                            <Text fontSize="sm">73.3%</Text>
+                          </Card>
+                          <Card bg="red.50" p={3} borderRadius="md">
+                            <Text fontWeight="bold" color="red.500">Absent</Text>
+                            <Heading size="md">5</Heading>
+                            <Text fontSize="sm">16.7%</Text>
+                          </Card>
+                          <Card bg="yellow.50" p={3} borderRadius="md">
+                            <Text fontWeight="bold" color="yellow.500">Leave</Text>
+                            <Heading size="md">3</Heading>
+                            <Text fontSize="sm">10.0%</Text>
+                          </Card>
+                          <Card bg="blue.50" p={3} borderRadius="md">
+                            <Text fontWeight="bold" color="blue.500">Total</Text>
+                            <Heading size="md">30</Heading>
+                            <Text fontSize="sm">Days</Text>
+                          </Card>
+                        </Grid>
                       </Box>
                     </Card>
-                  </GridItem>
-                  
-                  <GridItem>
-                    {selectedStudent ? (
-                      <Card p={0}>
-                        <Box bg="gray.50" p={4} borderBottomWidth="1px">
-                          <Flex justify="space-between" align="center">
-                            <Flex align="center">
-                              <Avatar size="sm" name={selectedStudent.name} src={selectedStudent.photo} mr={3} />
-                              <Box>
-                                <Text fontWeight="bold">{selectedStudent.name}</Text>
-                                <Text fontSize="sm" color="gray.500">
-                                  {selectedStudent.rollNumber} | Class {selectedStudent.class}-{selectedStudent.section}
-                                </Text>
-                              </Box>
-                            </Flex>
-                            <HStack>
-                              <IconButton 
-                                aria-label="Previous month" 
-                                icon={<ChevronLeftIcon />} 
-                                variant="ghost"
-                                onClick={() => {
-                                  const newMonth = new Date(currentMonth);
-                                  newMonth.setMonth(newMonth.getMonth() - 1);
-                                  handleMonthChange(newMonth);
-                                }}
-                              />
-                              <Text fontWeight="medium">
-                                {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                              </Text>
-                              <IconButton 
-                                aria-label="Next month" 
-                                icon={<ChevronRightIcon />} 
-                                variant="ghost"
-                                onClick={() => {
-                                  const newMonth = new Date(currentMonth);
-                                  newMonth.setMonth(newMonth.getMonth() + 1);
-                                  handleMonthChange(newMonth);
-                                }}
-                              />
-                            </HStack>
-                          </Flex>
-                        </Box>
-                        <Box p={4}>
-                          {/* Monthly Calendar View */}
-                          <AttendanceCalendar 
-                            studentId={selectedStudent.id} 
-                            month={currentMonth} 
-                            attendanceData={attendanceData[selectedStudent.id] || {}} 
-                            onDateSelect={handleDateChange}
-                          />
-                          
-                          {/* Summary Stats */}
-                          <Grid templateColumns="repeat(4, 1fr)" gap={4} mt={4}>
-                            <Card bg="green.50" p={3} borderRadius="md">
-                              <Text fontWeight="bold" color="green.500">Present</Text>
-                              <Heading size="md">22</Heading>
-                              <Text fontSize="sm">73.3%</Text>
-                            </Card>
-                            <Card bg="red.50" p={3} borderRadius="md">
-                              <Text fontWeight="bold" color="red.500">Absent</Text>
-                              <Heading size="md">5</Heading>
-                              <Text fontSize="sm">16.7%</Text>
-                            </Card>
-                            <Card bg="yellow.50" p={3} borderRadius="md">
-                              <Text fontWeight="bold" color="yellow.500">Leave</Text>
-                              <Heading size="md">3</Heading>
-                              <Text fontSize="sm">10.0%</Text>
-                            </Card>
-                            <Card bg="blue.50" p={3} borderRadius="md">
-                              <Text fontWeight="bold" color="blue.500">Total</Text>
-                              <Heading size="md">30</Heading>
-                              <Text fontSize="sm">Days</Text>
-                            </Card>
-                          </Grid>
-                        </Box>
-                      </Card>
-                    ) : (
-                      <Flex 
-                        justify="center" 
-                        align="center" 
-                        direction="column" 
-                        h="100%" 
-                        bg="gray.50" 
-                        borderRadius="md" 
-                        p={10}
-                      >
-                        <Icon as={MdPerson} boxSize={12} color="gray.300" />
-                        <Text mt={4} fontWeight="medium">Select a student to view attendance details</Text>
-                      </Flex>
-                    )}
-                  </GridItem>
-                </Grid>
+                  ) : (
+                    <Flex
+                      justify="center"
+                      align="center"
+                      direction="column"
+                      h="100%"
+                      bg="gray.50"
+                      borderRadius="md"
+                      p={10}
+                    >
+                      <Icon as={MdPerson} boxSize={12} color="gray.300" />
+                      <Text mt={4} fontWeight="medium">Select a student to view attendance details</Text>
+                    </Flex>
+                  )}
+                </GridItem>
+              </Grid>
             </Card>
           </TabPanel>
-          
+
           {/* Reports Tab */}
           <TabPanel p={0} pt={5}>
             <Card p={4}>
-                <Heading size="md" mb={4}>Attendance Reports</Heading>
-                <Text color="gray.600" mb={6}>
-                  Generate and view attendance reports for different time periods.
-                </Text>
-                
-                <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)' }} gap={6}>
-                  <Card p={4}>
-                    <Heading size="sm" mb={4}>Class-wise Attendance</Heading>
-                    <VStack align="stretch" spacing={4}>
-                      <HStack justify="space-between">
-                        <Text>Class 10-A</Text>
-                        <Text fontWeight="bold">92%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>Class 10-B</Text>
-                        <Text fontWeight="bold">87%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>Class 11-A</Text>
-                        <Text fontWeight="bold">95%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>Class 11-B</Text>
-                        <Text fontWeight="bold">89%</Text>
-                      </HStack>
-                    </VStack>
-                    <Button colorScheme="blue" mt={4} width="full">View Full Report</Button>
-                  </Card>
-                  
-                  <Card p={4}>
-                    <Heading size="sm" mb={4}>Monthly Comparison</Heading>
-                    <VStack align="stretch" spacing={4}>
-                      <HStack justify="space-between">
-                        <Text>September 2025</Text>
-                        <Text fontWeight="bold">88%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>October 2025</Text>
-                        <Text fontWeight="bold">91%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>November 2025</Text>
-                        <Text fontWeight="bold">89%</Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text>Current Month</Text>
-                        <Text fontWeight="bold">92%</Text>
-                      </HStack>
-                    </VStack>
-                    <Button colorScheme="blue" mt={4} width="full">Generate Report</Button>
-                  </Card>
-                </Grid>
+              <Heading size="md" mb={4}>Attendance Reports</Heading>
+              <Text color="gray.600" mb={6}>
+                Generate and view attendance reports for different time periods.
+              </Text>
+
+              <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)' }} gap={6}>
+                <Card p={4}>
+                  <Heading size="sm" mb={4}>Class-wise Attendance</Heading>
+                  <VStack align="stretch" spacing={4}>
+                    <HStack justify="space-between">
+                      <Text>Class 10-A</Text>
+                      <Text fontWeight="bold">92%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>Class 10-B</Text>
+                      <Text fontWeight="bold">87%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>Class 11-A</Text>
+                      <Text fontWeight="bold">95%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>Class 11-B</Text>
+                      <Text fontWeight="bold">89%</Text>
+                    </HStack>
+                  </VStack>
+                  <Button colorScheme="blue" mt={4} width="full">View Full Report</Button>
+                </Card>
+
+                <Card p={4}>
+                  <Heading size="sm" mb={4}>Monthly Comparison</Heading>
+                  <VStack align="stretch" spacing={4}>
+                    <HStack justify="space-between">
+                      <Text>September 2025</Text>
+                      <Text fontWeight="bold">88%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>October 2025</Text>
+                      <Text fontWeight="bold">91%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>November 2025</Text>
+                      <Text fontWeight="bold">89%</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>Current Month</Text>
+                      <Text fontWeight="bold">92%</Text>
+                    </HStack>
+                  </VStack>
+                  <Button colorScheme="blue" mt={4} width="full">Generate Report</Button>
+                </Card>
+              </Grid>
             </Card>
           </TabPanel>
         </TabPanels>
       </Tabs>
-      
+
       {/* Student Attendance Detail Modal */}
-      <AttendanceDetailModal 
+      <AttendanceDetailModal
         isOpen={isOpen}
         onClose={onClose}
         student={selectedStudent}

@@ -35,6 +35,7 @@ import StatCard from '../../../../components/card/StatCard';
 import BarChart from 'components/charts/BarChart.tsx';
 import DonutChart from 'components/charts/v2/DonutChart.tsx';
 import * as teacherApi from '../../../../services/api/teachers';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const TeacherAttendance = () => {
   // Date state
@@ -42,6 +43,7 @@ const TeacherAttendance = () => {
   const [selectedDate, setSelectedDate] = useState(
     today.toISOString().split('T')[0]
   );
+  const { campusId } = useAuth();
 
   const [teacherRows, setTeacherRows] = useState([]);
   const [attendanceMap, setAttendanceMap] = useState({});
@@ -94,7 +96,7 @@ const TeacherAttendance = () => {
     if (!selectedDate) return;
     setLoading(true);
     try {
-      const response = await teacherApi.getAttendance({ date: selectedDate });
+      const response = await teacherApi.getAttendance({ date: selectedDate, campusId: campusId });
       const records = Array.isArray(response?.records) ? response.records : [];
       const normalized = records
         .filter((record) => record?.teacherId)
@@ -134,7 +136,7 @@ const TeacherAttendance = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, toast]);
+  }, [selectedDate, campusId, toast]);
 
   const fetchWeeklyAttendance = useCallback(async () => {
     if (!selectedDate) return;
@@ -149,7 +151,7 @@ const TeacherAttendance = () => {
       });
 
       const responses = await Promise.all(
-        days.map((d) => teacherApi.getAttendance({ date: d }))
+        days.map((d) => teacherApi.getAttendance({ date: d, campusId: campusId }))
       );
 
       const trend = responses.map((res, idx) => {
@@ -164,7 +166,7 @@ const TeacherAttendance = () => {
     } finally {
       setWeeklyLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, campusId]);
 
   useEffect(() => {
     fetchAttendance();
@@ -222,7 +224,7 @@ const TeacherAttendance = () => {
           checkOutTime: entry.checkOutTime || null,
         };
       });
-      await teacherApi.saveAttendance({ date: selectedDate, entries });
+      await teacherApi.saveAttendance({ date: selectedDate, entries, campusId: campusId });
       toast({
         title: 'Attendance saved',
         description: formatDate(selectedDate),

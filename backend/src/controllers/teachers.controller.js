@@ -152,7 +152,16 @@ export const list = async (req, res, next) => {
       return res.json({ rows: self ? [self] : [], total: self ? 1 : 0, page: 1, pageSize: 1 });
     }
     const { page = 1, pageSize = 50, q } = req.query;
-    const campusId = req.user?.campusId;
+    const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
+    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    const campusId = isGlobalAdmin
+      ? (requestedCampusId ?? req.user?.campusId)
+      : req.user?.campusId;
+
+    // Force campus scoping for owner/superadmin: never return all campuses by default
+    if (isGlobalAdmin && !campusId) {
+      return res.json({ rows: [], total: 0, page: Number(page), pageSize: Number(pageSize) });
+    }
     const result = await teachers.list({
       page: Number(page),
       pageSize: Number(pageSize),
@@ -318,7 +327,18 @@ export const listAttendance = async (req, res, next) => {
       const self = await teachers.getByUserId(req.user.id);
       teacherId = self?.id;
     }
-    const records = await teachers.getAttendanceByDate({ date, teacherId: teacherId ? Number(teacherId) : undefined });
+
+    const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
+    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    const campusId = isGlobalAdmin
+      ? (requestedCampusId ?? req.user?.campusId)
+      : req.user?.campusId;
+
+    const records = await teachers.getAttendanceByDate({
+      date,
+      teacherId: teacherId ? Number(teacherId) : undefined,
+      campusId
+    });
     return res.json({ date, records });
   } catch (e) {
     next(e);
@@ -354,10 +374,22 @@ export const listPayrolls = async (req, res, next) => {
       const self = await teachers.getByUserId(req.user.id);
       teacherId = self?.id;
     }
+
+    const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
+    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    const campusId = isGlobalAdmin
+      ? (requestedCampusId ?? req.user?.campusId)
+      : req.user?.campusId;
+
+    // Force campus scoping for owner/superadmin: never return all campuses by default
+    if (isGlobalAdmin && !campusId) {
+      return res.json([]);
+    }
     const payrolls = await teachers.listPayrolls({
       month: req.query.month,
       status: req.query.status,
       teacherId,
+      campusId,
     });
     return res.json(payrolls);
   } catch (e) {
@@ -452,7 +484,7 @@ export const updatePerformanceReview = async (req, res, next) => {
 
 export const listSubjects = async (req, res, next) => {
   try {
-    const subjects = await teachers.listSubjects();
+    const subjects = await teachers.listSubjects({ campusId: req.user?.campusId });
     return res.json(subjects);
   } catch (e) {
     next(e);
@@ -505,6 +537,7 @@ export const listSubjectAssignments = async (req, res, next) => {
     const assignments = await teachers.listSubjectAssignments({
       teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
       subjectId: req.query.subjectId ? Number(req.query.subjectId) : undefined,
+      campusId: req.user?.campusId,
     });
     return res.json(assignments);
   } catch (e) {

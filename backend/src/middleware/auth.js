@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import { query } from '../config/db.js';
 
-export const authenticate = (req, res, next) => {
+export const authenticate = async (req, res, next) => {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
@@ -10,10 +11,19 @@ export const authenticate = (req, res, next) => {
 
     // Support campus override for administrators
     const campusHeader = req.headers['x-campus-id'];
-    if (campusHeader && (payload.role === 'admin' || payload.role === 'owner')) {
-      const parsed = Number(String(campusHeader).trim());
+    if (campusHeader && (payload.role === 'admin' || payload.role === 'owner' || payload.role === 'superadmin')) {
+      const raw = String(campusHeader).trim();
+      const parsed = Number(raw);
       if (!Number.isNaN(parsed) && parsed > 0) {
         payload.campusId = parsed;
+      } else if (raw) {
+        try {
+          const { rows } = await query(
+            'SELECT id FROM campuses WHERE LOWER(name) = LOWER($1) LIMIT 1',
+            [raw]
+          );
+          if (rows[0]?.id) payload.campusId = rows[0].id;
+        } catch (_) {}
       }
     }
 

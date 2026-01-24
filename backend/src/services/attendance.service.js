@@ -122,7 +122,7 @@ export const upsertDaily = async ({ date, records, createdBy, campusId }) => {
   try {
     for (const r of records || []) {
       // Sanitize status to allowed values
-      const status = ['present', 'absent', 'late'].includes(r.status) ? r.status : 'present';
+      const status = ['present', 'absent', 'late', 'leave'].includes(r.status) ? r.status : 'present';
       await query(
         `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
          VALUES ($1,$2,$3,$4,$5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END, $6)

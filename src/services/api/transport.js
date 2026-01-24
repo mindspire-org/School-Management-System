@@ -16,3 +16,5 @@ export const updateStop = (routeId, stopId, data) => http.put(`/transport/routes
 export const removeStop = (routeId, stopId) => http.delete(`/transport/routes/${routeId}/stops/${stopId}`);
 
 export const assignBus = (busId, routeId) => http.post('/transport/assign-bus', { busId, routeId });
+export const getStats = () => http.get('/transport/stats');
+export const listStudentEntries = (params) => http.get('/transport/student-entries', { params });

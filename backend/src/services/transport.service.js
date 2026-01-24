@@ -5,6 +5,7 @@ const ensureBusExtendedColumns = async () => {
   await query('ALTER TABLE IF EXISTS buses ADD COLUMN IF NOT EXISTS plate TEXT');
   await query('ALTER TABLE IF EXISTS buses ADD COLUMN IF NOT EXISTS capacity INTEGER');
   await query('ALTER TABLE IF EXISTS buses ADD COLUMN IF NOT EXISTS last_service DATE');
+  await query('ALTER TABLE IF EXISTS buses ADD COLUMN IF NOT EXISTS campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL');
 };
 
 // Ensure extended columns exist on routes table (idempotent)
@@ -12,6 +13,7 @@ const ensureRoutesExtendedColumns = async () => {
   // Use non-reserved column names and alias them in queries to match frontend
   await query('ALTER TABLE IF EXISTS routes ADD COLUMN IF NOT EXISTS start_location TEXT');
   await query('ALTER TABLE IF EXISTS routes ADD COLUMN IF NOT EXISTS end_location TEXT');
+  await query('ALTER TABLE IF EXISTS routes ADD COLUMN IF NOT EXISTS campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL');
 };
 
 // Buses
@@ -26,7 +28,8 @@ export const listBuses = async (campusId) => {
            b.capacity,
            b.last_service AS "lastService",
            ba.route_id AS "routeId",
-           r.name AS "routeName"
+           r.name AS "routeName",
+           (SELECT COUNT(*)::int FROM student_transport st WHERE st.bus_id = b.id) AS occupancy
     FROM buses b
     LEFT JOIN bus_assignments ba ON ba.bus_id = b.id
     LEFT JOIN routes r ON r.id = ba.route_id
@@ -47,7 +50,8 @@ export const getBusById = async (id) => {
            b.capacity,
            b.last_service AS "lastService",
            ba.route_id AS "routeId",
-           r.name AS "routeName"
+           r.name AS "routeName",
+           (SELECT COUNT(*)::int FROM student_transport st WHERE st.bus_id = b.id) AS occupancy
     FROM buses b
     LEFT JOIN bus_assignments ba ON ba.bus_id = b.id
     LEFT JOIN routes r ON r.id = ba.route_id
@@ -224,4 +228,50 @@ export const setStudentTransport = async (studentId, { routeId, busId, pickupSto
     [studentId, routeId || null, busId || null, pickupStopId || null, dropStopId || null]
   );
   return rows[0];
+};
+
+// Optimized list for assignment page
+export const listStudentTransportEntries = async (campusId, { q, className, busId } = {}) => {
+  const { rows } = await query(`
+    SELECT s.id,
+           s.name,
+           s.roll_number AS "rollNumber",
+           s.class,
+           s.section,
+           s.avatar,
+           st.bus_id AS "busId",
+           b.number AS "busNumber",
+           st.route_id AS "routeId",
+           r.name AS "routeName",
+           st.pickup_stop_id AS "pickupStopId",
+           st.drop_stop_id AS "dropStopId"
+    FROM students s
+    LEFT JOIN student_transport st ON st.student_id = s.id
+    LEFT JOIN buses b ON b.id = st.bus_id
+    LEFT JOIN routes r ON r.id = st.route_id
+    WHERE ($1::int IS NULL OR s.campus_id = $1::int)
+      AND ($2::text IS NULL OR (s.name ILIKE '%' || $2 || '%' OR s.roll_number ILIKE '%' || $2 || '%'))
+      AND ($3::text IS NULL OR s.class = $3)
+      AND ($4::int IS NULL OR st.bus_id = $4::int)
+    ORDER BY s.class ASC, s.name ASC
+    LIMIT 200
+  `, [campusId || null, q || null, className || null, busId || null]);
+  return rows;
+};
+
+// Transport Stats for dashboard cards
+export const getTransportStats = async (campusId) => {
+  const [busesRes, usersRes, rfidRes, routesRes] = await Promise.all([
+    query('SELECT COUNT(*)::int AS count FROM buses WHERE ($1::int IS NULL OR campus_id = $1::int)', [campusId || null]),
+    query('SELECT COUNT(*)::int AS count FROM student_transport st JOIN students s ON s.id = st.student_id WHERE ($1::int IS NULL OR s.campus_id = $1::int)', [campusId || null]),
+    query('SELECT COUNT(*)::int AS count FROM students WHERE rfid_tag IS NOT NULL AND rfid_tag != \'\' AND ($1::int IS NULL OR campus_id = $1::int)', [campusId || null]),
+    query('SELECT COUNT(*)::int AS count FROM routes WHERE ($1::int IS NULL OR campus_id = $1::int)', [campusId || null]),
+  ]);
+
+  return {
+    totalBuses: busesRes.rows[0]?.count || 0,
+    busUsers: usersRes.rows[0]?.count || 0,
+    activeRfid: rfidRes.rows[0]?.count || 0,
+    totalRoutes: routesRes.rows[0]?.count || 0,
+  };
 };

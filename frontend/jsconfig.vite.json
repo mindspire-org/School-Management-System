@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["./src/*"],
+      "assets/*": ["./src/assets/*"],
+      "components/*": ["./src/components/*"],
+      "contexts/*": ["./src/contexts/*"],
+      "layouts/*": ["./src/layouts/*"],
+      "theme/*": ["./src/theme/*"],
+      "variables/*": ["./src/variables/*"],
+      "views/*": ["./src/views/*"],
+      "routes": ["./src/routes.js"]
+    }
+  }
+}

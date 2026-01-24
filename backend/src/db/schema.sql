@@ -469,7 +469,8 @@ CREATE TABLE IF NOT EXISTS attendance_records (
 );
 ALTER TABLE attendance_records
   ADD COLUMN IF NOT EXISTS check_in_time TIME,
-  ADD COLUMN IF NOT EXISTS check_out_time TIME;
+  ADD COLUMN IF NOT EXISTS check_out_time TIME,
+  ADD COLUMN IF NOT EXISTS campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL;
 
 ALTER TABLE attendance_records DROP CONSTRAINT IF EXISTS attendance_records_status_check;
 ALTER TABLE attendance_records ADD CONSTRAINT attendance_records_status_check CHECK (status IN ('present','absent','late','leave'));
@@ -479,12 +480,14 @@ CREATE TABLE IF NOT EXISTS buses (
   id SERIAL PRIMARY KEY,
   number TEXT NOT NULL UNIQUE,
   driver_name TEXT,
-  status TEXT DEFAULT 'active' CHECK (status IN ('active','maintenance','inactive'))
+  status TEXT DEFAULT 'active' CHECK (status IN ('active','maintenance','inactive')),
+  campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS routes (
   id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS route_stops (
@@ -794,6 +797,7 @@ CREATE TABLE IF NOT EXISTS drivers (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive','on_leave')),
   avatar TEXT,
   joining_date DATE DEFAULT CURRENT_DATE,
+  campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -817,6 +821,7 @@ ALTER TABLE drivers
   ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active',
   ADD COLUMN IF NOT EXISTS avatar TEXT,
   ADD COLUMN IF NOT EXISTS joining_date DATE DEFAULT CURRENT_DATE,
+  ADD COLUMN IF NOT EXISTS campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 

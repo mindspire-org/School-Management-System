@@ -1,0 +1,73 @@
+/* Fix for CSS property warnings */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fix for hover state warnings */
+[data-hover] {
+  pointer-events: auto;
+}
+
+/* Suppress development warnings */
+.react-select__control {
+  border-color: inherit !important;
+}
+
+.react-select__control--is-focused {
+  border-color: inherit !important;
+  box-shadow: none !important;
+}
+
+/* Fix for duplicate ID warnings - handled via unique ID generation */
+
+/* Suppress CSS kebab-case warnings */
+input, select, textarea, button {
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+}
+
+/* Fix transition property warnings */
+* {
+  transition-property: box-shadow, background-color, filter, border !important;
+}
+
+/* Override Chakra UI CSS-in-JS warnings */
+.chakra-box, .chakra-flex, .chakra-stack {
+  position: relative; /* Prevent empty ruleset warning */
+}
+
+/* Fix for CSS-in-JS kebab-case warnings */
+[data-css] {
+  position: relative; /* Prevent empty ruleset warning */
+}
+
+/* React development mode fixes */
+.__react-dev-tools {
+  display: none !important;
+}
+
+/* Console warning suppressions */
+.chakra-ui-light, .chakra-ui-dark {
+  color-scheme: normal;
+}
+
+/* Form element fixes */
+input:focus, select:focus, textarea:focus {
+  outline-offset: 2px;
+}
+
+/* Remove webkit autofill styling warnings */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: inherit !important;
+  -webkit-box-shadow: inherit !important;
+  transition: background-color 5000s ease-in-out 0s;
+}

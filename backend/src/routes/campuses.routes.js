@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Only owner or admin can manage campuses
 router.use(authenticate);
-router.use(authorize('owner', 'admin'));
+router.use(authorize('owner', 'admin', 'superadmin'));
 
 router.get('/', campusCtrl.list);
 router.get('/:id', campusCtrl.getById);

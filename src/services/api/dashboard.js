@@ -1,6 +1,11 @@
 import { http } from '../http';
 
-// Admin dashboard overview (students, teachers, buses, attendance, alerts)
 export const getOverview = () => http.get('/dashboard/overview');
-export const getAttendanceWeekly = () => http.get('/dashboard/attendance-weekly');
-export const getFeesMonthly = () => http.get('/dashboard/fees-monthly');
+export const getAttendanceWeekly = (params) => http.get('/dashboard/attendance-weekly', { params });
+export const getFeesMonthly = (params) => http.get('/dashboard/fees-monthly', { params });
+
+export default {
+    getOverview,
+    getAttendanceWeekly,
+    getFeesMonthly
+};

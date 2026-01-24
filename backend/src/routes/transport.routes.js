@@ -6,6 +6,9 @@ import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
+router.get('/stats', authenticate, controller.getStats);
+router.get('/student-entries', authenticate, controller.listStudentEntries);
+
 router.get('/buses', authenticate, controller.listBuses);
 router.get('/buses/:id', authenticate, [param('id').isInt()], validate, controller.getBusById);
 router.post(
@@ -15,7 +18,7 @@ router.post(
   [
     body('number').isString().notEmpty(),
     body('driverName').optional().isString(),
-    body('status').optional().isIn(['active','maintenance','inactive']),
+    body('status').optional().isIn(['active', 'maintenance', 'inactive']),
     body('plate').optional().isString(),
     body('capacity').optional().isInt({ min: 0 }),
     body('lastService').optional().isISO8601(),
@@ -32,7 +35,7 @@ router.put(
     param('id').isInt(),
     body('number').optional().isString(),
     body('driverName').optional().isString(),
-    body('status').optional().isIn(['active','maintenance','inactive']),
+    body('status').optional().isIn(['active', 'maintenance', 'inactive']),
     body('plate').optional().isString(),
     body('capacity').optional().isInt({ min: 0 }),
     body('lastService').optional().isISO8601(),

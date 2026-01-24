@@ -11,7 +11,8 @@ export const overview = async (req, res, next) => {
 
 export const attendanceWeekly = async (req, res, next) => {
   try {
-    const data = await getAttendanceWeekly(req.user?.campusId);
+    const { range } = req.query;
+    const data = await getAttendanceWeekly(req.user?.campusId, range);
     return res.json({ success: true, data });
   } catch (err) {
     return next(err);
@@ -20,7 +21,8 @@ export const attendanceWeekly = async (req, res, next) => {
 
 export const feesMonthly = async (req, res, next) => {
   try {
-    const data = await getFeesMonthly(req.user?.campusId);
+    const { range } = req.query;
+    const data = await getFeesMonthly(req.user?.campusId, range);
     return res.json({ success: true, data });
   } catch (err) {
     return next(err);

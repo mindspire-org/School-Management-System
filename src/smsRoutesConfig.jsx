@@ -28,6 +28,13 @@ import {
   MdAlarm,
   MdSecurity,
   MdHistory,
+  MdInventory,
+  MdStore,
+  MdPhone,
+  MdQrCodeScanner,
+  MdCardMembership,
+  MdWork,
+  MdMonetizationOn,
 } from 'react-icons/md';
 import {
   FaUserGraduate,
@@ -50,6 +57,7 @@ import EditStudent from './modules/admin/pages/Students/EditStudent';
 import StudentProfile from './modules/admin/pages/Students/StudentProfile';
 import AttendanceMonitor from './modules/admin/pages/Attendance/AttendanceMonitor';
 import AdminDailyAttendance from './modules/admin/pages/Attendance/AdminDailyAttendance';
+import AdminQRAttendance from './modules/admin/pages/Attendance/QRCodeAttendance';
 
 // Student Module Components
 import StudentListTest from './modules/students/StudentListTest';
@@ -81,6 +89,13 @@ export const getSMSRoutes = () => {
       path: '/dashboard',
       icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
       component: <AdminDashboard />,
+    },
+    {
+      name: 'Campuses',
+      layout: '/admin',
+      path: '/campuses-list',
+      icon: <Icon as={MdSchool} width="20px" height="20px" color="inherit" />,
+      component: lazy(() => import('./modules/admin/pages/Settings/CampusesList')),
     },
 
     // Parents Section
@@ -203,6 +218,12 @@ export const getSMSRoutes = () => {
           component: lazy(() => import('./modules/admin/pages/Students/StudentTransport')),
           hidden: true,
         },
+        {
+          name: 'QR Attendance',
+          layout: '/admin',
+          path: '/students/attendance/qr',
+          component: <AdminQRAttendance />,
+        },
       ],
     },
 
@@ -254,6 +275,12 @@ export const getSMSRoutes = () => {
           layout: '/admin',
           path: '/teachers/subjects',
           component: lazy(() => import('./modules/admin/pages/teachers/TeacherSubjects')),
+        },
+        {
+          name: 'QR Attendance',
+          layout: '/admin',
+          path: '/teachers/attendance/qr',
+          component: <AdminQRAttendance />,
         },
       ],
     },
@@ -371,6 +398,12 @@ export const getSMSRoutes = () => {
           path: '/attendance/alerts',
           component: lazy(() => import('./modules/admin/pages/Attendance/AttendanceAlerts')),
         },
+        {
+          name: 'QR Attendance',
+          layout: '/admin',
+          path: '/attendance/qr',
+          component: <AdminQRAttendance />,
+        },
       ],
     },
 
@@ -432,6 +465,150 @@ export const getSMSRoutes = () => {
       ],
     },
 
+    // Inventory Section
+    {
+      name: 'Inventory',
+      layout: '/admin',
+      icon: <Icon as={MdInventory} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Product',
+          layout: '/admin',
+          path: '/inventory/product',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Product')),
+        },
+        {
+          name: 'Category',
+          layout: '/admin',
+          path: '/inventory/category',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Category')),
+        },
+        {
+          name: 'Store',
+          layout: '/admin',
+          path: '/inventory/store',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Store')),
+        },
+        {
+          name: 'Supplier',
+          layout: '/admin',
+          path: '/inventory/supplier',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Supplier')),
+        },
+        {
+          name: 'Unit',
+          layout: '/admin',
+          path: '/inventory/unit',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Unit')),
+        },
+        {
+          name: 'Purchase',
+          layout: '/admin',
+          path: '/inventory/purchase',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Purchase')),
+        },
+        {
+          name: 'Sales',
+          layout: '/admin',
+          path: '/inventory/sales',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Sales')),
+        },
+        {
+          name: 'Issue',
+          layout: '/admin',
+          path: '/inventory/issue',
+          component: lazy(() => import('./modules/admin/pages/Inventory/Issue')),
+        },
+      ],
+    },
+
+    // Reception Section
+    {
+      name: 'Reception',
+      layout: '/admin',
+      icon: <Icon as={MdPhone} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Admission Enquiry',
+          layout: '/admin',
+          path: '/reception/admission-enquiry',
+          component: lazy(() => import('./modules/admin/pages/Reception/AdmissionEnquiry')),
+        },
+        {
+          name: 'Postal Record',
+          layout: '/admin',
+          path: '/reception/postal-record',
+          component: lazy(() => import('./modules/admin/pages/Reception/PostalRecord')),
+        },
+        {
+          name: 'Call Log',
+          layout: '/admin',
+          path: '/reception/call-log',
+          component: lazy(() => import('./modules/admin/pages/Reception/CallLog')),
+        },
+        {
+          name: 'Visitor Log',
+          layout: '/admin',
+          path: '/reception/visitor-log',
+          component: lazy(() => import('./modules/admin/pages/Reception/VisitorLog')),
+        },
+        {
+          name: 'Complaint',
+          layout: '/admin',
+          path: '/reception/complaint',
+          component: lazy(() => import('./modules/admin/pages/Reception/Complaint')),
+        },
+        {
+          name: 'Config Reception',
+          layout: '/admin',
+          path: '/reception/config',
+          component: lazy(() => import('./modules/admin/pages/Reception/ConfigReception')),
+        },
+      ],
+    },
+
+    // Card Management Section
+    {
+      name: 'Card Management',
+      layout: '/admin',
+      icon: <Icon as={MdCreditCard} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Id Card Template',
+          layout: '/admin',
+          path: '/card-management/id-card-template',
+          component: lazy(() => import('./modules/admin/pages/CardManagement/IdCardTemplate')),
+        },
+        {
+          name: 'Student Id Card',
+          layout: '/admin',
+          path: '/card-management/student-id-card',
+          component: lazy(() => import('./modules/admin/pages/CardManagement/StudentIdCard')),
+        },
+        {
+          name: 'Employee Id Card',
+          layout: '/admin',
+          path: '/card-management/employee-id-card',
+          component: lazy(() => import('./modules/admin/pages/CardManagement/EmployeeIdCard')),
+        },
+        {
+          name: 'Admit Card Template',
+          layout: '/admin',
+          path: '/card-management/admit-card-template',
+          component: lazy(() => import('./modules/admin/pages/CardManagement/AdmitCardTemplate')),
+        },
+        {
+          name: 'Generate Admit Card',
+          layout: '/admin',
+          path: '/card-management/generate-admit-card',
+          component: lazy(() => import('./modules/admin/pages/CardManagement/GenerateAdmitCard')),
+        },
+      ],
+    },
+
     // Finance Section
     {
       name: 'Finance',
@@ -486,6 +663,237 @@ export const getSMSRoutes = () => {
           layout: '/admin',
           path: '/finance/payroll',
           component: lazy(() => import('./modules/admin/pages/Finance/Payroll')),
+        },
+      ],
+    },
+
+    // Reports Section
+    {
+      name: 'Reports',
+      layout: '/admin',
+      icon: <Icon as={MdBarChart} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Student Reports',
+          collapse: true,
+          items: [
+            {
+              name: 'Attendance Report',
+              layout: '/admin',
+              path: '/reports/student/attendance',
+              component: lazy(() => import('./modules/admin/pages/Reports/Student/StudentAttendanceReport')),
+            },
+            {
+              name: 'Performance Report',
+              layout: '/admin',
+              path: '/reports/student/performance',
+              component: lazy(() => import('./modules/admin/pages/Reports/Student/StudentPerformanceReport')),
+            },
+          ],
+        },
+        {
+          name: 'Fees Reports',
+          collapse: true,
+          items: [
+            {
+              name: 'Collection Report',
+              layout: '/admin',
+              path: '/reports/fees/collection',
+              component: lazy(() => import('./modules/admin/pages/Reports/Fees/FeesCollectionReport')),
+            },
+            {
+              name: 'Outstanding Report',
+              layout: '/admin',
+              path: '/reports/fees/outstanding',
+              component: lazy(() => import('./modules/admin/pages/Reports/Fees/FeesOutstandingReport')),
+            },
+          ],
+        },
+        {
+          name: 'Financial Reports',
+          collapse: true,
+          items: [
+            {
+              name: 'Income Statement',
+              layout: '/admin',
+              path: '/reports/financial/income',
+              component: lazy(() => import('./modules/admin/pages/Reports/Financial/IncomeReport')),
+            },
+            {
+              name: 'Expense Report',
+              layout: '/admin',
+              path: '/reports/financial/expense',
+              component: lazy(() => import('./modules/admin/pages/Reports/Financial/ExpenseReport')),
+            },
+          ],
+        },
+        {
+          name: 'Attendance Reports',
+          collapse: true,
+          items: [
+            {
+              name: 'Daily Report',
+              layout: '/admin',
+              path: '/reports/attendance/daily',
+              component: lazy(() => import('./modules/admin/pages/Reports/Attendance/DailyAttendanceReport')),
+            },
+            {
+              name: 'Monthly Report',
+              layout: '/admin',
+              path: '/reports/attendance/monthly',
+              component: lazy(() => import('./modules/admin/pages/Reports/Attendance/MonthlyAttendanceReport')),
+            },
+          ],
+        },
+        {
+          name: 'Human Resource',
+          collapse: true,
+          items: [
+            {
+              name: 'Employee Report',
+              layout: '/admin',
+              path: '/reports/hr/employee',
+              component: lazy(() => import('./modules/admin/pages/Reports/HumanResource/EmployeeReport')),
+            },
+            {
+              name: 'Salary Report',
+              layout: '/admin',
+              path: '/reports/hr/salary',
+              component: lazy(() => import('./modules/admin/pages/Reports/HumanResource/SalaryReport')),
+            },
+          ],
+        },
+        {
+          name: 'Examination',
+          collapse: true,
+          items: [
+            {
+              name: 'Results Report',
+              layout: '/admin',
+              path: '/reports/exam/results',
+              component: lazy(() => import('./modules/admin/pages/Reports/Examination/ExamResultsReport')),
+            },
+            {
+              name: 'Grade Distribution',
+              layout: '/admin',
+              path: '/reports/exam/grades',
+              component: lazy(() => import('./modules/admin/pages/Reports/Examination/ExamGradesReport')),
+            },
+          ],
+        },
+        {
+          name: 'Inventory',
+          collapse: true,
+          items: [
+            {
+              name: 'Stock Report',
+              layout: '/admin',
+              path: '/reports/inventory/stock',
+              component: lazy(() => import('./modules/admin/pages/Reports/Inventory/StockReport')),
+            },
+            {
+              name: 'Purchase Report',
+              layout: '/admin',
+              path: '/reports/inventory/purchase',
+              component: lazy(() => import('./modules/admin/pages/Reports/Inventory/PurchaseReport')),
+            },
+          ],
+        },
+      ],
+    },
+
+    // Events Section
+    {
+      name: 'Events',
+      layout: '/admin',
+      path: '/events',
+      icon: <Icon as={MdEvent} width="20px" height="20px" color="inherit" />,
+      component: lazy(() => import('./modules/admin/pages/Events/Events')),
+    },
+
+    // Certificates Section
+    {
+      name: 'Certificates',
+      layout: '/admin',
+      icon: <Icon as={MdCardMembership} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Certificate Template',
+          layout: '/admin',
+          path: '/certificates/template',
+          component: lazy(() => import('./modules/admin/pages/Certificates/CertificateTemplate')),
+        },
+        {
+          name: 'Employee Certificate',
+          layout: '/admin',
+          path: '/certificates/employee',
+          component: lazy(() => import('./modules/admin/pages/Certificates/EmployeeCertificate')),
+        },
+        {
+          name: 'Student Certificate',
+          layout: '/admin',
+          path: '/certificates/student',
+          component: lazy(() => import('./modules/admin/pages/Certificates/StudentCertificate')),
+        },
+      ],
+    },
+
+    // Human Resource Section
+    {
+      name: 'Human Resource',
+      layout: '/admin',
+      icon: <Icon as={MdWork} width="20px" height="20px" color="inherit" />,
+      collapse: true,
+      items: [
+        {
+          name: 'Payroll',
+          collapse: true,
+          items: [
+            {
+              name: 'Payroll Dashboard',
+              layout: '/admin',
+              path: '/hr/payroll/dashboard',
+              component: lazy(() => import('./modules/admin/pages/HumanResource/Payroll/PayrollDashboard')),
+            },
+          ],
+        },
+        {
+          name: 'Advance Salary',
+          collapse: true,
+          items: [
+            {
+              name: 'Advance Requests',
+              layout: '/admin',
+              path: '/hr/advance-salary/requests',
+              component: lazy(() => import('./modules/admin/pages/HumanResource/AdvanceSalary/AdvanceRequests')),
+            },
+          ],
+        },
+        {
+          name: 'Leave',
+          collapse: true,
+          items: [
+            {
+              name: 'Leave Requests',
+              layout: '/admin',
+              path: '/hr/leave/requests',
+              component: lazy(() => import('./modules/admin/pages/HumanResource/Leave/LeaveRequests')),
+            },
+          ],
+        },
+        {
+          name: 'Award',
+          collapse: true,
+          items: [
+            {
+              name: 'Awards List',
+              layout: '/admin',
+              path: '/hr/award/list',
+              component: lazy(() => import('./modules/admin/pages/HumanResource/Award/AwardsList')),
+            },
+          ],
         },
       ],
     },
@@ -598,6 +1006,12 @@ export const getSMSRoutes = () => {
           layout: '/admin',
           path: '/settings/licensing',
           component: lazy(() => import('./modules/admin/pages/Settings/Licensing')),
+        },
+        {
+          name: 'Master Data',
+          layout: '/admin',
+          path: '/settings/master-data',
+          component: lazy(() => import('./modules/admin/pages/MasterDataManagement')),
         },
         {
           name: 'Campuses',

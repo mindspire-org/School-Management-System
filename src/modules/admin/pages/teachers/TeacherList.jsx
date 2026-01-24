@@ -180,9 +180,12 @@ function TeacherList() {
         subjectFilter.toLowerCase() === subject ||
         subjectValues.includes(subjectFilter.toLowerCase());
 
-      return matchesSearch && matchesDepartment && matchesStatus && matchesSubject;
+      // Campus filter (safeguard)
+      const matchesCampus = !campusId || !teacher.campusId || String(teacher.campusId) === String(campusId);
+
+      return matchesSearch && matchesDepartment && matchesStatus && matchesSubject && matchesCampus;
     });
-  }, [teachers, searchTerm, departmentFilter, statusFilter, subjectFilter]);
+  }, [teachers, searchTerm, departmentFilter, statusFilter, subjectFilter, campusId]);
 
   const stats = useMemo(() => {
     const activeCount = teachers.filter((t) => (t.employmentStatus || t.status || '').toLowerCase() === 'active').length;

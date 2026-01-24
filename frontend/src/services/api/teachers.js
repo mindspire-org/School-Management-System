@@ -1,0 +1,26 @@
+import { http } from '../http';
+
+export const list = (params) => http.get('/teachers', { params });
+export const getById = (id) => http.get(`/teachers/${id}`);
+export const create = (data) => http.post('/teachers', data);
+export const update = (id, data) => http.put(`/teachers/${id}`, data);
+export const remove = (id) => http.delete(`/teachers/${id}`);
+export const getSchedule = (id, params) => http.get(`/teachers/${id}/schedule`, { params });
+export const listSchedules = (params) => http.get('/teachers/schedules', { params });
+export const createScheduleSlot = (data) => http.post('/teachers/schedules', data);
+export const updateScheduleSlot = (id, data) => http.put(`/teachers/schedules/${id}`, data);
+export const deleteScheduleSlot = (id) => http.delete(`/teachers/schedules/${id}`);
+export const getAttendance = (params) => http.get('/teachers/attendance', { params });
+export const saveAttendance = (data) => http.post('/teachers/attendance', data);
+export const getPayrolls = (params) => http.get('/teachers/payrolls', { params });
+export const createPayroll = (data) => http.post('/teachers/payrolls', data);
+export const updatePayroll = (id, data) => http.patch(`/teachers/payrolls/${id}`, data);
+export const getPerformanceReviews = (params) => http.get('/teachers/performance', { params });
+export const createPerformanceReview = (data) => http.post('/teachers/performance', data);
+export const updatePerformanceReview = (id, data) => http.patch(`/teachers/performance/${id}`, data);
+export const listSubjects = (params) => http.get('/teachers/subjects', { params });
+export const createSubject = (data) => http.post('/teachers/subjects', data);
+export const listSubjectAssignments = (params) => http.get('/teachers/subjects/assignments', { params });
+export const assignSubject = (data) => http.post('/teachers/subjects/assignments', data);
+export const updateSubjectAssignment = (id, data) => http.patch(`/teachers/subjects/assignments/${id}`, data);
+export const deleteSubjectAssignment = (id) => http.delete(`/teachers/subjects/assignments/${id}`);

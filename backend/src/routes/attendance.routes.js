@@ -43,7 +43,7 @@ router.post(
     body('date').isISO8601({ strict: false }),
     body('records').isArray({ min: 1 }),
     body('records.*.studentId').customSanitizer((v) => (typeof v === 'number' ? v : parseInt(v, 10))).isInt().toInt(),
-    body('records.*.status').isIn(['present','absent','late']),
+    body('records.*.status').isIn(['present', 'absent', 'late']),
     body('records.*.remarks').optional({ nullable: true }).isString(),
   ],
   validate,
@@ -61,7 +61,7 @@ router.get(
 router.post(
   '/',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [
     body('studentId').customSanitizer((v) => (typeof v === 'number' ? v : parseInt(v, 10))).isInt().toInt(),
     body('date').isISO8601({ strict: false }),
@@ -75,7 +75,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin', 'teacher'),
+  authorize('admin', 'teacher', 'owner'),
   [param('id').isInt()],
   validate,
   controller.update
@@ -84,7 +84,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [param('id').isInt()],
   validate,
   controller.remove

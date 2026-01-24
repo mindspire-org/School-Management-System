@@ -46,7 +46,8 @@ const teacherSelect = `
   iban,
   avatar,
   created_at AS "createdAt",
-  updated_at AS "updatedAt"
+  updated_at AS "updatedAt",
+  campus_id AS "campusId"
 `;
 
 const scheduleSelect = `
@@ -293,7 +294,19 @@ const mapSubjectRow = (row = {}) => ({
 
 const mapSubjectAssignmentRow = (row = {}) => ({
   ...row,
-  classes: Array.isArray(row.classes) ? row.classes : [],
+  classes:
+    Array.isArray(row.classes)
+      ? row.classes
+      : typeof row.classes === 'string'
+        ? (() => {
+          try {
+            const parsed = JSON.parse(row.classes);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            return [];
+          }
+        })()
+        : [],
 });
 
 const getSubjectById = async (id) => {
@@ -634,12 +647,16 @@ export const deleteScheduleSlot = async (id) => {
   return rowCount > 0;
 };
 
-export const getAttendanceByDate = async ({ date, teacherId }) => {
+export const getAttendanceByDate = async ({ date, teacherId, campusId }) => {
   const params = [date];
   let filter = '';
   if (teacherId) {
     params.push(teacherId);
-    filter = `AND t.id = $${params.length}`;
+    filter += ` AND t.id = $${params.length}`;
+  }
+  if (campusId) {
+    params.push(campusId);
+    filter += ` AND t.campus_id = $${params.length}`;
   }
   const { rows } = await query(
     `SELECT ${attendanceSelect}
@@ -688,7 +705,7 @@ export const upsertAttendanceEntries = async ({ date, entries = [], recordedBy }
   return await getAttendanceByDate({ date });
 };
 
-export const listPayrolls = async ({ month, teacherId, status }) => {
+export const listPayrolls = async ({ month, teacherId, status, campusId }) => {
   const params = [];
   const where = [];
   const formattedMonth = formatMonthToDate(month);
@@ -699,6 +716,10 @@ export const listPayrolls = async ({ month, teacherId, status }) => {
   if (teacherId) {
     params.push(teacherId);
     where.push(`tp.teacher_id = $${params.length}`);
+  }
+  if (campusId) {
+    params.push(campusId);
+    where.push(`t.campus_id = $${params.length}`);
   }
   if (status && payrollStatuses.has(status)) {
     params.push(status);
@@ -938,7 +959,8 @@ export const updatePerformanceReview = async (id, payload = {}) => {
   return rows[0] ? await getPerformanceById(rows[0].id) : null;
 };
 
-export const listSubjects = async () => {
+export const listSubjects = async ({ campusId } = {}) => {
+  const scopedCampusId = campusId ? Number(campusId) : null;
   const { rows } = await query(
     `SELECT
         s.id,
@@ -948,12 +970,14 @@ export const listSubjects = async () => {
         s.description,
         s.created_at AS "createdAt",
         s.updated_at AS "updatedAt",
-        COALESCE(COUNT(tsa.id), 0)::int AS "teacherCount",
-        COALESCE(COUNT(tsa.id) FILTER (WHERE tsa.is_primary), 0)::int AS "primaryTeacherCount"
+        COALESCE(COUNT(tsa.id) FILTER (WHERE t.id IS NOT NULL), 0)::int AS "teacherCount",
+        COALESCE(COUNT(tsa.id) FILTER (WHERE tsa.is_primary AND t.id IS NOT NULL), 0)::int AS "primaryTeacherCount"
      FROM subjects s
      LEFT JOIN teacher_subject_assignments tsa ON tsa.subject_id = s.id
+     LEFT JOIN teachers t ON t.id = tsa.teacher_id AND ($1::int IS NULL OR t.campus_id = $1)
      GROUP BY s.id
-     ORDER BY s.name ASC`
+     ORDER BY s.name ASC`,
+    [scopedCampusId]
   );
   return rows;
 };
@@ -1031,7 +1055,7 @@ export const removeSubject = async (id) => {
   return rowCount > 0;
 };
 
-export const listSubjectAssignments = async ({ teacherId, subjectId }) => {
+export const listSubjectAssignments = async ({ teacherId, subjectId, campusId }) => {
   const params = [];
   const where = [];
   if (teacherId) {
@@ -1041,6 +1065,10 @@ export const listSubjectAssignments = async ({ teacherId, subjectId }) => {
   if (subjectId) {
     params.push(subjectId);
     where.push(`tsa.subject_id = $${params.length}`);
+  }
+  if (campusId) {
+    params.push(Number(campusId));
+    where.push(`t.campus_id = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(

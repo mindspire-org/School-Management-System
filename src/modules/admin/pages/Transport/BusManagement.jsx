@@ -46,11 +46,6 @@ import StatCard from '../../../../components/card/StatCard';
 import * as transportApi from '../../../../services/api/transport';
 import * as driversApi from '../../../../services/api/drivers';
 
-const fallbackBuses = [
-  { backendId: null, id: 'BUS-101', plate: 'LEB-1234', capacity: 45, driver: 'Imran Khan', route: 'R1', status: 'Active', lastService: '2025-10-10', maintDue: false },
-  { backendId: null, id: 'BUS-102', plate: 'LEB-5678', capacity: 40, driver: 'Ali Raza', route: 'R2', status: 'Maintenance', lastService: '2025-07-01', maintDue: true },
-  { backendId: null, id: 'BUS-103', plate: 'LEB-9012', capacity: 42, driver: 'Zeeshan', route: 'R3', status: 'Active', lastService: '2025-09-12', maintDue: false },
-];
 
 export default function BusManagement() {
   const toast = useToast();
@@ -95,7 +90,7 @@ export default function BusManagement() {
           ? data
           : [];
       const list = source.map(normalizeBus).filter(Boolean);
-      setRows(list.length ? list : fallbackBuses);
+      setRows(list);
     } catch (e) {
       console.error('Failed to load buses', e);
       toast({
@@ -105,7 +100,7 @@ export default function BusManagement() {
         duration: 6000,
         isClosable: true,
       });
-      setRows(fallbackBuses);
+      setRows([]);
     }
   };
 

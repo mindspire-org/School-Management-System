@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup,
   IconButton, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select,
@@ -19,6 +19,8 @@ import NoUsersWarning from './components/NoUsersWarning';
 import { useFinanceUsers, usePayrollSummary } from '../../../../hooks/useFinanceUsers';
 import { driversApi } from '../../../../services/financeApi';
 import * as teacherApi from '../../../../services/api/teachers';
+import { campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function Payroll() {
   const toast = useToast();
@@ -32,6 +34,10 @@ export default function Payroll() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selected, setSelected] = useState(null);
+  const [campusFilter, setCampusFilter] = useState('all');
+  const [campuses, setCampuses] = useState([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'owner';
 
   // Modals
   const viewDisc = useDisclosure();
@@ -62,9 +68,19 @@ export default function Payroll() {
     role: roleFilter !== 'all' ? roleFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     periodMonth: monthFilter || undefined,
+    campusId: campusFilter !== 'all' ? campusFilter : 'all',
     page,
     pageSize
   });
+
+  // Load campuses for admin
+  useEffect(() => {
+    if (isAdmin) {
+      campusesApi.list({ pageSize: 100 })
+        .then(res => setCampuses(res.rows || []))
+        .catch(err => console.error('Failed to load campuses', err));
+    }
+  }, [isAdmin]);
 
   const loading = usersLoading || payrollLoading;
 
@@ -273,6 +289,14 @@ export default function Payroll() {
             <option value='paid'>Paid</option>
           </Select>
           <Input type='month' maxW='180px' value={monthFilter} onChange={(e) => { setMonthFilter(e.target.value); setPage(1); }} />
+          {isAdmin && (
+            <Select maxW='200px' value={campusFilter} onChange={(e) => { setCampusFilter(e.target.value); setPage(1); }}>
+              <option value='all'>All Branches</option>
+              {campuses.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          )}
         </Flex>
       </Card>
 

@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, Flex, Button, ButtonGroup, SimpleGrid, Badge, Table, Thead, Tbody, Tr, Th, Td, TableContainer, Select, Progress, useToast } from '@chakra-ui/react';
+import {
+  Box, Text, Flex, Button, ButtonGroup, SimpleGrid, Badge, Table, Thead, Tbody, Tr, Th, Td,
+  TableContainer, Select, Progress, useToast, useDisclosure, Divider, Input,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
+  FormControl, FormLabel, VStack
+} from '@chakra-ui/react';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
@@ -8,9 +13,15 @@ import BarChart from '../../../../components/charts/BarChart.tsx';
 import PieChart from '../../../../components/charts/PieChart';
 import LineChart from '../../../../components/charts/LineChart';
 // Icons
-import { MdSchool, MdGrade, MdStar, MdStarBorder, MdTrendingUp, MdSearch, MdFilterList, MdRemoveRedEye, MdMoreVert, MdAssignment, MdRefresh, MdFileDownload, MdPrint } from 'react-icons/md';
+import { MdSchool, MdGrade, MdStar, MdStarBorder, MdTrendingUp, MdSearch, MdFilterList, MdRemoveRedEye, MdMoreVert, MdAssignment, MdRefresh, MdFileDownload, MdPrint, MdAdd } from 'react-icons/md';
+// Auth
+import { useAuth } from '../../../../contexts/AuthContext';
 // API
 import * as studentsApi from '../../../../services/api/students';
+import * as examsApi from '../../../../services/api/exams';
+import * as resultsApi from '../../../../services/api/results';
+import * as classesApi from '../../../../services/api/classes';
+import * as gradingApi from '../../../../services/api/grading';
 
 const DEMO_SUBJECTS = [
   { subject: 'Mathematics', avg: 86 },
@@ -41,11 +52,13 @@ function normalizePerformance(payload) {
 
 export default function StudentPerformancePage() {
   const toast = useToast();
+  const { user } = useAuth();
   const [students, setStudents] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(false);
   const [perf, setPerf] = useState({ average: 0, totalExams: 0, subjects: [], recentResults: [] });
   const [busy, setBusy] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   // Load students
   useEffect(() => {
@@ -218,6 +231,11 @@ export default function StudentPerformancePage() {
               <option key={s.id} value={s.id}>{s.name} ({s.class}-{s.section})</option>
             ))}
           </Select>
+          {['admin', 'owner', 'teacher', 'super-admin'].includes(user?.role) && (
+            <Button size='sm' colorScheme='blue' leftIcon={<MdAdd />} onClick={onOpen}>
+              Add Performance
+            </Button>
+          )}
           <ButtonGroup size='sm' variant='outline' isAttached>
             <Button onClick={refresh} isLoading={busy} leftIcon={<MdRefresh />}>Refresh</Button>
             <Button onClick={exportCSV} leftIcon={<MdFileDownload />}>Export</Button>
@@ -225,6 +243,14 @@ export default function StudentPerformancePage() {
           </ButtonGroup>
         </Flex>
       </Flex>
+
+      {/* Add Performance Modal */}
+      <AddPerformanceModal
+        isOpen={isOpen}
+        onClose={onClose}
+        studentId={selectedId}
+        onSuccess={refresh}
+      />
 
       {/* Performance Statistics Cards */}
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
@@ -384,5 +410,183 @@ export default function StudentPerformancePage() {
         </TableContainer>
       </Card>
     </Box>
+  );
+}
+
+// Internal Helper Component for Adding Performance
+function AddPerformanceModal({ isOpen, onClose, studentId, onSuccess }) {
+  const toast = useToast();
+  const [loading, setLoading] = useState(false);
+  const [exams, setExams] = useState([]);
+  const [selectedExamId, setSelectedExamId] = useState('');
+  const [subjects, setSubjects] = useState([]);
+  const [gradingBands, setGradingBands] = useState(null);
+  const [student, setStudent] = useState(null);
+
+  // Load context data
+  useEffect(() => {
+    if (!isOpen || !studentId) return;
+
+    const load = async () => {
+      try {
+        const [examRes, stRes, bandRes] = await Promise.all([
+          examsApi.list({ pageSize: 100 }),
+          studentsApi.getById(studentId),
+          gradingApi.getDefault()
+        ]);
+
+        const examItems = Array.isArray(examRes?.items) ? examRes.items : (Array.isArray(examRes) ? examRes : []);
+        setExams(examItems);
+        setStudent(stRes);
+
+        // Load subjects for the student's class
+        if (stRes?.class) {
+          const subRes = await classesApi.listSubjectsByClass({ className: stRes.class, section: stRes.section });
+          const items = Array.isArray(subRes?.items) ? subRes.items : (Array.isArray(subRes) ? subRes : []);
+          setSubjects(items.map(s => ({
+            name: s.subjectName || s.name,
+            marks: '',
+            grade: '',
+            fullMarks: s.fullMarks || 100
+          })));
+        }
+
+        // Load grading bands
+        const bands = bandRes?.bands || (Array.isArray(bandRes?.items) ? bandRes.items[0]?.bands : null);
+        if (bands) setGradingBands(bands);
+
+      } catch (e) {
+        toast({ title: 'Failed to load details', status: 'error' });
+      }
+    };
+    load();
+  }, [isOpen, studentId]);
+
+  const computeGrade = (marks, fullMarks) => {
+    if (!gradingBands || marks === '') return '';
+    const percent = (Number(marks) / Number(fullMarks)) * 100;
+    const sorted = Object.entries(gradingBands)
+      .map(([k, v]) => [k, Number(v)])
+      .sort((a, b) => b[1] - a[1]);
+
+    for (const [grade, min] of sorted) {
+      if (percent >= min) return grade;
+    }
+    return 'F';
+  };
+
+  const handleSave = async () => {
+    if (!selectedExamId) {
+      toast({ title: 'Please select an exam', status: 'warning' });
+      return;
+    }
+
+    const payload = subjects
+      .filter(s => s.marks !== '')
+      .map(s => ({
+        studentId: Number(studentId),
+        examId: Number(selectedExamId),
+        subject: s.name,
+        marks: Number(s.marks),
+        grade: s.grade || computeGrade(s.marks, s.fullMarks)
+      }));
+
+    if (!payload.length) {
+      toast({ title: 'No marks entered', status: 'warning' });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await resultsApi.bulkCreate(payload);
+      toast({ title: 'Performance saved successfully', status: 'success' });
+      onSuccess();
+      onClose();
+    } catch (e) {
+      toast({ title: 'Failed to save results', status: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size='xl' scrollBehavior='inside'>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Add Performance - {student?.name}</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <VStack spacing={4} align='stretch'>
+            <FormControl isRequired>
+              <FormLabel>Select Exam</FormLabel>
+              <Select
+                placeholder='Choose Exam'
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+              >
+                {exams.map(ex => (
+                  <option key={ex.id} value={ex.id}>{ex.title}</option>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Divider />
+
+            <Text fontWeight='bold'>Enter Marks</Text>
+            <Table size='sm' variant='simple'>
+              <Thead>
+                <Tr>
+                  <Th>Subject</Th>
+                  <Th isNumeric>Full</Th>
+                  <Th width='100px'>Marks</Th>
+                  <Th width='80px'>Grade</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {subjects.map((sub, idx) => (
+                  <Tr key={idx}>
+                    <Td fontWeight='500'>{sub.name}</Td>
+                    <Td isNumeric color='gray.500'>{sub.fullMarks}</Td>
+                    <Td>
+                      <Input
+                        size='sm'
+                        type='number'
+                        placeholder='0-100'
+                        value={sub.marks}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSubjects(prev => prev.map((item, i) =>
+                            i === idx
+                              ? { ...item, marks: val, grade: computeGrade(val, item.fullMarks) }
+                              : item
+                          ));
+                        }}
+                      />
+                    </Td>
+                    <Td>
+                      <Badge colorScheme='blue' fontSize='xs'>{sub.grade || '-'}</Badge>
+                    </Td>
+                  </Tr>
+                ))}
+                {!subjects.length && (
+                  <Tr><Td colSpan={4} textAlign='center'>No subjects found for class {student?.class}</Td></Tr>
+                )}
+              </Tbody>
+            </Table>
+          </VStack>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant='ghost' mr={3} onClick={onClose}>Cancel</Button>
+          <Button
+            colorScheme='blue'
+            isLoading={loading}
+            onClick={handleSave}
+            isDisabled={!selectedExamId || subjects.every(s => s.marks === '')}
+          >
+            Save Results
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

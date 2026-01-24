@@ -20,6 +20,7 @@ import {
   MdLock,
   MdNotifications,
   MdLogin,
+  MdQrCodeScanner,
 } from 'react-icons/md';
 import TeacherDashboard from './modules/teachers/TeacherDashboard';
 import TeacherModulePlaceholder from './modules/teachers/TeacherModulePlaceholder';
@@ -27,6 +28,7 @@ import ClassList from './modules/teachers/classes/ClassList';
 import SubjectWiseStudents from './modules/teachers/classes/SubjectWiseStudents';
 import ClassTimetable from './modules/teachers/classes/ClassTimetable';
 import DailyAttendance from './modules/teachers/attendance/DailyAttendance';
+import TeacherQRAttendance from './modules/teachers/QRCodeAttendance';
 import StudentList from './modules/teachers/students/StudentList';
 import StudentProfile from './modules/teachers/students/StudentProfile';
 import StudentPerformance from './modules/teachers/students/StudentPerformance';
@@ -108,6 +110,13 @@ const teacherRoutes = [
         path: '/attendance/monthly',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
         component: <TeacherModulePlaceholder title='Monthly Report' subtitle='Coming soon' />,
+      },
+      {
+        name: 'QR Attendance',
+        layout: '/teacher',
+        path: '/attendance/qr',
+        icon: <Icon as={MdQrCodeScanner} width="16px" height="16px" color="inherit" />,
+        component: <TeacherQRAttendance />,
       },
     ],
   },

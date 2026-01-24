@@ -1,0 +1,50 @@
+/* Black screen fix CSS */
+
+/* Ensure root element has proper styling */
+#root {
+  min-height: 100vh !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Force body background */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Fix any potential CSS-in-JS issues */
+* {
+  box-sizing: border-box;
+}
+
+/* Chakra UI override */
+.chakra-ui-light, .chakra-ui-dark {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Force visibility for any hidden elements */
+[hidden] {
+  display: block !important;
+}
+
+/* Ensure all containers have proper background */
+.chakra-container,
+.chakra-box,
+.chakra-flex,
+.chakra-stack {
+  background-color: transparent !important;
+}
+
+/* Emergency visibility fix */
+.teacher-component,
+.admin-layout,
+.main-content {
+  background-color: white !important;
+  color: black !important;
+  min-height: 100vh !important;
+}

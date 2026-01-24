@@ -10,4 +10,6 @@ export * as parentsApi from './parents';
 export * as driversApi from './drivers';
 export * as alertsApi from './alerts';
 export * as campusesApi from './campuses';
+export * as dashboardApi from './dashboard';
+export * as masterDataApi from './masterData';
 export { http, setAuthToken, setUnauthorizedHandler } from '../http';

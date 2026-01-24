@@ -21,10 +21,12 @@ import {
   MdLock,
   MdNotifications,
   MdLogin,
+  MdQrCodeScanner,
 } from 'react-icons/md';
 
 import StudentDashboard from './modules/students/StudentDashboard';
 import StudentModulePlaceholder from './modules/students/StudentModulePlaceholder';
+import QRCodeAttendance from './modules/students/QRCodeAttendance';
 import Results from './modules/students/exams/Results';
 import SMSLogin from './modules/authentication/Login';
 
@@ -95,6 +97,13 @@ const studentRoutes = [
         path: '/attendance/chart',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
         component: <StudentModulePlaceholder title='Attendance Chart' subtitle='Coming soon' />,
+      },
+      {
+        name: 'QR Attendance',
+        layout: '/student',
+        path: '/attendance/qr',
+        icon: <Icon as={MdQrCodeScanner} width="16px" height="16px" color="inherit" />,
+        component: <QRCodeAttendance />,
       },
     ],
   },

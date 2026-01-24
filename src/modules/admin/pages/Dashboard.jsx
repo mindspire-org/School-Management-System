@@ -54,64 +54,33 @@ import * as transportApi from '../../../services/api/transport';
 // --- Custom Components ---
 
 // 2. Line Chart Card (Premium Area Chart)
-const LineChartCard = ({ title, categories, series, height = 250 }) => {
+const LineChartCard = ({ title, categories, series, height = 250, activeRange, onRangeChange }) => {
   const bg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.100', 'gray.700');
-  const mainColor = useColorModeValue('#4318FF', '#7551FF'); // Vivid Primary Blue
+  const mainColor = useColorModeValue('#4318FF', '#7551FF');
 
+  // Chart options (same as before)
   const chartOptions = {
     chart: {
       toolbar: { show: false },
       type: 'area',
       zoom: { enabled: false },
-      animations: {
-        enabled: true,
-        easing: 'easeinout',
-        speed: 800,
-      },
+      animations: { enabled: true, easing: 'easeinout', speed: 800 },
       background: 'transparent'
     },
     colors: [mainColor],
-    stroke: {
-      curve: 'smooth',
-      width: 3,
-    },
-    fill: {
-      type: 'gradient',
-      gradient: {
-        shadeIntensity: 1,
-        opacityFrom: 0.4,
-        opacityTo: 0.05,
-        stops: [0, 100],
-      }
-    },
+    stroke: { curve: 'smooth', width: 3 },
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] } },
     xaxis: {
       categories: categories,
-      labels: {
-        style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }
-      },
+      labels: { style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' } },
       axisBorder: { show: false },
       axisTicks: { show: false },
     },
-    yaxis: {
-      show: true,
-      labels: {
-        style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' }
-      }
-    },
-    grid: {
-      strokeDashArray: 5,
-      borderColor: useColorModeValue('rgba(163, 174, 208, 0.1)', 'rgba(255, 255, 255, 0.05)'),
-      yaxis: { lines: { show: true } },
-      xaxis: { lines: { show: false } },
-    },
+    yaxis: { show: true, labels: { style: { colors: '#A3AED0', fontSize: '12px', fontWeight: 600, fontFamily: 'Inter' } } },
+    grid: { strokeDashArray: 5, borderColor: useColorModeValue('rgba(163, 174, 208, 0.1)', 'rgba(255, 255, 255, 0.05)'), yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } },
     dataLabels: { enabled: false },
-    tooltip: {
-      theme: 'light',
-      style: { fontSize: '12px', fontFamily: 'Inter' },
-      x: { show: true },
-      marker: { show: false }
-    }
+    tooltip: { theme: 'light', style: { fontSize: '12px', fontFamily: 'Inter' }, x: { show: true }, marker: { show: false } }
   };
 
   return (
@@ -132,9 +101,23 @@ const LineChartCard = ({ title, categories, series, height = 250 }) => {
         </Text>
 
         <HStack spacing='6px' bg={useColorModeValue('gray.100', 'whiteAlpha.100')} p='4px' borderRadius='12px'>
-          <Button size='xs' variant='ghost' colorScheme='gray' borderRadius='8px' fontSize='10px' fontWeight='600'>7D</Button>
-          <Button size='xs' bg={useColorModeValue('white', 'gray.700')} color={mainColor} shadow='sm' borderRadius='8px' fontSize='10px' fontWeight='700'>1M</Button>
-          <Button size='xs' variant='ghost' colorScheme='gray' borderRadius='8px' fontSize='10px' fontWeight='600'>1Y</Button>
+          {['7d', '1m', '1y'].map((range) => (
+            <Button
+              key={range}
+              size='xs'
+              variant={activeRange === range ? 'solid' : 'ghost'}
+              bg={activeRange === range ? useColorModeValue('white', 'gray.700') : 'transparent'}
+              color={activeRange === range ? mainColor : 'gray.500'}
+              shadow={activeRange === range ? 'sm' : 'none'}
+              borderRadius='8px'
+              fontSize='10px'
+              fontWeight='700'
+              onClick={() => onRangeChange(range)}
+              textTransform="uppercase"
+            >
+              {range}
+            </Button>
+          ))}
         </HStack>
       </Flex>
 
@@ -160,12 +143,16 @@ export default function AdminDashboard() {
     totalStudents: 0,
     totalTeachers: 0,
     activeBuses: 0,
-    todayAttendance: 0,
+    todayAttendance: 0, // Fallback
+    studentStats: { total: 0, present: 0, absent: 0, late: 0, leave: 0 },
+    teacherStats: { total: 0, present: 0, absent: 0, late: 0, leave: 0 },
     recentAlerts: []
   });
   const [buses, setBuses] = useState([]);
   const [attendanceWeekly, setAttendanceWeekly] = useState([]);
   const [feesMonthly, setFeesMonthly] = useState([]);
+  const [attRange, setAttRange] = useState('7d');
+  const [feeRange, setFeeRange] = useState('1y');
 
   // -- Effects --
   useEffect(() => {
@@ -175,8 +162,8 @@ export default function AdminDashboard() {
         const [overviewRes, busesRes, attRes, feesRes] = await Promise.all([
           dashboardApi.getOverview(),
           transportApi.listBuses(),
-          dashboardApi.getAttendanceWeekly(),
-          dashboardApi.getFeesMonthly(),
+          dashboardApi.getAttendanceWeekly({ range: attRange }),
+          dashboardApi.getFeesMonthly({ range: feeRange }),
         ]);
 
         const ovData = overviewRes?.data || {};
@@ -185,6 +172,8 @@ export default function AdminDashboard() {
           totalTeachers: Number(ovData.totalTeachers) || 0,
           activeBuses: Number(ovData.activeBuses) || 0,
           todayAttendance: Number(ovData.todayAttendance) || 0,
+          studentStats: ovData.studentStats || { total: 0, present: 0, absent: 0, late: 0, leave: 0 },
+          teacherStats: ovData.teacherStats || { total: 0, present: 0, absent: 0, late: 0, leave: 0 },
           recentAlerts: Array.isArray(ovData.recentAlerts) ? ovData.recentAlerts : [],
         });
 
@@ -207,30 +196,51 @@ export default function AdminDashboard() {
       }
     };
     load();
-  }, []);
+  }, [attRange, feeRange]); // Reload when ranges change
 
   // -- Data Processing for Charts --
-  const attendanceToday = useMemo(() => {
-    const v = Number(overview.todayAttendance) || 0;
-    return Math.max(0, Math.min(100, Math.round(v)));
-  }, [overview.todayAttendance]);
+  const studentStats = overview.studentStats || { total: 0, present: 0, absent: 0, late: 0, leave: 0 };
+  const teacherStats = overview.teacherStats || { total: 0, present: 0, absent: 0, late: 0, leave: 0 };
+
+  // Calculate percentages
+  const calcPct = (present, total) => total > 0 ? Math.round((present / total) * 100) : 0;
+
+  const studentAttPct = calcPct(studentStats.present + studentStats.late, studentStats.total); // Late counts as present-ish for overview
+  const teacherAttPct = calcPct(teacherStats.present + teacherStats.late, teacherStats.total);
+
+  const studentPie = {
+    series: [studentStats.present, studentStats.absent, studentStats.late, studentStats.leave],
+    labels: ['Present', 'Absent', 'Late', 'Leave'],
+    colors: ['#01B574', '#EE5D50', '#FFB547', '#A3AED0']
+  };
+
+  const teacherPie = {
+    series: [teacherStats.present, teacherStats.absent, teacherStats.late, teacherStats.leave],
+    labels: ['Present', 'Absent', 'Late', 'Leave'],
+    colors: ['#01B574', '#EE5D50', '#FFB547', '#A3AED0']
+  };
 
   const attendanceBars = useMemo(() => {
-    return (attendanceWeekly || []).slice(-7).map((d) => {
-      const pct = (Number(d.present) || 0); // Using absolute numbers might be better for Line chart or keep percentage
+    return (attendanceWeekly || []).map((d) => {
+      const pct = (Number(d.present) || 0);
       const dateObj = new Date(d.day);
-      const dayLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short' });
+      let dayLabel = dateObj.toLocaleDateString(undefined, { weekday: 'short' });
+      // If range is large (1y), showing full date might be better, or month name
+      if (attRange === '1y') {
+        dayLabel = dateObj.toLocaleDateString(undefined, { month: 'short' });
+      } else if (attRange === '1m') {
+        dayLabel = dateObj.getDate(); // Just day number for 30 days
+      }
       return { day: dayLabel, value: pct };
     });
-  }, [attendanceWeekly]);
+  }, [attendanceWeekly, attRange]);
 
   const activitySeries = useMemo(() => {
-    // For sparkline
     return attendanceBars.map(d => d.value);
   }, [attendanceBars]);
 
   const feeMonths = useMemo(() => {
-    return (feesMonthly || []).slice(-6).map((m) => {
+    return (feesMonthly || []).map((m) => {
       const dt = new Date(m.month);
       const label = dt.toLocaleDateString(undefined, { month: 'short' });
       return { month: label, collected: Number(m.collected) || 0 };
@@ -288,10 +298,12 @@ export default function AdminDashboard() {
               fontSize='4xl'
               fontWeight='900'
               letterSpacing='-1px'
-              bgGradient="linear(to-r, blue.500, purple.500)"
+              bgGradient="linear(to-r, blue.600, blue.400)"
               bgClip="text"
+              display='inline-flex'
+              alignItems='center'
             >
-              Good Morning, Admin 👋
+              Good Morning, Super Admin <Text as="span" bgClip="initial" ml="2">👋</Text>
             </Text>
             <Text fontSize='lg' color='gray.500' fontWeight='600' opacity={0.8}>
               Your school is performing exceptionally today.
@@ -347,9 +359,9 @@ export default function AdminDashboard() {
             trendValue={0}
           />
           <StatCard
-            title="Average Attendance"
-            value={`${overview.todayAttendance}%`}
-            note="Across all departments"
+            title="Avg Student Attendance"
+            value={`${studentAttPct}%`}
+            note="Across all classes today"
             icon={MdCheckCircle}
             colorScheme="green"
             trend="up"
@@ -360,33 +372,72 @@ export default function AdminDashboard() {
         {/* --- Section 2: Trend Charts (NEW - Upper Section) --- */}
         <SimpleGrid columns={{ base: 1, md: 2 }} gap='20px' mb='20px'>
           <LineChartCard
-            title="Weekly Attendance Trend"
+            title="Attendance Trend"
             categories={attendanceBars.map(d => d.day)}
             series={[{ name: 'Attendance', data: attendanceBars.map(d => d.value) }]}
             height={280}
+            activeRange={attRange}
+            onRangeChange={setAttRange}
           />
           <LineChartCard
-            title="Monthly Fee Collection"
+            title="Fee Collection"
             categories={feeMonths.map(d => d.month)}
             series={[{ name: 'Collections', data: feeMonths.map(d => d.collected) }]}
             height={280}
+            activeRange={feeRange}
+            onRangeChange={setFeeRange}
           />
         </SimpleGrid>
 
         {/* --- Section 3: Charts & Graphs --- */}
         <SimpleGrid columns={{ base: 1, md: 3 }} gap='24px' mb='30px' px='10px'>
-          {/* Card 1: Radial Attendance */}
-          <Card p='24px'>
-            <Flex justify='space-between' align='center' mb='16px'>
-              <Text fontSize='lg' fontWeight='800'>Attendance</Text>
-              <Badge colorScheme={attendanceToday >= 90 ? 'green' : attendanceToday >= 75 ? 'orange' : 'red'} borderRadius='8px' px='2'>
-                {attendanceToday >= 90 ? 'Excellent' : attendanceToday >= 75 ? 'Good' : 'Needs Care'}
-              </Badge>
+          {/* Card 1: Student Attendance */}
+          <Card p='20px'>
+            <Text fontSize='lg' fontWeight='800' mb='4'>Student Attendance</Text>
+            <Flex align='center' justify='center' mb='4'>
+              <PieChart
+                chartData={studentPie.series}
+                chartOptions={{
+                  labels: studentPie.labels,
+                  colors: studentPie.colors,
+                  legend: { position: 'bottom' },
+                  dataLabels: { enabled: false }
+                }}
+                type='donut'
+                height={220}
+              />
             </Flex>
-            <Text fontSize='sm' color={subtleText} mb='20px'>
-              Real-time attendance insights.
-            </Text>
-            <RadialAttendance ariaLabel="Today's attendance" value={attendanceToday} height={240} label="Attendance" subtitle={`${attendanceToday}%`} />
+            <SimpleGrid columns={2} spacing={2} textAlign='center'>
+              <Box><Text fontSize='xs' color='gray.400'>Present</Text><Text fontWeight='bold' color='green.500'>{studentStats.present}</Text></Box>
+              <Box><Text fontSize='xs' color='gray.400'>Absent</Text><Text fontWeight='bold' color='red.500'>{studentStats.absent}</Text></Box>
+              <Box><Text fontSize='xs' color='gray.400'>Late</Text><Text fontWeight='bold' color='orange.400'>{studentStats.late}</Text></Box>
+              <Box><Text fontSize='xs' color='gray.400'>Total</Text><Text fontWeight='bold'>{studentStats.total}</Text></Box>
+            </SimpleGrid>
+          </Card>
+
+          {/* Card 2: Teacher Attendance */}
+          <Card p='20px'>
+            <Text fontSize='lg' fontWeight='800' mb='4'>Teacher Attendance</Text>
+            <Flex align='center' justify='center' mb='4'>
+              <PieChart
+                chartData={teacherPie.series}
+                chartOptions={{
+                  labels: teacherPie.labels,
+                  colors: teacherPie.colors,
+                  legend: { position: 'bottom' },
+                  dataLabels: { enabled: false }
+                }}
+                type='donut'
+                height={220}
+              />
+            </Flex>
+            <SimpleGrid columns={2} spacing={2} textAlign='center'>
+              <Box><Text fontSize='xs' color='gray.400'>Present</Text><Text fontWeight='bold' color='green.500'>{teacherStats.present}</Text></Box>
+              <Box><Text fontSize='xs' color='gray.400'>Absent</Text><Text fontWeight='bold' color='red.500'>{teacherStats.absent}</Text></Box>
+              {/* Assuming teacherStats has late/leave for symmetry, if not 0 */}
+              <Box><Text fontSize='xs' color='gray.400'>On Leave</Text><Text fontWeight='bold' color='blue.400'>{teacherStats.leave}</Text></Box>
+              <Box><Text fontSize='xs' color='gray.400'>Total</Text><Text fontWeight='bold'>{teacherStats.total}</Text></Box>
+            </SimpleGrid>
           </Card>
 
           {/* Card 2: Fee Collection Donut */}

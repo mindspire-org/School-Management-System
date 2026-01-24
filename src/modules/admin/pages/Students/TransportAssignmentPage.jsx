@@ -7,48 +7,62 @@ import StatCard from '../../../../components/card/StatCard';
 // Icons
 import { MdDirectionsBus, MdCreditCard, MdLocationOn, MdPerson, MdSearch, MdFilterList, MdRemoveRedEye, MdMoreVert, MdMap } from 'react-icons/md';
 // API
-import * as studentsApi from '../../../../services/api/students';
 import * as transportApi from '../../../../services/api/transport';
+import useClassOptions from '../../../../hooks/useClassOptions';
 
 export default function TransportAssignmentPage() {
   const toast = useToast();
-  const [students, setStudents] = useState([]);
-  const [transportByStudent, setTransportByStudent] = useState({}); // { [id]: { busNumber, ... } }
+  const [entries, setEntries] = useState([]);
   const [buses, setBuses] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [stops, setStops] = useState([]);
+  const [stats, setStats] = useState({ totalBuses: 0, busUsers: 0, activeRfid: 0, totalRoutes: 0 });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterClass, setFilterClass] = useState('all');
+  const [filterBus, setFilterBus] = useState('all');
+
+  const { classOptions } = useClassOptions();
   const assignDisc = useDisclosure();
   const [assignState, setAssignState] = useState({ studentId: null, busId: '', routeId: '', pickupStopId: '', dropStopId: '' });
 
-  // Load students and buses
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [studentsRes, busesRes, routesRes] = await Promise.all([
-          studentsApi.list({ pageSize: 200 }),
-          transportApi.listBuses(),
-          transportApi.listRoutes(),
-        ]);
-        const rows = Array.isArray(studentsRes?.rows) ? studentsRes.rows : (Array.isArray(studentsRes) ? studentsRes : []);
-        setStudents(rows || []);
-        setBuses(Array.isArray(busesRes?.items) ? busesRes.items : (Array.isArray(busesRes) ? busesRes : []));
-        setRoutes(Array.isArray(routesRes?.items) ? routesRes.items : (Array.isArray(routesRes) ? routesRes : []));
-        // Fetch transport info per student (best-effort)
-        (rows || []).slice(0, 100).forEach(async (s) => {
-          try {
-            const payload = await studentsApi.getTransport(s.id);
-            setTransportByStudent(prev => ({ ...prev, [s.id]: payload || {} }));
-          } catch { }
-        });
-      } catch (e) {
-        toast({ title: 'Failed to load transport data', status: 'error' });
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [statsRes, busesRes, routesRes, entriesRes] = await Promise.all([
+        transportApi.getStats(),
+        transportApi.listBuses(),
+        transportApi.listRoutes(),
+        transportApi.listStudentEntries({
+          q: search || undefined,
+          className: filterClass !== 'all' ? filterClass : undefined,
+          busId: filterBus !== 'all' && filterBus !== 'none' ? Number(filterBus) : undefined
+        })
+      ]);
+
+      setStats(statsRes);
+      setBuses(Array.isArray(busesRes?.items) ? busesRes.items : (Array.isArray(busesRes) ? busesRes : []));
+      setRoutes(Array.isArray(routesRes?.items) ? routesRes.items : (Array.isArray(routesRes) ? routesRes : []));
+
+      let rows = Array.isArray(entriesRes?.items) ? entriesRes.items : (Array.isArray(entriesRes) ? entriesRes : []);
+      if (filterBus === 'none') {
+        rows = rows.filter(r => !r.busId);
       }
-    };
-    load();
-  }, []);
+      setEntries(rows);
+    } catch (e) {
+      toast({ title: 'Failed to load transport data', status: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [search, filterClass, filterBus]);
 
   const openAssign = (studentId) => {
-    const current = transportByStudent[studentId] || {};
+    const current = entries.find(e => e.id === studentId) || {};
     setAssignState({
       studentId,
       busId: current.busId ? String(current.busId) : '',
@@ -61,19 +75,21 @@ export default function TransportAssignmentPage() {
 
   const saveAssign = async () => {
     try {
-      await studentsApi.updateTransport(assignState.studentId, {
+      setSaving(true);
+      await transportApi.setStudentTransport(assignState.studentId, {
         busId: assignState.busId ? Number(assignState.busId) : null,
         routeId: assignState.routeId ? Number(assignState.routeId) : null,
         pickupStopId: assignState.pickupStopId ? Number(assignState.pickupStopId) : null,
         dropStopId: assignState.dropStopId ? Number(assignState.dropStopId) : null,
       });
-      const payload = await studentsApi.getTransport(assignState.studentId);
-      setTransportByStudent(prev => ({ ...prev, [assignState.studentId]: payload || {} }));
+      loadData();
       toast({ title: 'Transport updated', status: 'success' });
       assignDisc.onClose();
     } catch (e) {
       const message = e?.response?.data?.message || 'Failed to update transport';
       toast({ title: 'Error', description: message, status: 'error' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -109,15 +125,15 @@ export default function TransportAssignmentPage() {
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
         <StatCard
           title='Total Buses'
-          value='12'
+          value={String(stats.totalBuses)}
           icon={MdDirectionsBus}
           colorScheme='blue'
         />
 
         <StatCard
           title='Bus Users'
-          value='845'
-          subValue='67.6% Students'
+          value={String(stats.busUsers)}
+          subValue='Estimated count'
           icon={MdPerson}
           colorScheme='green'
           note='Of total student body'
@@ -125,8 +141,8 @@ export default function TransportAssignmentPage() {
 
         <StatCard
           title='Active RFID Cards'
-          value='825'
-          subValue='97.6% Users'
+          value={String(stats.activeRfid)}
+          subValue='Assigned tags'
           icon={MdCreditCard}
           colorScheme='orange'
           note='Cards assigned and active'
@@ -134,7 +150,7 @@ export default function TransportAssignmentPage() {
 
         <StatCard
           title='Routes'
-          value='5'
+          value={String(stats.totalRoutes)}
           icon={MdLocationOn}
           colorScheme='red'
           note='Active transport routes'
@@ -147,25 +163,36 @@ export default function TransportAssignmentPage() {
           Available Buses
         </Text>
         <SimpleGrid columns={{ base: 1, md: 3 }} gap='20px'>
-          {[1, 2, 3].map((bus) => (
-            <Card key={bus} variant='outline'>
-              <Flex p='15px' justify='space-between' align='center'>
-                <Box>
-                  <Text fontWeight='bold'>Bus 10{bus}</Text>
-                  <Text fontSize='sm' color='gray.500'>Main Route {String.fromCharCode(64 + bus)}</Text>
-                  <HStack mt='5px' spacing='5px'>
-                    <Badge colorScheme='green'>{5 + bus} seats available</Badge>
-                  </HStack>
-                </Box>
-                <IconButton
-                  icon={<MdDirectionsBus />}
-                  colorScheme='blue'
-                  size='sm'
-                  aria-label='View bus details'
-                />
-              </Flex>
-            </Card>
-          ))}
+          {buses.slice(0, 6).map((bus) => {
+            const capacity = bus.capacity || 0;
+            const occupancy = bus.occupancy || 0;
+            const available = Math.max(0, capacity - occupancy);
+            return (
+              <Card key={bus.id} variant='outline'>
+                <Flex p='15px' justify='space-between' align='center'>
+                  <Box>
+                    <Text fontWeight='bold'>Bus {bus.number}</Text>
+                    <Text fontSize='sm' color='gray.500'>{bus.routeName || 'No Route Assigned'}</Text>
+                    <HStack mt='5px' spacing='5px'>
+                      <Badge colorScheme={available > 5 ? 'green' : (available > 0 ? 'orange' : 'red')}>
+                        {available} seats available
+                      </Badge>
+                    </HStack>
+                  </Box>
+                  <IconButton
+                    icon={<MdDirectionsBus />}
+                    colorScheme='blue'
+                    size='sm'
+                    aria-label='View bus details'
+                    onClick={() => setFilterBus(String(bus.id))}
+                  />
+                </Flex>
+              </Card>
+            );
+          })}
+          {!buses.length && (
+            <Text color='gray.500'>No buses registered in this campus.</Text>
+          )}
         </SimpleGrid>
       </Card>
 
@@ -177,33 +204,35 @@ export default function TransportAssignmentPage() {
               <MdSearch color='gray.300' />
             </InputLeftElement>
             <Input
-              placeholder='Search by name, ID, or bus...'
+              placeholder='Search by name or roll number...'
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </InputGroup>
 
           <Select
             w={{ base: '100%', md: '150px' }}
             icon={<MdFilterList />}
-            defaultValue='all'
+            value={filterClass}
+            onChange={(e) => setFilterClass(e.target.value)}
           >
             <option value='all'>All Classes</option>
-            <option value='9'>Class 9</option>
-            <option value='10'>Class 10</option>
-            <option value='11'>Class 11</option>
-            <option value='12'>Class 12</option>
+            {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
           </Select>
 
           <Select
             w={{ base: '100%', md: '150px' }}
             icon={<MdFilterList />}
-            defaultValue='all'
+            value={filterBus}
+            onChange={(e) => setFilterBus(e.target.value)}
           >
             <option value='all'>All Buses</option>
-            <option value='101'>Bus 101</option>
-            <option value='102'>Bus 102</option>
-            <option value='103'>Bus 103</option>
+            {buses.map(b => (
+              <option key={b.id} value={b.id}>Bus {b.number}</option>
+            ))}
             <option value='none'>Not Assigned</option>
           </Select>
+          <Button variant='ghost' size='sm' onClick={() => { setSearch(''); setFilterClass('all'); setFilterBus('all'); }}>Reset</Button>
         </Flex>
       </Card>
 
@@ -222,52 +251,54 @@ export default function TransportAssignmentPage() {
               </Tr>
             </Thead>
             <Tbody>
-              {students.map((student) => {
-                const t = transportByStudent[student.id] || {};
-                return (
-                  <Tr key={student.id}>
-                    <Td>
-                      <HStack spacing='12px'>
-                        <Avatar
-                          size='sm'
-                          name={student.name}
-                          src={student.avatar}
-                        />
-                        <Text fontWeight='500'>{student.name}</Text>
-                      </HStack>
-                    </Td>
-                    <Td>
-                      <Text fontSize='sm'>{student.rollNumber}</Text>
-                    </Td>
-                    <Td>
-                      <Badge colorScheme='purple'>
-                        {student.class}-{student.section}
-                      </Badge>
-                    </Td>
-                    <Td>
-                      {t.busNumber ? (
-                        <Badge colorScheme='blue'>{t.busNumber}</Badge>
-                      ) : (
-                        <Badge colorScheme='gray'>Not Assigned</Badge>
-                      )}
-                    </Td>
-                    <Td>
-                      <Text fontSize='sm'>{t.routeName || 'N/A'}</Text>
-                    </Td>
-                    <Td>
-                      <HStack spacing='2'>
-                        <IconButton
-                          aria-label='More options'
-                          icon={<MdMoreVert />}
-                          size='sm'
-                          variant='ghost'
-                          onClick={() => openAssign(student.id)}
-                        />
-                      </HStack>
-                    </Td>
-                  </Tr>
-                );
-              })}
+              {loading ? (
+                <Tr><Td colSpan={6} textAlign='center' py={4}>Loading entries...</Td></Tr>
+              ) : entries.map((student) => (
+                <Tr key={student.id}>
+                  <Td>
+                    <HStack spacing='12px'>
+                      <Avatar
+                        size='sm'
+                        name={student.name}
+                        src={student.avatar}
+                      />
+                      <Text fontWeight='500'>{student.name}</Text>
+                    </HStack>
+                  </Td>
+                  <Td>
+                    <Text fontSize='sm'>{student.rollNumber}</Text>
+                  </Td>
+                  <Td>
+                    <Badge colorScheme='purple'>
+                      {student.class}{student.section ? `-${student.section}` : ''}
+                    </Badge>
+                  </Td>
+                  <Td>
+                    {student.busNumber ? (
+                      <Badge colorScheme='blue'>Bus {student.busNumber}</Badge>
+                    ) : (
+                      <Badge colorScheme='gray'>Not Assigned</Badge>
+                    )}
+                  </Td>
+                  <Td>
+                    <Text fontSize='sm'>{student.routeName || 'N/A'}</Text>
+                  </Td>
+                  <Td>
+                    <HStack spacing='2'>
+                      <IconButton
+                        aria-label='Assign Info'
+                        icon={<MdMoreVert />}
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => openAssign(student.id)}
+                      />
+                    </HStack>
+                  </Td>
+                </Tr>
+              ))}
+              {!loading && !entries.length && (
+                <Tr><Td colSpan={6} textAlign='center' py={4}>No students found matching filters.</Td></Tr>
+              )}
             </Tbody>
           </Table>
         </TableContainer>
@@ -303,7 +334,7 @@ export default function TransportAssignmentPage() {
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' onClick={assignDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={saveAssign} isDisabled={!assignState.studentId}>Save</Button>
+            <Button colorScheme='blue' onClick={saveAssign} isLoading={saving} isDisabled={!assignState.studentId}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

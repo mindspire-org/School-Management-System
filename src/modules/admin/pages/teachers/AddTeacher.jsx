@@ -268,12 +268,12 @@ const AddTeacher = () => {
       if (!formData.phone.trim()) e.phone = 'Phone is required';
       if (!formData.gender) e.gender = 'Select gender';
       if (!formData.dob) e.dob = 'Date of birth is required';
+      if (!formData.qualification.trim()) e.qualification = 'Qualification is required';
       setErrors((prev) => ({ ...prev, ...e }));
       return Object.keys(e).length === 0;
     }
     if (k === 'professional') {
       const e = {};
-      if (!formData.qualification.trim()) e.qualification = 'Qualification is required';
       if (!formData.joiningDate) e.joiningDate = 'Joining date is required';
       if (!formData.employeeId.trim()) e.employeeId = 'Employee ID is required';
       if (!formData.department.trim()) e.department = 'Department is required';
@@ -297,10 +297,14 @@ const AddTeacher = () => {
     return true;
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) e.preventDefault();
     if (validateStep(currentStep)) setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
   };
-  const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
+  const prevStep = (e) => {
+    if (e) e.preventDefault();
+    setCurrentStep((s) => Math.max(s - 1, 0));
+  };
 
   // Handle form submission
   const handleSubmit = async (e) => {
@@ -744,9 +748,9 @@ const AddTeacher = () => {
 
             <Divider />
             <Flex justify="space-between">
-              <Button variant="outline" onClick={prevStep} isDisabled={currentStep === 0 || isSubmitting}>Back</Button>
+              <Button variant="outline" type="button" onClick={prevStep} isDisabled={currentStep === 0 || isSubmitting}>Back</Button>
               {currentStep < steps.length - 1 ? (
-                <Button colorScheme="blue" onClick={nextStep} isDisabled={isSubmitting}>Next</Button>
+                <Button colorScheme="blue" type="button" onClick={nextStep} isDisabled={isSubmitting}>Next</Button>
               ) : (
                 <Button colorScheme="blue" size="lg" type="submit" isLoading={isSubmitting} loadingText="Submitting">Add Teacher</Button>
               )}

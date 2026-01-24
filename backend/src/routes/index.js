@@ -23,6 +23,14 @@ import rbacRoutes from './rbac.routes.js';
 import parentsRoutes from './parents.routes.js';
 import expensesRoutes from './expenses.routes.js';
 import campusRoutes from './campuses.routes.js';
+import masterDataRoutes from './masterData.routes.js';
+
+// New module routes
+import inventoryRoutes from './inventory.routes.js';
+import receptionRoutes from './reception.routes.js';
+import cardManagementRoutes from './cardManagement.routes.js';
+import eventsCertificatesRoutes from './eventsCertificates.routes.js';
+import hrRoutes from './hr.routes.js';
 
 const router = Router();
 
@@ -50,5 +58,13 @@ router.use('/rbac', rbacRoutes);
 router.use('/parents', parentsRoutes);
 router.use('/expenses', expensesRoutes);
 router.use('/campuses', campusRoutes);
+router.use('/master-data', masterDataRoutes);
+
+// New module routes
+router.use('/inventory', inventoryRoutes);
+router.use('/reception', receptionRoutes);
+router.use('/card-management', cardManagementRoutes);
+router.use('/events-certificates', eventsCertificatesRoutes);
+router.use('/hr', hrRoutes);
 
 export default router;

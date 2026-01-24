@@ -31,7 +31,7 @@ async function testDb(url) {
   } catch (_) {
     return { ok: false, hasTables: false, ssl: undefined };
   } finally {
-    try { await client.end(); } catch (_) {}
+    try { await client.end(); } catch (_) { }
   }
 }
 
@@ -75,8 +75,10 @@ async function detectConnectionString() {
 
 const detected = await detectConnectionString();
 
+export const connectionDetails = detected;
+
 export const pool = new Pool({ connectionString: detected.url, ssl: detected.ssl });
 
 export const query = (text, params) => pool.query(text, params);
 
-export default { pool, query };
+export default { pool, query, connectionDetails };
