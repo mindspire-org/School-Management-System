@@ -30,6 +30,7 @@ import inventoryRoutes from './inventory.routes.js';
 import receptionRoutes from './reception.routes.js';
 import cardManagementRoutes from './cardManagement.routes.js';
 import eventsCertificatesRoutes from './eventsCertificates.routes.js';
+import certificatesRoutes from './certificates.routes.js';
 import hrRoutes from './hr.routes.js';
 
 const router = Router();
@@ -65,6 +66,7 @@ router.use('/inventory', inventoryRoutes);
 router.use('/reception', receptionRoutes);
 router.use('/card-management', cardManagementRoutes);
 router.use('/events-certificates', eventsCertificatesRoutes);
+router.use('/certificates', certificatesRoutes);
 router.use('/hr', hrRoutes);
 
 export default router;

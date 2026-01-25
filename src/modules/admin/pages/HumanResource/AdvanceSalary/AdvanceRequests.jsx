@@ -4,6 +4,7 @@ import {
     Flex,
     Button,
     useToast,
+    Select,
     Table,
     Thead,
     Tbody,
@@ -29,7 +30,7 @@ import {
 } from '@chakra-ui/react';
 import { MdAdd, MdCheck, MdClose } from 'react-icons/md';
 import Card from '../../../../../components/card/Card';
-import { advanceSalaryApi } from '../../../../../services/moduleApis';
+import { advanceSalaryApi, hrEmployeesApi } from '../../../../../services/moduleApis';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function AdvanceRequests() {
@@ -38,6 +39,7 @@ export default function AdvanceRequests() {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [employees, setEmployees] = useState([]);
 
     const [formData, setFormData] = useState({
         employeeName: '',
@@ -50,7 +52,17 @@ export default function AdvanceRequests() {
 
     useEffect(() => {
         fetchRequests();
+        fetchEmployees();
     }, [campusId]);
+
+    const fetchEmployees = async () => {
+        try {
+            const rows = await hrEmployeesApi.list({ campusId });
+            setEmployees(Array.isArray(rows) ? rows : []);
+        } catch (e) {
+            setEmployees([]);
+        }
+    };
 
     const fetchRequests = async () => {
         setLoading(true);
@@ -66,7 +78,11 @@ export default function AdvanceRequests() {
 
     const handleSubmit = async () => {
         try {
-            await advanceSalaryApi.create({ ...formData, campusId, employeeId: 123 }); // Mock employee ID if not selectable
+            if (!formData.employeeId) {
+                toast({ title: 'Please select an employee', status: 'warning' });
+                return;
+            }
+            await advanceSalaryApi.create({ ...formData, campusId, employeeId: Number(formData.employeeId) });
             toast({ title: 'Request Submitted', status: 'success' });
             onClose();
             fetchRequests();
@@ -135,7 +151,25 @@ export default function AdvanceRequests() {
                     <ModalBody>
                         <FormControl mb={3}>
                             <FormLabel>Employee Name</FormLabel>
-                            <Input value={formData.employeeName} onChange={e => setFormData({ ...formData, employeeName: e.target.value })} />
+                            <Select
+                                placeholder="Select Employee"
+                                value={formData.employeeId || ''}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    const emp = employees.find((x) => String(x.id) === String(id));
+                                    setFormData((p) => ({
+                                        ...p,
+                                        employeeId: id,
+                                        employeeName: emp?.name || '',
+                                    }));
+                                }}
+                            >
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                        {emp.name}{emp.designation ? ` (${emp.designation})` : ''}
+                                    </option>
+                                ))}
+                            </Select>
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Amount</FormLabel>

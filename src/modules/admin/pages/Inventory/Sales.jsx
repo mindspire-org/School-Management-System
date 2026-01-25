@@ -73,7 +73,7 @@ export default function Sales() {
         }
     };
 
-    const getProductName = (id) => products.find(p => p.id === id)?.name || 'Unknown';
+    const getProductName = (id) => products.find(p => String(p.id) === String(id))?.name || 'Unknown';
 
     const stats = {
         total: sales.length,

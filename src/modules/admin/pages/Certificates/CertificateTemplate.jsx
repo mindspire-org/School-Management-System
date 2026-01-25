@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Flex, Heading, Text, Button, IconButton, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td,
     Input, InputGroup, InputLeftElement, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader,
-    ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, useToast, Select, Textarea, Spinner
+    ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, useToast, Select, Textarea, Spinner, Image
 } from '@chakra-ui/react';
 import { MdAdd, MdSearch, MdEdit, MdDelete, MdDescription } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
@@ -18,7 +18,49 @@ export default function CertificateTemplate() {
     const [templates, setTemplates] = useState([]);
 
     const { isOpen, onOpen, onClose } = useDisclosure();
-    const [form, setForm] = useState({ id: '', name: '', type: 'Student', layout: 'Landscape', bgColor: '#ffffff', logoUrl: '', title: 'Certificate of Appreciation', bodyText: '', footerText: '' });
+    const emptyForm = {
+        id: '',
+        name: '',
+        type: 'Student',
+        layout: 'Landscape',
+        bgColor: '#ffffff',
+        logoUrl: '',
+        title: 'Certificate of Appreciation',
+        bodyText: '',
+        footerText: '',
+
+        showBorder: true,
+        borderColor: '#111111',
+        borderWidth: 2,
+        borderStyle: 'solid',
+        borderRadius: 14,
+
+        backgroundImageUrl: '',
+        backgroundImageOpacity: 0.2,
+
+        watermarkText: '',
+        watermarkImageUrl: '',
+        watermarkOpacity: 0.08,
+        watermarkRotate: -25,
+
+        fontFamily: 'Georgia, serif',
+        titleFontFamily: 'Georgia, serif',
+        titleFontSize: 34,
+        bodyFontSize: 18,
+        footerFontSize: 14,
+
+        signature1Name: '',
+        signature1Title: '',
+        signature1ImageUrl: '',
+        signature2Name: '',
+        signature2Title: '',
+        signature2ImageUrl: '',
+
+        showSerial: true,
+        serialPrefix: 'CERT-',
+        serialPadding: 6,
+    };
+    const [form, setForm] = useState(emptyForm);
     const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
 
     useEffect(() => {
@@ -39,17 +81,47 @@ export default function CertificateTemplate() {
 
     const handleSave = async () => {
         try {
+            const payload = { ...form, campusId };
+            delete payload.id;
             if (form.id) {
-                await certificateTemplateApi.update(form.id, { ...form, campusId });
+                await certificateTemplateApi.update(form.id, payload);
                 toast({ title: 'Template updated', status: 'success' });
             } else {
-                await certificateTemplateApi.create({ ...form, campusId });
+                await certificateTemplateApi.create(payload);
                 toast({ title: 'Template created', status: 'success' });
             }
             fetchTemplates();
             onClose();
         } catch (error) {
             toast({ title: 'Error saving template', status: 'error' });
+        }
+    };
+
+    const handleLogoFile = async (file) => {
+        if (!file) return;
+        try {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                setForm((prev) => ({ ...prev, logoUrl: result }));
+            };
+            reader.readAsDataURL(file);
+        } catch (_) {
+            toast({ title: 'Failed to read logo file', status: 'error' });
+        }
+    };
+
+    const handleAssetFile = async (file, key) => {
+        if (!file) return;
+        try {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                setForm((prev) => ({ ...prev, [key]: result }));
+            };
+            reader.readAsDataURL(file);
+        } catch (_) {
+            toast({ title: 'Failed to read file', status: 'error' });
         }
     };
 
@@ -72,7 +144,7 @@ export default function CertificateTemplate() {
                     <Heading as="h3" size="lg" mb={1}>Certificate Templates</Heading>
                     <Text color={textColorSecondary}>Design and manage certificate templates</Text>
                 </Box>
-                <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', name: '', type: 'Student', layout: 'Landscape', bgColor: '#ffffff', logoUrl: '', title: 'Certificate of Appreciation', bodyText: '', footerText: '' }); onOpen(); }}>
+                <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ ...emptyForm }); onOpen(); }}>
                     Create Template
                 </Button>
             </Flex>
@@ -112,7 +184,7 @@ export default function CertificateTemplate() {
                                     <Td>{template.layout}</Td>
                                     <Td>{template.title}</Td>
                                     <Td>
-                                        <IconButton aria-label="Edit" icon={<MdEdit />} size="sm" variant="ghost" onClick={() => { setForm(template); onOpen(); }} />
+                                        <IconButton aria-label="Edit" icon={<MdEdit />} size="sm" variant="ghost" onClick={() => { setForm({ ...emptyForm, ...template }); onOpen(); }} />
                                         <IconButton aria-label="Delete" icon={<MdDelete />} size="sm" variant="ghost" colorScheme="red" onClick={() => handleDelete(template.id)} />
                                     </Td>
                                 </Tr>
@@ -166,6 +238,212 @@ export default function CertificateTemplate() {
                             <FormLabel>Logo URL</FormLabel>
                             <Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://..." />
                         </FormControl>
+                        <FormControl mb={3}>
+                            <FormLabel>Upload Logo</FormLabel>
+                            <Input
+                                type="file"
+                                accept="image/*"
+                                p={1}
+                                onChange={(e) => handleLogoFile(e.target.files?.[0])}
+                            />
+                            {form.logoUrl ? (
+                                <Box mt={2} borderWidth="1px" borderRadius="md" p={2}>
+                                    <Image src={form.logoUrl} alt="Logo preview" maxH="80px" objectFit="contain" />
+                                </Box>
+                            ) : null}
+                        </FormControl>
+
+                        <Box mt={4} borderTopWidth="1px" pt={4}>
+                            <Heading as="h4" size="sm" mb={3}>Design & Styling</Heading>
+
+                            <FormControl mb={3}>
+                                <FormLabel>Font Family</FormLabel>
+                                <Select value={form.fontFamily || ''} onChange={(e) => setForm({ ...form, fontFamily: e.target.value })}>
+                                    <option value="Georgia, serif">Georgia (Serif)</option>
+                                    <option value="Times New Roman, Times, serif">Times New Roman</option>
+                                    <option value="Arial, Helvetica, sans-serif">Arial</option>
+                                    <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                                    <option value="'Trebuchet MS', Arial, sans-serif">Trebuchet MS</option>
+                                </Select>
+                            </FormControl>
+
+                            <FormControl mb={3}>
+                                <FormLabel>Title Font Family</FormLabel>
+                                <Select value={form.titleFontFamily || ''} onChange={(e) => setForm({ ...form, titleFontFamily: e.target.value })}>
+                                    <option value="Georgia, serif">Georgia (Serif)</option>
+                                    <option value="Times New Roman, Times, serif">Times New Roman</option>
+                                    <option value="Arial Black, Arial, sans-serif">Arial Black</option>
+                                    <option value="'Trebuchet MS', Arial, sans-serif">Trebuchet MS</option>
+                                </Select>
+                            </FormControl>
+
+                            <Flex gap={3} wrap="wrap">
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Title Size (px)</FormLabel>
+                                    <Input type="number" value={form.titleFontSize ?? 34} onChange={(e) => setForm({ ...form, titleFontSize: Number(e.target.value) })} />
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Body Size (px)</FormLabel>
+                                    <Input type="number" value={form.bodyFontSize ?? 18} onChange={(e) => setForm({ ...form, bodyFontSize: Number(e.target.value) })} />
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Footer Size (px)</FormLabel>
+                                    <Input type="number" value={form.footerFontSize ?? 14} onChange={(e) => setForm({ ...form, footerFontSize: Number(e.target.value) })} />
+                                </FormControl>
+                            </Flex>
+
+                            <Flex gap={3} wrap="wrap">
+                                <FormControl mb={3} flex="1" minW="220px">
+                                    <FormLabel>Show Border</FormLabel>
+                                    <Select value={String(form.showBorder ?? true)} onChange={(e) => setForm({ ...form, showBorder: e.target.value === 'true' })}>
+                                        <option value="true">Yes</option>
+                                        <option value="false">No</option>
+                                    </Select>
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Border Color</FormLabel>
+                                    <Input type="color" value={form.borderColor || '#111111'} onChange={(e) => setForm({ ...form, borderColor: e.target.value })} />
+                                </FormControl>
+                            </Flex>
+
+                            <Flex gap={3} wrap="wrap">
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Border Width</FormLabel>
+                                    <Input type="number" value={form.borderWidth ?? 2} onChange={(e) => setForm({ ...form, borderWidth: Number(e.target.value) })} />
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Border Style</FormLabel>
+                                    <Select value={form.borderStyle || 'solid'} onChange={(e) => setForm({ ...form, borderStyle: e.target.value })}>
+                                        <option value="solid">Solid</option>
+                                        <option value="double">Double</option>
+                                        <option value="dashed">Dashed</option>
+                                        <option value="dotted">Dotted</option>
+                                    </Select>
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Border Radius</FormLabel>
+                                    <Input type="number" value={form.borderRadius ?? 14} onChange={(e) => setForm({ ...form, borderRadius: Number(e.target.value) })} />
+                                </FormControl>
+                            </Flex>
+
+                            <Heading as="h5" size="sm" mt={2} mb={3}>Background</Heading>
+                            <FormControl mb={3}>
+                                <FormLabel>Background Image URL</FormLabel>
+                                <Input value={form.backgroundImageUrl || ''} onChange={(e) => setForm({ ...form, backgroundImageUrl: e.target.value })} placeholder="https://..." />
+                            </FormControl>
+                            <FormControl mb={3}>
+                                <FormLabel>Upload Background Image</FormLabel>
+                                <Input type="file" accept="image/*" p={1} onChange={(e) => handleAssetFile(e.target.files?.[0], 'backgroundImageUrl')} />
+                                {form.backgroundImageUrl ? (
+                                    <Box mt={2} borderWidth="1px" borderRadius="md" p={2}>
+                                        <Image src={form.backgroundImageUrl} alt="Background preview" maxH="120px" objectFit="contain" />
+                                    </Box>
+                                ) : null}
+                            </FormControl>
+                            <FormControl mb={3}>
+                                <FormLabel>Background Opacity (0 - 1)</FormLabel>
+                                <Input type="number" step="0.01" min={0} max={1} value={form.backgroundImageOpacity ?? 0.2} onChange={(e) => setForm({ ...form, backgroundImageOpacity: Number(e.target.value) })} />
+                            </FormControl>
+
+                            <Heading as="h5" size="sm" mt={2} mb={3}>Watermark</Heading>
+                            <FormControl mb={3}>
+                                <FormLabel>Watermark Text</FormLabel>
+                                <Input value={form.watermarkText || ''} onChange={(e) => setForm({ ...form, watermarkText: e.target.value })} placeholder="e.g. School Name" />
+                            </FormControl>
+                            <FormControl mb={3}>
+                                <FormLabel>Watermark Image URL</FormLabel>
+                                <Input value={form.watermarkImageUrl || ''} onChange={(e) => setForm({ ...form, watermarkImageUrl: e.target.value })} placeholder="https://..." />
+                            </FormControl>
+                            <FormControl mb={3}>
+                                <FormLabel>Upload Watermark Image</FormLabel>
+                                <Input type="file" accept="image/*" p={1} onChange={(e) => handleAssetFile(e.target.files?.[0], 'watermarkImageUrl')} />
+                                {form.watermarkImageUrl ? (
+                                    <Box mt={2} borderWidth="1px" borderRadius="md" p={2}>
+                                        <Image src={form.watermarkImageUrl} alt="Watermark preview" maxH="120px" objectFit="contain" />
+                                    </Box>
+                                ) : null}
+                            </FormControl>
+                            <Flex gap={3} wrap="wrap">
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Opacity (0 - 1)</FormLabel>
+                                    <Input type="number" step="0.01" min={0} max={1} value={form.watermarkOpacity ?? 0.08} onChange={(e) => setForm({ ...form, watermarkOpacity: Number(e.target.value) })} />
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Rotate (deg)</FormLabel>
+                                    <Input type="number" value={form.watermarkRotate ?? -25} onChange={(e) => setForm({ ...form, watermarkRotate: Number(e.target.value) })} />
+                                </FormControl>
+                            </Flex>
+
+                            <Heading as="h5" size="sm" mt={2} mb={3}>Serial Number</Heading>
+                            <Flex gap={3} wrap="wrap">
+                                <FormControl mb={3} flex="1" minW="220px">
+                                    <FormLabel>Show Serial</FormLabel>
+                                    <Select value={String(form.showSerial ?? true)} onChange={(e) => setForm({ ...form, showSerial: e.target.value === 'true' })}>
+                                        <option value="true">Yes</option>
+                                        <option value="false">No</option>
+                                    </Select>
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="200px">
+                                    <FormLabel>Prefix</FormLabel>
+                                    <Input value={form.serialPrefix || ''} onChange={(e) => setForm({ ...form, serialPrefix: e.target.value })} />
+                                </FormControl>
+                                <FormControl mb={3} flex="1" minW="160px">
+                                    <FormLabel>Padding</FormLabel>
+                                    <Input type="number" value={form.serialPadding ?? 6} onChange={(e) => setForm({ ...form, serialPadding: Number(e.target.value) })} />
+                                </FormControl>
+                            </Flex>
+
+                            <Heading as="h5" size="sm" mt={2} mb={3}>Signatories</Heading>
+                            <Box borderWidth="1px" borderRadius="md" p={3} mb={3}>
+                                <Text fontWeight="600" mb={2}>Signature 1</Text>
+                                <FormControl mb={2}>
+                                    <FormLabel>Name</FormLabel>
+                                    <Input value={form.signature1Name || ''} onChange={(e) => setForm({ ...form, signature1Name: e.target.value })} />
+                                </FormControl>
+                                <FormControl mb={2}>
+                                    <FormLabel>Title</FormLabel>
+                                    <Input value={form.signature1Title || ''} onChange={(e) => setForm({ ...form, signature1Title: e.target.value })} />
+                                </FormControl>
+                                <FormControl mb={2}>
+                                    <FormLabel>Signature Image URL</FormLabel>
+                                    <Input value={form.signature1ImageUrl || ''} onChange={(e) => setForm({ ...form, signature1ImageUrl: e.target.value })} placeholder="https://..." />
+                                </FormControl>
+                                <FormControl>
+                                    <FormLabel>Upload Signature Image</FormLabel>
+                                    <Input type="file" accept="image/*" p={1} onChange={(e) => handleAssetFile(e.target.files?.[0], 'signature1ImageUrl')} />
+                                    {form.signature1ImageUrl ? (
+                                        <Box mt={2} borderWidth="1px" borderRadius="md" p={2}>
+                                            <Image src={form.signature1ImageUrl} alt="Signature 1 preview" maxH="80px" objectFit="contain" />
+                                        </Box>
+                                    ) : null}
+                                </FormControl>
+                            </Box>
+
+                            <Box borderWidth="1px" borderRadius="md" p={3} mb={2}>
+                                <Text fontWeight="600" mb={2}>Signature 2</Text>
+                                <FormControl mb={2}>
+                                    <FormLabel>Name</FormLabel>
+                                    <Input value={form.signature2Name || ''} onChange={(e) => setForm({ ...form, signature2Name: e.target.value })} />
+                                </FormControl>
+                                <FormControl mb={2}>
+                                    <FormLabel>Title</FormLabel>
+                                    <Input value={form.signature2Title || ''} onChange={(e) => setForm({ ...form, signature2Title: e.target.value })} />
+                                </FormControl>
+                                <FormControl mb={2}>
+                                    <FormLabel>Signature Image URL</FormLabel>
+                                    <Input value={form.signature2ImageUrl || ''} onChange={(e) => setForm({ ...form, signature2ImageUrl: e.target.value })} placeholder="https://..." />
+                                </FormControl>
+                                <FormControl>
+                                    <FormLabel>Upload Signature Image</FormLabel>
+                                    <Input type="file" accept="image/*" p={1} onChange={(e) => handleAssetFile(e.target.files?.[0], 'signature2ImageUrl')} />
+                                    {form.signature2ImageUrl ? (
+                                        <Box mt={2} borderWidth="1px" borderRadius="md" p={2}>
+                                            <Image src={form.signature2ImageUrl} alt="Signature 2 preview" maxH="80px" objectFit="contain" />
+                                        </Box>
+                                    ) : null}
+                                </FormControl>
+                            </Box>
+                        </Box>
                     </ModalBody>
                     <ModalFooter>
                         <Button variant="ghost" mr={3} onClick={onClose}>Cancel</Button>

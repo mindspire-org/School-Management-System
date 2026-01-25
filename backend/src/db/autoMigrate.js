@@ -68,6 +68,142 @@ export async function ensureStudentExtendedColumns() {
   `);
 }
 
+export async function ensureCardManagementSchema() {
+  await query(`
+    ALTER TABLE admit_card_templates
+      ADD COLUMN IF NOT EXISTS exam_name TEXT;
+  `);
+}
+
+export async function ensureCertificatesSchema() {
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'certificate_templates') THEN
+        ALTER TABLE certificate_templates
+          ADD COLUMN IF NOT EXISTS show_border BOOLEAN DEFAULT TRUE,
+          ADD COLUMN IF NOT EXISTS border_color TEXT DEFAULT '#111111',
+          ADD COLUMN IF NOT EXISTS border_width INTEGER DEFAULT 2,
+          ADD COLUMN IF NOT EXISTS border_style TEXT DEFAULT 'solid',
+          ADD COLUMN IF NOT EXISTS border_radius INTEGER DEFAULT 14,
+          ADD COLUMN IF NOT EXISTS background_image_url TEXT,
+          ADD COLUMN IF NOT EXISTS background_image_opacity NUMERIC(5,2) DEFAULT 0.20,
+          ADD COLUMN IF NOT EXISTS watermark_text TEXT,
+          ADD COLUMN IF NOT EXISTS watermark_image_url TEXT,
+          ADD COLUMN IF NOT EXISTS watermark_opacity NUMERIC(5,2) DEFAULT 0.08,
+          ADD COLUMN IF NOT EXISTS watermark_rotate INTEGER DEFAULT -25,
+          ADD COLUMN IF NOT EXISTS font_family TEXT DEFAULT 'Georgia, serif',
+          ADD COLUMN IF NOT EXISTS title_font_family TEXT DEFAULT 'Georgia, serif',
+          ADD COLUMN IF NOT EXISTS title_font_size INTEGER DEFAULT 34,
+          ADD COLUMN IF NOT EXISTS body_font_size INTEGER DEFAULT 18,
+          ADD COLUMN IF NOT EXISTS footer_font_size INTEGER DEFAULT 14,
+          ADD COLUMN IF NOT EXISTS signature1_name TEXT,
+          ADD COLUMN IF NOT EXISTS signature1_title TEXT,
+          ADD COLUMN IF NOT EXISTS signature1_image_url TEXT,
+          ADD COLUMN IF NOT EXISTS signature2_name TEXT,
+          ADD COLUMN IF NOT EXISTS signature2_title TEXT,
+          ADD COLUMN IF NOT EXISTS signature2_image_url TEXT,
+          ADD COLUMN IF NOT EXISTS show_serial BOOLEAN DEFAULT TRUE,
+          ADD COLUMN IF NOT EXISTS serial_prefix TEXT DEFAULT 'CERT-',
+          ADD COLUMN IF NOT EXISTS serial_padding INTEGER DEFAULT 6;
+      END IF;
+    END $$;
+  `);
+}
+
+export async function ensureMasterDataSchema() {
+  await query(`
+    DO $$
+    DECLARE
+      default_campus_id INTEGER;
+    BEGIN
+      SELECT id INTO default_campus_id FROM campuses LIMIT 1;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'designations'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE designations (
+            id SERIAL PRIMARY KEY,
+            title TEXT NOT NULL,
+            department TEXT,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE,
+            is_shared BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'fee_structures'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE fee_structures (
+            id SERIAL PRIMARY KEY,
+            fee_type TEXT NOT NULL,
+            amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            frequency TEXT NOT NULL DEFAULT ''Monthly'',
+            class_id INTEGER,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+      END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'subjects') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='subjects' AND column_name='category') THEN
+          EXECUTE 'ALTER TABLE subjects ADD COLUMN category TEXT';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='subjects' AND column_name='is_shared') THEN
+          EXECUTE 'ALTER TABLE subjects ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE';
+        END IF;
+      END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'designations') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='designations' AND column_name='campus_id') THEN
+          EXECUTE 'ALTER TABLE designations ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE';
+        END IF;
+        IF default_campus_id IS NOT NULL THEN
+          EXECUTE 'UPDATE designations SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+          BEGIN
+            EXECUTE 'ALTER TABLE designations ALTER COLUMN campus_id SET DEFAULT ' || default_campus_id;
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+          BEGIN
+            EXECUTE 'ALTER TABLE designations ALTER COLUMN campus_id SET NOT NULL';
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+        END IF;
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_designations_campus_id ON designations(campus_id)';
+      END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'fee_structures') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='fee_structures' AND column_name='campus_id') THEN
+          EXECUTE 'ALTER TABLE fee_structures ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE';
+        END IF;
+        IF default_campus_id IS NOT NULL THEN
+          EXECUTE 'UPDATE fee_structures SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+          BEGIN
+            EXECUTE 'ALTER TABLE fee_structures ALTER COLUMN campus_id SET DEFAULT ' || default_campus_id;
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+          BEGIN
+            EXECUTE 'ALTER TABLE fee_structures ALTER COLUMN campus_id SET NOT NULL';
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+        END IF;
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_fee_structures_campus_id ON fee_structures(campus_id)';
+      END IF;
+    END $$;
+  `);
+}
+
 // Idempotent alterations to support username-based auth and domain linkage
 export async function ensureAuthSchema() {
   await query(`

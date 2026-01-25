@@ -81,6 +81,11 @@ export const create = async (req, res, next) => {
     await ensureStudentExtendedColumns();
     await ensureParentsSchema();
     const payload = { ...req.body };
+
+    if (!payload.avatar) {
+      payload.avatar = payload.photo || payload.photoUrl || payload.imageUrl || payload.personal?.photo || null;
+    }
+
     let credentials = null;
     // Upload base64 avatar to Cloudinary if provided
     if (payload.avatar && typeof payload.avatar === 'string' && payload.avatar.startsWith('data:')) {
@@ -88,8 +93,7 @@ export const create = async (req, res, next) => {
         const upload = await cloudinary.uploader.upload(payload.avatar, { folder: 'students' });
         payload.avatar = upload.secure_url;
       } catch (_) {
-        // If upload fails, drop avatar to avoid storing large base64
-        payload.avatar = null;
+        // If upload fails, keep the provided avatar as-is
       }
     }
     // Ensure a parents record exists and attach family number
@@ -156,14 +160,18 @@ export const update = async (req, res, next) => {
   try {
     await ensureStudentExtendedColumns();
     const data = { ...req.body };
+
+    if (!data.avatar) {
+      data.avatar = data.photo || data.photoUrl || data.imageUrl || data.personal?.photo;
+    }
+
     // Upload base64 avatar to Cloudinary if provided on update
     if (data.avatar && typeof data.avatar === 'string' && data.avatar.startsWith('data:')) {
       try {
         const upload = await cloudinary.uploader.upload(data.avatar, { folder: 'students' });
         data.avatar = upload.secure_url;
       } catch (_) {
-        // Keep existing avatar if upload fails
-        delete data.avatar;
+        // If upload fails, keep the provided avatar as-is
       }
     }
     // If Parent/Guardian portal password is supplied on update, upsert the parent user

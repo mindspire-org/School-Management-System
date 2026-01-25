@@ -31,7 +31,12 @@ export default function AdmitCardTemplate() {
             const data = await admitCardTemplateApi.list({ campusId });
             setTemplates(data || []);
         } catch (error) {
-            toast({ title: 'Error fetching templates', status: 'error' });
+            const msg =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                'Error fetching templates';
+            toast({ title: 'Error fetching templates', description: msg, status: 'error' });
         } finally {
             setLoading(false);
         }
@@ -49,7 +54,12 @@ export default function AdmitCardTemplate() {
             fetchTemplates();
             onClose();
         } catch (error) {
-            toast({ title: 'Error saving template', status: 'error' });
+            const msg =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                'Error saving template';
+            toast({ title: 'Error saving template', description: msg, status: 'error' });
         }
     };
 
@@ -60,7 +70,12 @@ export default function AdmitCardTemplate() {
                 toast({ title: 'Template deleted', status: 'success' });
                 fetchTemplates();
             } catch (error) {
-                toast({ title: 'Error deleting template', status: 'error' });
+                const msg =
+                    error?.response?.data?.error ||
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    'Error deleting template';
+                toast({ title: 'Error deleting template', description: msg, status: 'error' });
             }
         }
     };

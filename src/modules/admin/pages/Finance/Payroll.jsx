@@ -6,7 +6,7 @@ import {
   ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   FormControl, FormLabel, NumberInput, NumberInputField, Spinner, useToast, Alert, AlertIcon
 } from '@chakra-ui/react';
-import { MdWork, MdPeople, MdLocalShipping, MdAddCircle, MdSearch, MdFileDownload, MdPictureAsPdf, MdRemoveRedEye, MdEdit } from 'react-icons/md';
+import { MdWork, MdPeople, MdLocalShipping, MdAddCircle, MdSearch, MdFileDownload, MdPictureAsPdf, MdRemoveRedEye, MdEdit, MdDelete } from 'react-icons/md';
 import { FaChalkboardTeacher, FaTruck } from 'react-icons/fa';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
@@ -42,6 +42,7 @@ export default function Payroll() {
   // Modals
   const viewDisc = useDisclosure();
   const createDisc = useDisclosure();
+  const [editingRow, setEditingRow] = useState(null);
 
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -52,6 +53,9 @@ export default function Payroll() {
     allowances: 0,
     deductions: 0,
     bonuses: 0,
+    status: 'pending',
+    transactionReference: '',
+    paymentMethod: '',
     notes: '',
   });
   const [creating, setCreating] = useState(false);
@@ -130,8 +134,12 @@ export default function Payroll() {
       allowances: 0,
       deductions: 0,
       bonuses: 0,
+      status: 'pending',
+      transactionReference: '',
+      paymentMethod: '',
       notes: '',
     });
+    setEditingRow(null);
     setFormError('');
     createDisc.onOpen();
   };
@@ -153,17 +161,37 @@ export default function Payroll() {
 
     try {
       if (createForm.role === 'teacher') {
-        await teacherApi.createPayroll({
-          teacherId: createForm.user.id,
-          periodMonth: createForm.periodMonth,
-          baseSalary: Number(createForm.baseSalary),
-          allowances: Number(createForm.allowances),
-          deductions: Number(createForm.deductions),
-          bonuses: Number(createForm.bonuses),
-          notes: createForm.notes,
-        });
+        if (editingRow) {
+          await teacherApi.updatePayroll(editingRow.id, {
+            periodMonth: createForm.periodMonth,
+            baseSalary: Number(createForm.baseSalary),
+            allowances: Number(createForm.allowances),
+            deductions: Number(createForm.deductions),
+            bonuses: Number(createForm.bonuses),
+            status: createForm.status,
+            paymentMethod: createForm.paymentMethod || null,
+            transactionReference: createForm.transactionReference || null,
+            notes: createForm.notes,
+            paidOn: createForm.status === 'paid' ? new Date().toISOString() : null,
+          });
+        } else {
+          await teacherApi.createPayroll({
+            teacherId: createForm.user.id,
+            periodMonth: createForm.periodMonth,
+            baseSalary: Number(createForm.baseSalary),
+            allowances: Number(createForm.allowances),
+            deductions: Number(createForm.deductions),
+            bonuses: Number(createForm.bonuses),
+            status: createForm.status,
+            paymentMethod: createForm.paymentMethod || null,
+            transactionReference: createForm.transactionReference || null,
+            notes: createForm.notes,
+            paidOn: createForm.status === 'paid' ? new Date().toISOString() : null,
+          });
+        }
       } else {
-        await driversApi.createPayroll(createForm.user.id, {
+        const driverId = createForm.user.id;
+        const saved = await driversApi.createPayroll(driverId, {
           periodMonth: createForm.periodMonth + '-01',
           baseSalary: Number(createForm.baseSalary),
           allowances: Number(createForm.allowances),
@@ -171,10 +199,17 @@ export default function Payroll() {
           bonuses: Number(createForm.bonuses),
           notes: createForm.notes,
         });
+        if (createForm.status && createForm.status !== 'pending') {
+          await driversApi.updatePayrollStatus(driverId, saved?.id || editingRow?.id, {
+            status: createForm.status,
+            transactionReference: createForm.transactionReference || undefined,
+          });
+        }
       }
 
-      toast({ title: 'Payroll created successfully', status: 'success', duration: 3000 });
+      toast({ title: editingRow ? 'Payroll updated successfully' : 'Payroll created successfully', status: 'success', duration: 3000 });
       createDisc.onClose();
+      setEditingRow(null);
       refreshPayroll();
     } catch (e) {
       setFormError(e.response?.data?.message || 'Failed to create payroll');
@@ -199,20 +234,116 @@ export default function Payroll() {
   };
 
   const releasePayslip = (row) => {
+    const monthLabel = row?.periodMonth ? String(row.periodMonth).slice(0, 7) : '';
+    const paidOn = row?.paidOn ? String(row.paidOn).slice(0, 10) : '';
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Payslip</title>
-      <style>body{font-family:Arial,sans-serif;padding:24px}.row{margin:4px 0}</style></head><body>
-      <h1>Payslip</h1>
-      <div class='row'><strong>Employee:</strong> ${row.userName} (${row.role})</div>
-      <div class='row'><strong>Month:</strong> ${row.periodMonth?.slice(0, 7)}</div>
-      <div class='row'><strong>Basic:</strong> Rs. ${Number(row.baseSalary).toLocaleString()}</div>
-      <div class='row'><strong>Allowances:</strong> Rs. ${Number(row.allowances).toLocaleString()}</div>
-      <div class='row'><strong>Deductions:</strong> Rs. ${Number(row.deductions).toLocaleString()}</div>
-      <div class='row'><strong>Bonuses:</strong> Rs. ${Number(row.bonuses || 0).toLocaleString()}</div>
-      <div class='row'><strong>Net Salary:</strong> Rs. ${Number(row.totalAmount).toLocaleString()}</div>
-      <script>window.onload=()=>{window.print();}</script>
-    </body></html>`;
+      <style>
+        :root{--brand:#2b6cb0;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc}
+        *{box-sizing:border-box}
+        body{font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:var(--text)}
+        .sheet{max-width:860px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,.08)}
+        .top{padding:20px 22px;background:linear-gradient(135deg,var(--brand),#00a3ff);color:#fff}
+        .top h1{margin:0;font-size:18px;letter-spacing:.3px}
+        .top .sub{margin-top:4px;font-size:12px;opacity:.9}
+        .meta{display:flex;gap:18px;flex-wrap:wrap;padding:16px 22px;border-bottom:1px solid var(--line)}
+        .chip{min-width:180px}
+        .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+        .v{font-size:13px;font-weight:600;margin-top:2px}
+        .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;padding:16px 22px}
+        .card{border:1px solid var(--line);border-radius:12px;padding:14px}
+        .card h2{margin:0 0 10px;font-size:13px}
+        table{width:100%;border-collapse:collapse}
+        td{padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+        td:last-child{text-align:right;font-weight:600}
+        tr:last-child td{border-bottom:none}
+        .total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+        .total .label{font-size:12px;color:var(--muted)}
+        .total .amt{font-size:18px;font-weight:800;color:var(--brand)}
+        .footer{padding:12px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+        @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border:none;border-radius:0}}
+      </style>
+      </head><body>
+        <div class="sheet">
+          <div class="top">
+            <h1>Salary Payslip</h1>
+            <div class="sub">Professional payroll statement</div>
+          </div>
+
+          <div class="meta">
+            <div class="chip"><div class="k">Employee</div><div class="v">${row?.userName || ''}</div></div>
+            <div class="chip"><div class="k">Role</div><div class="v">${String(row?.role || '').toUpperCase()}</div></div>
+            <div class="chip"><div class="k">Pay Period</div><div class="v">${monthLabel}</div></div>
+            <div class="chip"><div class="k">Status</div><div class="v">${String(row?.status || '').toUpperCase()}</div></div>
+            <div class="chip"><div class="k">Paid On</div><div class="v">${paidOn || '-'}</div></div>
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <h2>Earnings & Deductions</h2>
+              <table>
+                <tr><td>Basic Salary</td><td>Rs. ${Number(row?.baseSalary || 0).toLocaleString()}</td></tr>
+                <tr><td>Allowances</td><td>Rs. ${Number(row?.allowances || 0).toLocaleString()}</td></tr>
+                <tr><td>Bonuses</td><td>Rs. ${Number(row?.bonuses || 0).toLocaleString()}</td></tr>
+                <tr><td>Deductions</td><td>- Rs. ${Number(row?.deductions || 0).toLocaleString()}</td></tr>
+              </table>
+              <div class="total">
+                <div>
+                  <div class="label">Net Salary</div>
+                </div>
+                <div class="amt">Rs. ${Number(row?.totalAmount || 0).toLocaleString()}</div>
+              </div>
+            </div>
+            <div class="card">
+              <h2>Notes</h2>
+              <div style="font-size:13px;line-height:1.45;color:var(--text)">${row?.notes ? String(row.notes) : '—'}</div>
+              <div style="margin-top:14px;font-size:12px;color:var(--muted)">This document is system generated.</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div>Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}</div>
+            <div>Academia Pro</div>
+          </div>
+        </div>
+        <script>window.onload=()=>{window.print();}</script>
+      </body></html>`;
     const w = window.open('', '_blank');
     if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+  };
+
+  const handleEditOpen = (row) => {
+    setEditingRow(row);
+    setCreateForm({
+      role: row.role,
+      user: { id: row.userId, name: row.userName },
+      periodMonth: String(row.periodMonth || '').slice(0, 7),
+      baseSalary: Number(row.baseSalary || 0),
+      allowances: Number(row.allowances || 0),
+      deductions: Number(row.deductions || 0),
+      bonuses: Number(row.bonuses || 0),
+      status: row.status || 'pending',
+      transactionReference: row.transactionReference || '',
+      paymentMethod: row.paymentMethod || '',
+      notes: row.notes || '',
+      id: row.id,
+    });
+    setFormError('');
+    createDisc.onOpen();
+  };
+
+  const handleDelete = async (row) => {
+    if (!window.confirm('Delete this payroll record?')) return;
+    try {
+      if (row.role === 'teacher') {
+        await teacherApi.deletePayroll(row.id);
+      } else {
+        await driversApi.deletePayroll(row.userId, row.id);
+      }
+      toast({ title: 'Deleted', status: 'success', duration: 2500 });
+      refreshPayroll();
+    } catch (e) {
+      toast({ title: 'Delete failed', description: e.response?.data?.message || 'Something went wrong', status: 'error', duration: 3000 });
+    }
   };
 
   if (loading && payroll.length === 0) {
@@ -332,6 +463,8 @@ export default function Payroll() {
                   <Td><Badge colorScheme={r.status === 'paid' ? 'green' : r.status === 'processing' ? 'purple' : 'yellow'}>{r.status}</Badge></Td>
                   <Td>
                     <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='xs' variant='ghost' onClick={() => { setSelected(r); viewDisc.onOpen(); }} />
+                    <IconButton aria-label='Edit' icon={<MdEdit />} size='xs' variant='ghost' onClick={() => handleEditOpen(r)} />
+                    <IconButton aria-label='Delete' icon={<MdDelete />} size='xs' variant='ghost' colorScheme='red' onClick={() => handleDelete(r)} />
                     <Button size='xs' variant='ghost' onClick={() => releasePayslip(r)}>Payslip</Button>
                   </Td>
                 </Tr>
@@ -369,7 +502,7 @@ export default function Payroll() {
       <Modal isOpen={createDisc.isOpen} onClose={createDisc.onClose} size='lg'>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Add Salary</ModalHeader>
+          <ModalHeader>{editingRow ? 'Edit Salary' : 'Add Salary'}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {formError && (
@@ -397,9 +530,16 @@ export default function Payroll() {
             <UserSelector
               userType={createForm.role}
               value={createForm.user}
-              onChange={(user) => setCreateForm(f => ({ ...f, user }))}
+              onChange={(user) => setCreateForm(f => ({
+                ...f,
+                user,
+                baseSalary: Number(user?.baseSalary || 0),
+                allowances: Number(user?.allowances || 0),
+                deductions: Number(user?.deductions || 0),
+              }))}
               isRequired
               label="Select Employee"
+              disabled={!!editingRow}
             />
 
             <SimpleGrid columns={2} spacing={4} mt={4}>
@@ -431,6 +571,23 @@ export default function Payroll() {
                 <NumberInput value={createForm.bonuses} min={0} onChange={(v) => setCreateForm(f => ({ ...f, bonuses: Number(v) || 0 }))}>
                   <NumberInputField />
                 </NumberInput>
+              </FormControl>
+            </SimpleGrid>
+
+            <SimpleGrid columns={2} spacing={4} mt={4}>
+              <FormControl>
+                <FormLabel>Status</FormLabel>
+                <Select value={createForm.status} onChange={(e) => setCreateForm(f => ({ ...f, status: e.target.value }))}>
+                  <option value='pending'>Pending</option>
+                  <option value='processing'>Processing</option>
+                  <option value='paid'>Paid</option>
+                  <option value='failed'>Failed</option>
+                  <option value='cancelled'>Cancelled</option>
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Transaction Ref</FormLabel>
+                <Input value={createForm.transactionReference} onChange={(e) => setCreateForm(f => ({ ...f, transactionReference: e.target.value }))} placeholder='Optional' />
               </FormControl>
             </SimpleGrid>
 

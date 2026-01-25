@@ -12,4 +12,5 @@ export * as alertsApi from './alerts';
 export * as campusesApi from './campuses';
 export * as dashboardApi from './dashboard';
 export * as masterDataApi from './masterData';
+export * as qrAttendanceApi from './qrAttendance';
 export { http, setAuthToken, setUnauthorizedHandler } from '../http';

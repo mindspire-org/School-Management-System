@@ -287,6 +287,10 @@ export const driversApi = {
         return await http.patch(`${DRIVERS_BASE}/${driverId}/payroll/${payrollId}/status`, data);
     },
 
+    deletePayroll: async (driverId, payrollId) => {
+        return await http.delete(`${DRIVERS_BASE}/${driverId}/payroll/${payrollId}`);
+    },
+
     /**
      * Get driver count
      * @returns {Promise<{ count: number }>}

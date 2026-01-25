@@ -41,8 +41,7 @@ export default function CampusSwitcher() {
                     const current = list.find(c => String(c.id) === String(campusId));
                     setSelectedCampus(current || list[0]);
                     if (!campusId && list.length > 0) {
-                        // Optional: Auto-select first campus if none selected
-                        // setCampusId(list[0].id); 
+                        setCampusId(list[0].id);
                     }
                 })
                 .catch(err => console.error('Failed to load campuses', err));

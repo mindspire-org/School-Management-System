@@ -27,6 +27,9 @@ import {
 import StudentDashboard from './modules/students/StudentDashboard';
 import StudentModulePlaceholder from './modules/students/StudentModulePlaceholder';
 import QRCodeAttendance from './modules/students/QRCodeAttendance';
+import DailyRecord from './modules/students/attendance/DailyRecord';
+import MonthlyReport from './modules/students/attendance/MonthlyReport';
+import AttendanceChart from './modules/students/attendance/AttendanceChart';
 import Results from './modules/students/exams/Results';
 import SMSLogin from './modules/authentication/Login';
 
@@ -82,21 +85,21 @@ const studentRoutes = [
         layout: '/student',
         path: '/attendance/daily',
         icon: <Icon as={MdCheckCircle} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Daily Record' subtitle='Coming soon' />,
+        component: <DailyRecord />,
       },
       {
         name: 'Monthly Report',
         layout: '/student',
         path: '/attendance/monthly',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Monthly Report' subtitle='Coming soon' />,
+        component: <MonthlyReport />,
       },
       {
         name: 'Attendance Chart',
         layout: '/student',
         path: '/attendance/chart',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Attendance Chart' subtitle='Coming soon' />,
+        component: <AttendanceChart />,
       },
       {
         name: 'QR Attendance',

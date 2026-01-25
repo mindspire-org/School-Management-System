@@ -76,6 +76,7 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
                             s.fee_status
                           ) AS "feeStatus",
                           s.bus_number AS "busNumber", s.bus_assigned AS "busAssigned", s.parent_name AS "parentName", s.parent_phone AS "parentPhone", s.status, s.admission_date AS "admissionDate", s.avatar,
+                          s.avatar AS "photo", s.avatar AS "photoUrl",
                           s.personal, s.academic, s.parent, s.transport, s.fee
                    FROM students s
                    LEFT JOIN inv ON inv.student_id = s.id
@@ -87,7 +88,7 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
 
 export const getById = async (id) => {
   const { rows } = await query(
-    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE id = $1',
+    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE id = $1',
     [id]
   );
   return rows[0] || null;
@@ -95,7 +96,7 @@ export const getById = async (id) => {
 
 export const getByUserId = async (userId) => {
   const { rows } = await query(
-    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE user_id = $1',
+    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE user_id = $1',
     [userId]
   );
   return rows[0] || null;

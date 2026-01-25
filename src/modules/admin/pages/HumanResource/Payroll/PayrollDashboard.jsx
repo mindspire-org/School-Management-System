@@ -75,6 +75,31 @@ export default function PayrollDashboard() {
         }
     };
 
+    const handleOpenSlip = async (id) => {
+        try {
+            const data = await payrollApi.getSalarySlip(id);
+            const url = data?.slipUrl;
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+                return;
+            }
+            toast({
+                title: 'Slip not available',
+                status: 'warning',
+                duration: 3000,
+                isClosable: true,
+            });
+        } catch (error) {
+            toast({
+                title: 'Error fetching salary slip',
+                description: error.response?.data?.error || 'Something went wrong',
+                status: 'error',
+                duration: 3000,
+                isClosable: true,
+            });
+        }
+    };
+
     return (
         <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
             <Flex direction='column'>
@@ -156,7 +181,7 @@ export default function PayrollDashboard() {
                                             </Badge>
                                         </Td>
                                         <Td>
-                                            <Button size='sm' leftIcon={<MdDownload />} variant='ghost'>
+                                            <Button size='sm' leftIcon={<MdDownload />} variant='ghost' onClick={() => handleOpenSlip(payroll.id)}>
                                                 Slip
                                             </Button>
                                         </Td>

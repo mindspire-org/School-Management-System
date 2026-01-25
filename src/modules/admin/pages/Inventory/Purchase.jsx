@@ -83,8 +83,8 @@ export default function Purchase() {
         totalAmount: purchases.reduce((sum, p) => sum + Number(p.total || 0), 0),
     };
 
-    const getSupplierName = (id) => suppliers.find(s => s.id === id)?.name || 'Unknown';
-    const getProductName = (id) => products.find(p => p.id === id)?.name || 'Unknown';
+    const getSupplierName = (id) => suppliers.find(s => String(s.id) === String(id))?.name || 'Unknown';
+    const getProductName = (id) => products.find(p => String(p.id) === String(id))?.name || 'Unknown';
 
     return (
         <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>

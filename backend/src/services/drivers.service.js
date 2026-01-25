@@ -228,6 +228,14 @@ export const updateDriverPayrollStatus = async (id, status, transactionReference
   return rows[0] || null;
 };
 
+export const deleteDriverPayroll = async ({ driverId, payrollId }) => {
+  const { rows } = await query(
+    'DELETE FROM driver_payrolls WHERE id = $1 AND driver_id = $2 RETURNING id',
+    [payrollId, driverId]
+  );
+  return rows[0] || null;
+};
+
 // Count all drivers
 export const countDrivers = async () => {
   const { rows } = await query('SELECT COUNT(*) as count FROM drivers WHERE status = $1', ['active']);

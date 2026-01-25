@@ -198,7 +198,7 @@ export default function RoleManagement() {
           <Heading size='md'>Module Access</Heading>
           <Flex gap={3} align='center'>
             <Select maxW='220px' value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
-              {roles.filter(r => r.id !== 'admin').map(r => (
+              {roles.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </Select>

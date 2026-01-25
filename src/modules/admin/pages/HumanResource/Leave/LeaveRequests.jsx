@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { MdAdd } from 'react-icons/md';
 import Card from '../../../../../components/card/Card';
-import { leaveApi } from '../../../../../services/moduleApis';
+import { hrEmployeesApi, leaveApi } from '../../../../../services/moduleApis';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function LeaveRequests() {
@@ -15,8 +15,10 @@ export default function LeaveRequests() {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [employees, setEmployees] = useState([]);
     const [formData, setFormData] = useState({
         employeeName: '',
+        employeeId: '',
         leaveType: 'Casual',
         startDate: '',
         endDate: '',
@@ -26,6 +28,18 @@ export default function LeaveRequests() {
     const textColor = useColorModeValue('secondaryGray.900', 'white');
 
     useEffect(() => { fetchLeaves(); }, [campusId]);
+
+    useEffect(() => {
+        const run = async () => {
+            try {
+                const rows = await hrEmployeesApi.list({ campusId });
+                setEmployees(Array.isArray(rows) ? rows : []);
+            } catch (e) {
+                setEmployees([]);
+            }
+        };
+        run();
+    }, [campusId]);
 
     const fetchLeaves = async () => {
         setLoading(true);
@@ -38,7 +52,11 @@ export default function LeaveRequests() {
 
     const handleSubmit = async () => {
         try {
-            await leaveApi.create({ ...formData, campusId, employeeId: 999 });
+            if (!formData.employeeId) {
+                toast({ title: 'Please select an employee', status: 'warning' });
+                return;
+            }
+            await leaveApi.create({ ...formData, campusId, employeeId: Number(formData.employeeId) });
             toast({ title: 'Leave Requested', status: 'success' });
             onClose();
             fetchLeaves();
@@ -93,7 +111,25 @@ export default function LeaveRequests() {
                     <ModalBody>
                         <FormControl mb={3}>
                             <FormLabel>Employee Name</FormLabel>
-                            <Input value={formData.employeeName} onChange={e => setFormData({ ...formData, employeeName: e.target.value })} />
+                            <Select
+                                placeholder="Select Employee"
+                                value={formData.employeeId || ''}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    const emp = employees.find((x) => String(x.id) === String(id));
+                                    setFormData((p) => ({
+                                        ...p,
+                                        employeeId: id,
+                                        employeeName: emp?.name || '',
+                                    }));
+                                }}
+                            >
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                        {emp.name}{emp.designation ? ` (${emp.designation})` : ''}
+                                    </option>
+                                ))}
+                            </Select>
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Type</FormLabel>

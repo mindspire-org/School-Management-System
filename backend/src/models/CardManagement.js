@@ -28,6 +28,7 @@ export default (sequelize) => {
     const AdmitCardTemplate = sequelize.define('AdmitCardTemplate', {
         id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
         name: { type: DataTypes.STRING, allowNull: false },
+        examName: { type: DataTypes.STRING, field: 'exam_name' },
         layout: { type: DataTypes.ENUM('Vertical', 'Horizontal'), defaultValue: 'Vertical' },
         bgColor: { type: DataTypes.STRING, defaultValue: '#4299E1' },
         logoUrl: { type: DataTypes.STRING },

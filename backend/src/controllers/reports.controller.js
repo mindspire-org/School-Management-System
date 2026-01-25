@@ -26,6 +26,41 @@ export const financeSummary = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const financeByClass = async (req, res, next) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const campusId = req.user?.campusId;
+    const items = await service.getFinanceByClass({ fromDate, toDate, campusId });
+    res.json({ items });
+  } catch (e) { next(e); }
+};
+
+export const financeByHead = async (req, res, next) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const campusId = req.user?.campusId;
+    const items = await service.getFinanceByHead({ fromDate, toDate, campusId });
+    res.json({ items });
+  } catch (e) { next(e); }
+};
+
+export const financePaymentMethods = async (req, res, next) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const campusId = req.user?.campusId;
+    const items = await service.getFinancePaymentMethods({ fromDate, toDate, campusId });
+    res.json({ items });
+  } catch (e) { next(e); }
+};
+
+export const financeOverdueBuckets = async (req, res, next) => {
+  try {
+    const campusId = req.user?.campusId;
+    const items = await service.getFinanceOverdueBuckets({ campusId });
+    res.json({ items });
+  } catch (e) { next(e); }
+};
+
 export const examPerformance = async (req, res, next) => {
   try {
     const { examId } = req.query;

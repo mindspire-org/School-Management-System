@@ -211,7 +211,7 @@ export default function StudentsList() {
                       <Avatar
                         size='sm'
                         name={student.name}
-                        src={student.avatar}
+                        src={student.avatar || student.photo || student.photoUrl || student.imageUrl || ''}
                       />
                       <Box>
                         <Text fontWeight='500'>{student.name}</Text>

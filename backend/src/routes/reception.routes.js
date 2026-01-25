@@ -1,13 +1,32 @@
 import { Router } from 'express';
 import { AdmissionEnquiry, PostalRecord, CallLog, VisitorLog, Complaint, ReceptionConfig } from '../models/index.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(authenticate);
+
+const adminRoles = new Set(['admin', 'owner', 'superadmin']);
+
+const resolveCampusId = (req) => {
+    const headerCampusId =
+        req.headers?.['x-campus-id'] ??
+        req.headers?.['x-campusid'] ??
+        req.headers?.['campus-id'] ??
+        req.headers?.['campusid'];
+    const requested = headerCampusId ?? req.query?.campusId ?? req.body?.campusId;
+    const role = req.user?.role;
+    const authCampusId = req.user?.campusId;
+
+    if (authCampusId && !adminRoles.has(role)) return authCampusId;
+    return requested ?? authCampusId;
+};
 
 // Generic CRUD helper
 const createCRUD = (Model) => ({
     getAll: async (req, res) => {
         try {
-            const { campusId } = req.query;
+            const campusId = resolveCampusId(req);
             const where = campusId ? { campusId } : {};
             const items = await Model.findAll({ where });
             res.json(items);
@@ -17,8 +36,12 @@ const createCRUD = (Model) => ({
     },
     getOne: async (req, res) => {
         try {
+            const campusId = resolveCampusId(req);
             const item = await Model.findByPk(req.params.id);
             if (!item) return res.status(404).json({ error: 'Not found' });
+            if (campusId && String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
             res.json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -26,7 +49,13 @@ const createCRUD = (Model) => ({
     },
     create: async (req, res) => {
         try {
-            const item = await Model.create(req.body);
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+
+            const payload = { ...req.body };
+            if (payload.id === '' || payload.id === null || payload.id === undefined) delete payload.id;
+
+            const item = await Model.create({ ...payload, campusId });
             res.status(201).json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -34,19 +63,38 @@ const createCRUD = (Model) => ({
     },
     update: async (req, res) => {
         try {
-            const [updated] = await Model.update(req.body, { where: { id: req.params.id } });
-            if (!updated) return res.status(404).json({ error: 'Not found' });
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+
             const item = await Model.findByPk(req.params.id);
-            res.json(item);
+            if (!item) return res.status(404).json({ error: 'Not found' });
+            if (String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+
+            const payload = { ...req.body };
+            if (payload.id === '' || payload.id === null || payload.id === undefined) delete payload.id;
+            else delete payload.id;
+
+            await item.update({ ...payload, campusId });
+            return res.json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
     delete: async (req, res) => {
         try {
-            const deleted = await Model.destroy({ where: { id: req.params.id } });
-            if (!deleted) return res.status(404).json({ error: 'Not found' });
-            res.json({ message: 'Deleted successfully' });
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+
+            const item = await Model.findByPk(req.params.id);
+            if (!item) return res.status(404).json({ error: 'Not found' });
+            if (String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+
+            await item.destroy();
+            return res.json({ message: 'Deleted successfully' });
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

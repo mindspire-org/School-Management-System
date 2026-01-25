@@ -31,7 +31,125 @@ const getOverview = async ({ campusId }) => {
     assignments: assignments.rows[0].count,
     finance: invoices.rows[0],
   };
+
 };
+
+const getFinanceByClass = async ({ fromDate, toDate, campusId }) => {
+  const params = [];
+  const where = ["fi.user_type = 'student'", "fi.invoice_type = 'fee'"];
+  if (fromDate) { params.push(fromDate); where.push(`fi.issued_at::date >= $${params.length}`); }
+  if (toDate) { params.push(toDate); where.push(`fi.issued_at::date <= $${params.length}`); }
+  if (campusId) { params.push(Number(campusId)); where.push(`fi.campus_id = $${params.length}`); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const { rows } = await query(
+    `SELECT
+        COALESCE(NULLIF(TRIM(s.class), ''), 'Unknown') AS class,
+        COALESCE(SUM(fi.total), 0)::numeric AS billed,
+        COALESCE(SUM(fi.total - fi.balance), 0)::numeric AS collected
+     FROM finance_invoices fi
+     LEFT JOIN students s ON s.id = fi.user_id
+     ${whereSql}
+     GROUP BY COALESCE(NULLIF(TRIM(s.class), ''), 'Unknown')
+     ORDER BY class ASC`,
+    params
+  );
+
+  return rows.map((r) => ({
+    class: r.class,
+    billed: Number(r.billed || 0),
+    collected: Number(r.collected || 0),
+  }));
+};
+
+const getFinanceByHead = async ({ fromDate, toDate, campusId }) => {
+  const params = [];
+  const where = ["fi.user_type = 'student'", "fi.invoice_type = 'fee'"];
+  if (fromDate) { params.push(fromDate); where.push(`fi.issued_at::date >= $${params.length}`); }
+  if (toDate) { params.push(toDate); where.push(`fi.issued_at::date <= $${params.length}`); }
+  if (campusId) { params.push(Number(campusId)); where.push(`fi.campus_id = $${params.length}`); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const { rows } = await query(
+    `SELECT
+        COALESCE(NULLIF(TRIM(fi.description), ''), 'Fee') AS head,
+        COALESCE(SUM(fi.total), 0)::numeric AS billed,
+        COALESCE(SUM(fi.total - fi.balance), 0)::numeric AS collected
+     FROM finance_invoices fi
+     ${whereSql}
+     GROUP BY COALESCE(NULLIF(TRIM(fi.description), ''), 'Fee')
+     ORDER BY billed DESC
+     LIMIT 12`,
+    params
+  );
+
+  return rows.map((r) => ({
+    head: r.head,
+    billed: Number(r.billed || 0),
+    collected: Number(r.collected || 0),
+  }));
+};
+
+const getFinancePaymentMethods = async ({ fromDate, toDate, campusId }) => {
+  const params = [];
+  const where = [];
+  if (fromDate) { params.push(fromDate); where.push(`fp.paid_at::date >= $${params.length}`); }
+  if (toDate) { params.push(toDate); where.push(`fp.paid_at::date <= $${params.length}`); }
+  if (campusId) { params.push(Number(campusId)); where.push(`fp.campus_id = $${params.length}`); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const { rows } = await query(
+    `SELECT
+        COALESCE(NULLIF(TRIM(LOWER(fp.method)), ''), 'unknown') AS method,
+        COALESCE(SUM(fp.amount), 0)::numeric AS total
+     FROM finance_payments fp
+     ${whereSql}
+     GROUP BY COALESCE(NULLIF(TRIM(LOWER(fp.method)), ''), 'unknown')
+     ORDER BY total DESC`,
+    params
+  );
+
+  return rows.map((r) => ({
+    method: String(r.method || 'unknown'),
+    total: Number(r.total || 0),
+  }));
+};
+
+const getFinanceOverdueBuckets = async ({ campusId }) => {
+  const params = [];
+  const where = ["fi.status IN ('pending','partial','overdue')", 'fi.balance > 0'];
+  if (campusId) { params.push(Number(campusId)); where.push(`fi.campus_id = $${params.length}`); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const { rows } = await query(
+    `WITH inv AS (
+        SELECT
+          fi.balance,
+          CASE WHEN fi.due_date IS NOT NULL AND fi.due_date < CURRENT_DATE THEN (CURRENT_DATE - fi.due_date) ELSE 0 END AS days_overdue
+        FROM finance_invoices fi
+        ${whereSql}
+      )
+      SELECT
+        CASE
+          WHEN days_overdue BETWEEN 0 AND 30 THEN '0-30 days'
+          WHEN days_overdue BETWEEN 31 AND 60 THEN '31-60 days'
+          ELSE '60+ days'
+        END AS category,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(balance), 0)::numeric AS fine
+      FROM inv
+      GROUP BY category
+      ORDER BY category ASC`,
+    params
+  );
+
+  return rows.map((r) => ({
+    category: r.category,
+    count: Number(r.count || 0),
+    fine: Number(r.fine || 0),
+  }));
+};
+
 
 const getAttendanceHeatmap = async ({ fromDate, toDate, klass, section, location, campusId }) => {
   // Determine denominator: total students in scope
@@ -198,5 +316,9 @@ export {
   getAttendanceByClass,
   getAttendanceSummary,
   getFinanceSummary,
+  getFinanceByClass,
+  getFinanceByHead,
+  getFinancePaymentMethods,
+  getFinanceOverdueBuckets,
   getExamPerformance,
 };

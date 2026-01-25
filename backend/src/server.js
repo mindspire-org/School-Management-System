@@ -6,7 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 import { pool } from './config/db.js';
-import { ensureAuthSchema, ensureCampusSchema } from './db/autoMigrate.js';
+import { ensureAuthSchema, ensureCampusSchema, ensureCardManagementSchema, ensureCertificatesSchema, ensureMasterDataSchema } from './db/autoMigrate.js';
+import { initDb } from './models/index.js';
 
 loadEnv();
 
@@ -15,9 +16,10 @@ const DEFAULT_PORT = 59201;
 let port = Number(process.env.PORT) || DEFAULT_PORT;
 
 async function ensureBaseSchema() {
-  const { rows } = await pool.query("SELECT to_regclass('public.users') AS users");
+  const { rows } = await pool.query("SELECT to_regclass('public.users') AS users, to_regclass('public.settings') AS settings");
   const hasUsers = !!rows?.[0]?.users;
-  if (hasUsers) return;
+  const hasSettings = !!rows?.[0]?.settings;
+  if (hasUsers && hasSettings) return;
 
   const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
   const schemaPath = path.join(__dirname, 'db', 'schema.sql');
@@ -41,8 +43,18 @@ async function boot() {
     await ensureBaseSchema();
     await ensureAuthSchema();
     await ensureCampusSchema();
+    await ensureCardManagementSchema();
+    await ensureCertificatesSchema();
+    await ensureMasterDataSchema();
   } catch (e) {
     try { console.error('Auto-migration failed:', e?.stack || e); } catch (_) {}
+  }
+
+  // Ensure Sequelize-managed module tables exist
+  try {
+    await initDb();
+  } catch (e) {
+    try { console.error('Sequelize init failed:', e?.stack || e); } catch (_) {}
   }
 
   // Seed or ensure Owner account exists BEFORE starting server to avoid race

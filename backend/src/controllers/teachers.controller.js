@@ -1,4 +1,5 @@
 import * as teachers from '../services/teachers.service.js';
+import { query } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import * as authSvc from '../services/auth.service.js';
 
@@ -425,6 +426,29 @@ export const updatePayroll = async (req, res, next) => {
     const updated = await teachers.updatePayroll(Number(req.params.id), req.body);
     if (!updated) return res.status(404).json({ message: 'Payroll record not found' });
     return res.json(updated);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const deletePayroll = async (req, res, next) => {
+  try {
+    const campusId = req.user?.campusId;
+    if (!campusId) return res.status(400).json({ message: 'campusId is required' });
+
+    const { rows } = await query(
+      `SELECT tp.id
+         FROM teacher_payrolls tp
+         JOIN teachers t ON t.id = tp.teacher_id
+        WHERE tp.id = $1 AND t.campus_id = $2
+        LIMIT 1`,
+      [Number(req.params.id), Number(campusId)]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Payroll record not found' });
+
+    const deleted = await teachers.deletePayroll(Number(req.params.id));
+    if (!deleted) return res.status(404).json({ message: 'Payroll record not found' });
+    return res.json({ success: true });
   } catch (e) {
     next(e);
   }

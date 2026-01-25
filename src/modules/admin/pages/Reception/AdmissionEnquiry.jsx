@@ -7,7 +7,7 @@ import {
 import { MdAdd, MdSearch, MdEdit, MdDelete, MdSchool } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import StatCard from '../../../../components/card/StatCard';
-import { admissionEnquiryApi } from '../../../../services/moduleApis';
+import { admissionEnquiryApi, studentApi } from '../../../../services/moduleApis';
 import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function AdmissionEnquiry() {
@@ -16,14 +16,67 @@ export default function AdmissionEnquiry() {
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [enquiries, setEnquiries] = useState([]);
+    const [students, setStudents] = useState([]);
+    const [studentsLoading, setStudentsLoading] = useState(false);
 
     const { isOpen, onOpen, onClose } = useDisclosure();
-    const [form, setForm] = useState({ id: '', date: '', studentName: '', parentName: '', contact: '', email: '', class: '', status: 'Pending', notes: '', followUpDate: '' });
+    const [form, setForm] = useState({ id: '', date: '', studentId: '', studentName: '', parentName: '', contact: '', email: '', class: '', status: 'Pending', notes: '', followUpDate: '' });
     const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
+
+    const pickFirst = (...values) => values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+
+    const studentToAutoFields = (s) => {
+        if (!s) return {};
+
+        const parentName = pickFirst(
+            s.parentName,
+            s.fatherName,
+            s.guardianName,
+            s.parent_name,
+            s.father_name,
+            s.guardian_name
+        );
+        const contact = pickFirst(
+            s.contact,
+            s.phone,
+            s.mobile,
+            s.parentPhone,
+            s.fatherPhone,
+            s.guardianPhone,
+            s.parent_phone,
+            s.father_phone,
+            s.guardian_phone
+        );
+        const email = pickFirst(s.email, s.studentEmail, s.parentEmail, s.parent_email);
+
+        const cls = pickFirst(
+            s.class,
+            s.className,
+            s.class_name,
+            s.grade,
+            s.classGrade,
+            s.class_grade
+        );
+        const section = pickFirst(s.section, s.classSection, s.class_section);
+        const classLabel = pickFirst(section ? `${cls} ${section}` : cls);
+
+        return {
+            parentName,
+            contact,
+            email,
+            class: classLabel,
+        };
+    };
 
     useEffect(() => {
         fetchEnquiries();
     }, [campusId]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        fetchStudents();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, campusId]);
 
     const fetchEnquiries = async () => {
         setLoading(true);
@@ -34,6 +87,19 @@ export default function AdmissionEnquiry() {
             toast({ title: 'Error fetching enquiries', status: 'error' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchStudents = async () => {
+        setStudentsLoading(true);
+        try {
+            const data = await studentApi.list({ campusId });
+            const list = data?.items || data?.rows || data || [];
+            setStudents(Array.isArray(list) ? list : []);
+        } catch (_) {
+            setStudents([]);
+        } finally {
+            setStudentsLoading(false);
         }
     };
 
@@ -79,7 +145,7 @@ export default function AdmissionEnquiry() {
                     <Heading as="h3" size="lg" mb={1}>Admission Enquiry</Heading>
                     <Text color={textColorSecondary}>Manage prospective student enquiries</Text>
                 </Box>
-                <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', date: new Date().toISOString().slice(0, 10), studentName: '', parentName: '', contact: '', email: '', class: '', status: 'Pending', notes: '', followUpDate: '' }); onOpen(); }}>
+                <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', date: new Date().toISOString().slice(0, 10), studentId: '', studentName: '', parentName: '', contact: '', email: '', class: '', status: 'Pending', notes: '', followUpDate: '' }); onOpen(); }}>
                     Add Enquiry
                 </Button>
             </Flex>
@@ -160,7 +226,33 @@ export default function AdmissionEnquiry() {
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Student Name</FormLabel>
-                            <Input value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} />
+                            <Select
+                                placeholder={studentsLoading ? 'Loading students...' : 'Select student'}
+                                value={form.studentId || ''}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    const selected = (students || []).find((s) => String(s?.id) === String(id));
+                                    const auto = studentToAutoFields(selected);
+                                    setForm({
+                                        ...form,
+                                        studentId: id,
+                                        studentName: selected?.name || selected?.studentName || selected?.fullName || form.studentName,
+                                        parentName: auto.parentName ?? form.parentName,
+                                        contact: auto.contact ?? form.contact,
+                                        email: auto.email ?? form.email,
+                                        class: auto.class ?? form.class,
+                                    });
+                                }}
+                                isDisabled={studentsLoading}
+                                mb={2}
+                            >
+                                {(students || []).map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name || s.studentName || s.fullName || s.id}
+                                    </option>
+                                ))}
+                            </Select>
+                            <Input value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} placeholder="Student name" />
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Parent Name</FormLabel>

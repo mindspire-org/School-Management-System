@@ -1,16 +1,27 @@
 import * as service from '../services/masterData.service.js';
 
+const resolveCampusId = (req) => {
+    const headerCampusId =
+        req.headers?.['x-campus-id'] ??
+        req.headers?.['x-campusid'] ??
+        req.headers?.['campus-id'] ??
+        req.headers?.['campusid'];
+    const id = headerCampusId ?? req.user?.campusId;
+    const num = Number(id);
+    return Number.isFinite(num) && num > 0 ? num : null;
+};
+
 // --- Subjects ---
 export const getSubjects = async (req, res, next) => {
     try {
-        const data = await service.getSubjects(req.user?.campusId);
+        const data = await service.getSubjects(resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };
 
 export const createSubject = async (req, res, next) => {
     try {
-        const data = await service.createSubject(req.body, req.user?.campusId);
+        const data = await service.createSubject(req.body, resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };
@@ -32,14 +43,14 @@ export const deleteSubject = async (req, res, next) => {
 // --- Designations ---
 export const getDesignations = async (req, res, next) => {
     try {
-        const data = await service.getDesignations(req.user?.campusId);
+        const data = await service.getDesignations(resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };
 
 export const createDesignation = async (req, res, next) => {
     try {
-        const data = await service.createDesignation(req.body, req.user?.campusId);
+        const data = await service.createDesignation(req.body, resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };
@@ -61,14 +72,14 @@ export const deleteDesignation = async (req, res, next) => {
 // --- Fee Rules ---
 export const getFeeRules = async (req, res, next) => {
     try {
-        const data = await service.getFeeRules(req.user?.campusId);
+        const data = await service.getFeeRules(resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };
 
 export const createFeeRule = async (req, res, next) => {
     try {
-        const data = await service.createFeeRule(req.body, req.user?.campusId);
+        const data = await service.createFeeRule(req.body, resolveCampusId(req));
         res.json(data);
     } catch (err) { next(err); }
 };

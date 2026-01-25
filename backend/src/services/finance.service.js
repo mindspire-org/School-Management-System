@@ -171,11 +171,17 @@ export const getUsersByType = async (userType) => {
              FROM students ORDER BY name`;
       break;
     case 'teacher':
-      sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation 
+      sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation,
+                    COALESCE(base_salary, 0)::numeric AS "baseSalary",
+                    COALESCE(allowances, 0)::numeric AS allowances,
+                    COALESCE(deductions, 0)::numeric AS deductions
              FROM teachers ORDER BY name`;
       break;
     case 'driver':
-      sql = `SELECT id, name, email, license_number AS "licenseNumber", phone 
+      sql = `SELECT id, name, email, license_number AS "licenseNumber", phone,
+                    COALESCE(base_salary, 0)::numeric AS "baseSalary",
+                    COALESCE(allowances, 0)::numeric AS allowances,
+                    COALESCE(deductions, 0)::numeric AS deductions
              FROM drivers ORDER BY name`;
       break;
     default:
@@ -200,10 +206,18 @@ export const getUsersByTypeScoped = async (userType, { campusId } = {}) => {
       sql = `SELECT id, name, email, roll_number AS "rollNumber", class, section FROM students ${whereSql} ORDER BY name`;
       break;
     case 'teacher':
-      sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation FROM teachers ${whereSql} ORDER BY name`;
+      sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation,
+                    COALESCE(base_salary, 0)::numeric AS "baseSalary",
+                    COALESCE(allowances, 0)::numeric AS allowances,
+                    COALESCE(deductions, 0)::numeric AS deductions
+             FROM teachers ${whereSql} ORDER BY name`;
       break;
     case 'driver':
-      sql = `SELECT id, name, email, license_number AS "licenseNumber", phone FROM drivers ${whereSql} ORDER BY name`;
+      sql = `SELECT id, name, email, license_number AS "licenseNumber", phone,
+                    COALESCE(base_salary, 0)::numeric AS "baseSalary",
+                    COALESCE(allowances, 0)::numeric AS allowances,
+                    COALESCE(deductions, 0)::numeric AS deductions
+             FROM drivers ${whereSql} ORDER BY name`;
       break;
     default:
       throw new Error('Invalid user type');
@@ -573,15 +587,30 @@ export const listReceipts = async ({ userType, userId, userIds, campusId, page =
 
 // Create receipt
 export const createReceipt = async (paymentId, createdBy = null) => {
-  // Get payment details
-  const { rows: paymentRows } = await query(`
-    SELECT id, user_type, user_id, amount FROM finance_payments WHERE id = $1
+  const { rows: existingRows } = await query(`
+    SELECT fr.id, fr.receipt_number AS "receiptNumber", fr.payment_id AS "paymentId",
+           fr.user_type AS "userType", fr.user_id AS "userId", fr.amount,
+           fr.issued_at AS "issuedAt", fr.printed_at AS "printedAt",
+           fp.method AS "paymentMethod", fp.reference_number AS "referenceNumber", fp.paid_at AS "paidAt",
+           fi.invoice_number AS "invoiceNumber"
+      FROM finance_receipts fr
+      JOIN finance_payments fp ON fr.payment_id = fp.id
+      JOIN finance_invoices fi ON fp.invoice_id = fi.id
+     WHERE fr.payment_id = $1
+     ORDER BY fr.issued_at DESC
+     LIMIT 1
   `, [paymentId]);
-
-  if (!paymentRows[0]) {
-    throw new Error('Payment not found');
+  if (existingRows[0]) {
+    const receipt = existingRows[0];
+    receipt.userName = await getUserName(receipt.userType, receipt.userId);
+    return receipt;
   }
 
+  const { rows: paymentRows } = await query(
+    `SELECT id, user_type, user_id, amount FROM finance_payments WHERE id = $1`,
+    [paymentId]
+  );
+  if (!paymentRows[0]) throw new Error('Payment not found');
   const payment = paymentRows[0];
 
   // Generate receipt number
@@ -591,11 +620,27 @@ export const createReceipt = async (paymentId, createdBy = null) => {
   const { rows } = await query(`
     INSERT INTO finance_receipts (receipt_number, payment_id, user_type, user_id, amount, created_by)
     VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, receipt_number AS "receiptNumber", payment_id AS "paymentId",
-              user_type AS "userType", user_id AS "userId", amount, issued_at AS "issuedAt"
+    RETURNING id
   `, [receiptNumber, paymentId, payment.user_type, payment.user_id, payment.amount, createdBy]);
 
-  const receipt = rows[0];
+  const receiptId = rows?.[0]?.id;
+  if (!receiptId) throw new Error('Failed to create receipt');
+
+  const { rows: receiptRows } = await query(`
+    SELECT fr.id, fr.receipt_number AS "receiptNumber", fr.payment_id AS "paymentId",
+           fr.user_type AS "userType", fr.user_id AS "userId", fr.amount,
+           fr.issued_at AS "issuedAt", fr.printed_at AS "printedAt",
+           fp.method AS "paymentMethod", fp.reference_number AS "referenceNumber", fp.paid_at AS "paidAt",
+           fi.invoice_number AS "invoiceNumber"
+      FROM finance_receipts fr
+      JOIN finance_payments fp ON fr.payment_id = fp.id
+      JOIN finance_invoices fi ON fp.invoice_id = fi.id
+     WHERE fr.id = $1
+     LIMIT 1
+  `, [receiptId]);
+
+  const receipt = receiptRows?.[0];
+  if (!receipt) throw new Error('Failed to load receipt');
   receipt.userName = await getUserName(receipt.userType, receipt.userId);
   return receipt;
 };

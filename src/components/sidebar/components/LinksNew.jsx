@@ -42,15 +42,29 @@ export function SidebarLinks(props) {
   const isCollapsed = !!toggleSidebar;
 
   // verifies if routeName is the one active (in browser input)
-  const activeRoute = (routeName) => {
-    return location.pathname.includes(routeName);
+  const normalizePath = (p) => {
+    if (!p) return '';
+    return String(p).toLowerCase();
+  };
+
+  const getFullPath = (r) => {
+    if (!r) return '';
+    return normalizePath(`${r.layout || ''}${r.path || ''}`);
+  };
+
+  const isRouteActive = (fullPath) => {
+    const current = normalizePath(location.pathname);
+    const target = normalizePath(fullPath);
+    if (!target) return false;
+    if (current === target) return true;
+    return current.startsWith(target + '/');
   };
 
   // Check if any child route is active
   const hasActiveChild = (items) => {
     if (!items) return false;
     return items.some(item =>
-      item.path && activeRoute(item.path.toLowerCase())
+      item.path && isRouteActive(getFullPath(item))
     );
   };
 
@@ -133,19 +147,19 @@ export function SidebarLinks(props) {
             <Text
               fontSize="sm"
               color={
-                activeRoute(item.path.toLowerCase())
+                isRouteActive(getFullPath(item))
                   ? activeColor
                   : textColor
               }
               fontWeight={
-                activeRoute(item.path.toLowerCase())
+                isRouteActive(getFullPath(item))
                   ? "600"
                   : "normal"
               }
             >
               {item.name}
             </Text>
-            {activeRoute(item.path.toLowerCase()) && (
+            {isRouteActive(getFullPath(item)) && (
               <Box
                 position="absolute"
                 left="0"
@@ -229,8 +243,8 @@ export function SidebarLinks(props) {
                             >
                               <Text
                                 fontSize="sm"
-                                color={activeRoute(item.path.toLowerCase()) ? activeColor : textColor}
-                                fontWeight={activeRoute(item.path.toLowerCase()) ? "600" : "normal"}
+                                color={isRouteActive(getFullPath(item)) ? activeColor : textColor}
+                                fontWeight={isRouteActive(getFullPath(item)) ? "600" : "normal"}
                               >
                                 {item.name}
                               </Text>
@@ -341,13 +355,14 @@ export function SidebarLinks(props) {
         route.layout === "/student" ||
         route.layout === "/driver"
       ) {
+        const fullPath = getFullPath(route);
         const linkContent = (
           <NavLink key={index} to={route.layout + route.path}>
             {route.icon ? (
               <Box mb="4px">
                 <HStack
                   spacing={
-                    activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
+                    isRouteActive(fullPath) ? "22px" : "26px"
                   }
                   py="10px"
                   ps="10px"
@@ -360,7 +375,7 @@ export function SidebarLinks(props) {
                   <Flex w="100%" alignItems="center" justifyContent="center">
                     <Box
                       color={
-                        activeRoute(route.path.toLowerCase())
+                        isRouteActive(fullPath)
                           ? activeIcon
                           : textColor
                       }
@@ -371,12 +386,12 @@ export function SidebarLinks(props) {
                     <Text
                       me="auto"
                       color={
-                        activeRoute(route.path.toLowerCase())
+                        isRouteActive(fullPath)
                           ? activeColor
                           : textColor
                       }
                       fontWeight={
-                        activeRoute(route.path.toLowerCase())
+                        isRouteActive(fullPath)
                           ? "bold"
                           : "500"
                       }
@@ -386,7 +401,7 @@ export function SidebarLinks(props) {
                       {route.name}
                     </Text>
                   </Flex>
-                  {activeRoute(route.path.toLowerCase()) && (
+                  {isRouteActive(fullPath) && (
                     isCollapsed ? (
                       <Box
                         position="absolute"
@@ -413,7 +428,7 @@ export function SidebarLinks(props) {
               <Box mb="4px">
                 <HStack
                   spacing={
-                    activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
+                    isRouteActive(fullPath) ? "22px" : "26px"
                   }
                   py="10px"
                   ps="10px"
@@ -425,19 +440,19 @@ export function SidebarLinks(props) {
                   <Text
                     me="auto"
                     color={
-                      activeRoute(route.path.toLowerCase())
+                      isRouteActive(fullPath)
                         ? activeColor
                         : inactiveColor
                     }
                     fontWeight={
-                      activeRoute(route.path.toLowerCase()) ? "bold" : "500"
+                      isRouteActive(fullPath) ? "bold" : "500"
                     }
                     fontSize="md"
                     display={isCollapsed ? "none" : "block"}
                   >
                     {route.name}
                   </Text>
-                  {activeRoute(route.path.toLowerCase()) && (
+                  {isRouteActive(fullPath) && (
                     <Box h="36px" w="4px" bg={brandColor} borderRadius="5px" />
                   )}
                 </HStack>

@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Flex, Button, useToast, Table, Thead, Tbody, Tr, Th, Td, Text, Heading, useColorModeValue,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter,
-    FormControl, FormLabel, Input, useDisclosure, Textarea
+    FormControl, FormLabel, Input, Select, useDisclosure, Textarea
 } from '@chakra-ui/react';
 import { MdAdd, MdEmojiEvents } from 'react-icons/md';
 import Card from '../../../../../components/card/Card';
-import { awardApi } from '../../../../../services/moduleApis';
+import { awardApi, hrEmployeesApi } from '../../../../../services/moduleApis';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function AwardsList() {
@@ -15,17 +15,31 @@ export default function AwardsList() {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [awards, setAwards] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [employees, setEmployees] = useState([]);
     const [formData, setFormData] = useState({
         awardName: '',
         giftItem: '',
         cashPrice: '',
         employeeName: '',
+        employeeId: '',
         reason: ''
     });
 
     const textColor = useColorModeValue('secondaryGray.900', 'white');
 
     useEffect(() => { fetchAwards(); }, [campusId]);
+
+    useEffect(() => {
+        const run = async () => {
+            try {
+                const rows = await hrEmployeesApi.list({ campusId });
+                setEmployees(Array.isArray(rows) ? rows : []);
+            } catch (e) {
+                setEmployees([]);
+            }
+        };
+        run();
+    }, [campusId]);
 
     const fetchAwards = async () => {
         setLoading(true);
@@ -38,7 +52,11 @@ export default function AwardsList() {
 
     const handleSubmit = async () => {
         try {
-            await awardApi.create({ ...formData, campusId, employeeId: 0 });
+            if (!formData.employeeId) {
+                toast({ title: 'Please select an employee', status: 'warning' });
+                return;
+            }
+            await awardApi.create({ ...formData, campusId, employeeId: Number(formData.employeeId) });
             toast({ title: 'Award Given', status: 'success' });
             onClose();
             fetchAwards();
@@ -81,7 +99,25 @@ export default function AwardsList() {
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Employee Name</FormLabel>
-                            <Input value={formData.employeeName} onChange={e => setFormData({ ...formData, employeeName: e.target.value })} />
+                            <Select
+                                placeholder="Select Employee"
+                                value={formData.employeeId || ''}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    const emp = employees.find((x) => String(x.id) === String(id));
+                                    setFormData((p) => ({
+                                        ...p,
+                                        employeeId: id,
+                                        employeeName: emp?.name || '',
+                                    }));
+                                }}
+                            >
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.id}>
+                                        {emp.name}{emp.designation ? ` (${emp.designation})` : ''}
+                                    </option>
+                                ))}
+                            </Select>
                         </FormControl>
                         <FormControl mb={3}>
                             <FormLabel>Gift Item</FormLabel>

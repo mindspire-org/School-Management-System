@@ -9,71 +9,73 @@ const { Pool, Client } = pg;
 const defaultSchool = 'postgres://postgres:12345@localhost:5432/school_db';
 const defaultPostgres = 'postgres://postgres:12345@localhost:5432/postgres';
 
-async function testDb(url) {
-  let ssl;
+const toSSL = (url) => {
   try {
     const u = new URL(url);
     const sslEnabled =
       u.searchParams.get('ssl') === 'true' ||
       u.searchParams.get('sslmode') === 'require' ||
       process.env.PGSSL === 'true';
-    ssl = sslEnabled ? { rejectUnauthorized: false } : undefined;
+    return sslEnabled ? { rejectUnauthorized: false } : undefined;
   } catch (_) {
-    ssl = undefined;
+    return undefined;
   }
+};
 
-  const client = new Client({ connectionString: url, ssl });
+const forceSchoolDbUrl = (rawUrl) => {
+  try {
+    const u = new URL(rawUrl);
+    u.pathname = '/school_db';
+    return u.toString();
+  } catch (_) {
+    return defaultSchool;
+  }
+};
+
+const forcePostgresDbUrl = (rawUrl) => {
+  try {
+    const u = new URL(rawUrl);
+    u.pathname = '/postgres';
+    return u.toString();
+  } catch (_) {
+    return defaultPostgres;
+  }
+};
+
+async function ensureDatabaseExists({ adminUrl, dbName }) {
+  const ssl = toSSL(adminUrl);
+  const client = new Client({ connectionString: adminUrl, ssl });
   try {
     await client.connect();
-    const r = await client.query("SELECT to_regclass('public.users') AS users, to_regclass('public.students') AS students, to_regclass('public.settings') AS settings");
-    const hasTables = !!(r?.rows?.[0]?.users || r?.rows?.[0]?.students || r?.rows?.[0]?.settings);
-    return { ok: true, hasTables, ssl };
+    const exists = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
+    if (exists?.rowCount) return true;
+    await client.query(`CREATE DATABASE ${dbName}`);
+    return true;
   } catch (_) {
-    return { ok: false, hasTables: false, ssl: undefined };
+    return false;
   } finally {
     try { await client.end(); } catch (_) { }
   }
 }
 
-async function detectConnectionString() {
-  const envUrl = process.env.DATABASE_URL;
+// FORCE: Always use school_db
+const envUrl = process.env.DATABASE_URL;
+const baseUrl = envUrl || defaultSchool;
+const schoolUrl = forceSchoolDbUrl(baseUrl);
+const adminUrl = forcePostgresDbUrl(baseUrl);
 
-  // Evaluate school_db and postgres
-  const tSchool = await testDb(defaultSchool);
-  const tPost = await testDb(defaultPostgres);
+// Best-effort: create school_db if it doesn't exist
+await ensureDatabaseExists({ adminUrl, dbName: 'school_db' });
 
-  // 1) If DATABASE_URL is provided, honor it only if it targets school_db OR it has app tables
-  if (envUrl) {
-    try {
-      const u = new URL(envUrl);
-      const dbName = (u.pathname || '').replace(/^\//, '');
-      const tEnv = await testDb(envUrl);
-      if (dbName === 'school_db' && tEnv.ok) return { url: envUrl, ssl: tEnv.ssl };
-      if (tEnv.ok && tEnv.hasTables) return { url: envUrl, ssl: tEnv.ssl };
-      // If env connects but lacks tables and school_db is available, prefer school_db
-      if (tSchool.ok) return { url: defaultSchool, ssl: tSchool.ssl };
-      if (tPost.ok && tPost.hasTables) return { url: defaultPostgres, ssl: tPost.ssl };
-      if (tEnv.ok) return { url: envUrl, ssl: tEnv.ssl };
-    } catch (_) {
-      // ignore parse errors, fall through
-    }
-  }
+const detected = { url: schoolUrl, ssl: toSSL(schoolUrl) };
 
-  // 2) Prefer existing school_db with app tables
-  if (tSchool.ok && tSchool.hasTables) return { url: defaultSchool, ssl: tSchool.ssl };
-
-  // 3) Next prefer existing postgres with app tables
-  if (tPost.ok && tPost.hasTables) return { url: defaultPostgres, ssl: tPost.ssl };
-
-  // 4) If none have tables, prefer whichever connects: school_db first
-  if (tSchool.ok) return { url: defaultSchool, ssl: tSchool.ssl };
-  if (tPost.ok) return { url: defaultPostgres, ssl: tPost.ssl };
-
-  // 5) Final fallback
-  return { url: envUrl || defaultSchool, ssl: undefined };
-}
-
-const detected = await detectConnectionString();
+try {
+  const u = new URL(detected.url);
+  const dbName = (u.pathname || '').replace(/^\//, '');
+  const host = u.hostname;
+  const port = u.port || '5432';
+  console.log(`[db] Using database ${dbName} at ${host}:${port}`);
+} catch (_) {}
 
 export const connectionDetails = detected;
 

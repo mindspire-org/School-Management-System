@@ -1,24 +1,64 @@
 import { Router } from 'express';
-import { Product, Category, Store, Supplier, Unit, Purchase, Sale, Issue } from '../models/index.js';
+import { sequelize, Product, Category, Store, Supplier, Unit, Purchase, Sale, Issue } from '../models/index.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(authenticate);
+
+const adminRoles = new Set(['admin', 'owner', 'superadmin']);
+
+const resolveCampusId = (req) => {
+    const headerCampusId =
+        req.headers?.['x-campus-id'] ??
+        req.headers?.['x-campusid'] ??
+        req.headers?.['campus-id'] ??
+        req.headers?.['campusid'];
+    const raw = headerCampusId ?? req.query?.campusId ?? req.body?.campusId;
+    const requested = raw === '' || raw === undefined || raw === null ? null : raw;
+    const role = req.user?.role;
+    const authCampusId = req.user?.campusId;
+
+    if (authCampusId && !adminRoles.has(role)) return authCampusId;
+    const resolved = requested ?? authCampusId;
+    if (resolved === '' || resolved === undefined || resolved === null) return null;
+    const n = Number(resolved);
+    if (Number.isNaN(n)) return null;
+    return n;
+};
 
 // Generic CRUD operations
 const createCRUD = (Model) => ({
     getAll: async (req, res) => {
         try {
-            const { campusId } = req.query;
+            const campusId = resolveCampusId(req);
             const where = campusId ? { campusId } : {};
             const items = await Model.findAll({ where });
-            res.json(items);
+
+            if (Model === Category && campusId) {
+                const categories = items.map((c) => c.toJSON());
+                const counts = await Promise.all(
+                    categories.map(async (c) => {
+                        const productCount = await Product.count({ where: { campusId, category: c.name } });
+                        return { ...c, productCount };
+                    })
+                );
+                return res.json(counts);
+            }
+
+            return res.json(items);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
     getOne: async (req, res) => {
         try {
+            const campusId = resolveCampusId(req);
             const item = await Model.findByPk(req.params.id);
             if (!item) return res.status(404).json({ error: 'Not found' });
+            if (campusId && String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
             res.json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -26,7 +66,15 @@ const createCRUD = (Model) => ({
     },
     create: async (req, res) => {
         try {
-            const item = await Model.create(req.body);
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+
+            const payload = { ...req.body };
+            if (payload.id === '' || payload.id === null || payload.id === undefined) delete payload.id;
+            if (payload.campusId === '' || payload.campusId === null || payload.campusId === undefined) delete payload.campusId;
+            if (payload.campus_id === '' || payload.campus_id === null || payload.campus_id === undefined) delete payload.campus_id;
+
+            const item = await Model.create({ ...payload, campusId });
             res.status(201).json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -34,24 +82,75 @@ const createCRUD = (Model) => ({
     },
     update: async (req, res) => {
         try {
-            const [updated] = await Model.update(req.body, { where: { id: req.params.id } });
-            if (!updated) return res.status(404).json({ error: 'Not found' });
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
             const item = await Model.findByPk(req.params.id);
-            res.json(item);
+            if (!item) return res.status(404).json({ error: 'Not found' });
+            if (campusId && String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+
+            const payload = { ...req.body };
+            delete payload.id;
+            delete payload.campusId;
+            delete payload.campus_id;
+
+            await item.update({ ...payload, campusId });
+            return res.json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
     delete: async (req, res) => {
         try {
-            const deleted = await Model.destroy({ where: { id: req.params.id } });
-            if (!deleted) return res.status(404).json({ error: 'Not found' });
-            res.json({ message: 'Deleted successfully' });
+            const campusId = resolveCampusId(req);
+            if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+            const item = await Model.findByPk(req.params.id);
+            if (!item) return res.status(404).json({ error: 'Not found' });
+            if (campusId && String(item.campusId) !== String(campusId)) {
+                return res.status(404).json({ error: 'Not found' });
+            }
+
+            await item.destroy();
+            return res.json({ message: 'Deleted successfully' });
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
 });
+
+const coerceNumber = (v) => {
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+};
+
+const applyStockDelta = async (productId, delta, campusId, t) => {
+    if (!productId || !delta) return;
+    const productPk = coerceNumber(productId) ?? productId;
+    const product = await Product.findByPk(productPk, { transaction: t });
+    if (!product) {
+        const err = new Error('Product not found');
+        err.status = 400;
+        throw err;
+    }
+    if (campusId && String(product.campusId) !== String(campusId)) {
+        const err = new Error('Product campus mismatch');
+        err.status = 400;
+        throw err;
+    }
+    const currentQty = Number(product.quantity || 0);
+    const nextQty = currentQty + Number(delta);
+    if (nextQty < 0) {
+        const err = new Error('Insufficient stock');
+        err.status = 400;
+        throw err;
+    }
+    await product.update({ quantity: nextQty }, { transaction: t });
+};
+
+const purchaseEffect = (p) => (p?.status === 'Completed' ? Number(p?.quantity || 0) : 0);
+const saleEffect = (s) => (s?.status === 'Paid' ? -Number(s?.quantity || 0) : 0);
+const issueEffect = (i) => (i?.status === 'Issued' ? -Number(i?.quantity || 0) : 0);
 
 // Product routes
 const productCRUD = createCRUD(Product);
@@ -97,24 +196,183 @@ router.delete('/units/:id', unitCRUD.delete);
 const purchaseCRUD = createCRUD(Purchase);
 router.get('/purchases', purchaseCRUD.getAll);
 router.get('/purchases/:id', purchaseCRUD.getOne);
-router.post('/purchases', purchaseCRUD.create);
-router.put('/purchases/:id', purchaseCRUD.update);
-router.delete('/purchases/:id', purchaseCRUD.delete);
+router.post('/purchases', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const body = { ...req.body, ...(campusId ? { campusId } : {}) };
+    const t = await sequelize.transaction();
+    try {
+        const created = await Purchase.create(body, { transaction: t });
+        await applyStockDelta(created.productId, purchaseEffect(created), campusId, t);
+        await t.commit();
+        return res.status(201).json(created);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.put('/purchases/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Purchase.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+
+        await applyStockDelta(existing.productId, -purchaseEffect(existing), campusId, t);
+        await existing.update({ ...req.body, ...(campusId ? { campusId } : {}) }, { transaction: t });
+        await applyStockDelta(existing.productId, purchaseEffect(existing), campusId, t);
+
+        await t.commit();
+        return res.json(existing);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.delete('/purchases/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Purchase.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+        await applyStockDelta(existing.productId, -purchaseEffect(existing), campusId, t);
+        await existing.destroy({ transaction: t });
+        await t.commit();
+        return res.json({ message: 'Deleted successfully' });
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
 
 // Sale routes
 const saleCRUD = createCRUD(Sale);
 router.get('/sales', saleCRUD.getAll);
 router.get('/sales/:id', saleCRUD.getOne);
-router.post('/sales', saleCRUD.create);
-router.put('/sales/:id', saleCRUD.update);
-router.delete('/sales/:id', saleCRUD.delete);
+router.post('/sales', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const body = { ...req.body, ...(campusId ? { campusId } : {}) };
+    const t = await sequelize.transaction();
+    try {
+        const created = await Sale.create(body, { transaction: t });
+        await applyStockDelta(created.productId, saleEffect(created), campusId, t);
+        await t.commit();
+        return res.status(201).json(created);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.put('/sales/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Sale.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+
+        await applyStockDelta(existing.productId, -saleEffect(existing), campusId, t);
+        await existing.update({ ...req.body, ...(campusId ? { campusId } : {}) }, { transaction: t });
+        await applyStockDelta(existing.productId, saleEffect(existing), campusId, t);
+
+        await t.commit();
+        return res.json(existing);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.delete('/sales/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Sale.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+        await applyStockDelta(existing.productId, -saleEffect(existing), campusId, t);
+        await existing.destroy({ transaction: t });
+        await t.commit();
+        return res.json({ message: 'Deleted successfully' });
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
 
 // Issue routes
 const issueCRUD = createCRUD(Issue);
 router.get('/issues', issueCRUD.getAll);
 router.get('/issues/:id', issueCRUD.getOne);
-router.post('/issues', issueCRUD.create);
-router.put('/issues/:id', issueCRUD.update);
-router.delete('/issues/:id', issueCRUD.delete);
+router.post('/issues', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const body = { ...req.body, ...(campusId ? { campusId } : {}) };
+    const t = await sequelize.transaction();
+    try {
+        const created = await Issue.create(body, { transaction: t });
+        await applyStockDelta(created.productId, issueEffect(created), campusId, t);
+        await t.commit();
+        return res.status(201).json(created);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.put('/issues/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Issue.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+
+        await applyStockDelta(existing.productId, -issueEffect(existing), campusId, t);
+        await existing.update({ ...req.body, ...(campusId ? { campusId } : {}) }, { transaction: t });
+        await applyStockDelta(existing.productId, issueEffect(existing), campusId, t);
+
+        await t.commit();
+        return res.json(existing);
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
+router.delete('/issues/:id', async (req, res) => {
+    const campusId = resolveCampusId(req);
+    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
+    const t = await sequelize.transaction();
+    try {
+        const existing = await Issue.findByPk(req.params.id, { transaction: t });
+        if (!existing) {
+            await t.rollback();
+            return res.status(404).json({ error: 'Not found' });
+        }
+        await applyStockDelta(existing.productId, -issueEffect(existing), campusId, t);
+        await existing.destroy({ transaction: t });
+        await t.commit();
+        return res.json({ message: 'Deleted successfully' });
+    } catch (error) {
+        await t.rollback();
+        return res.status(error.status || 500).json({ error: error.message });
+    }
+});
 
 export default router;

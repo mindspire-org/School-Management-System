@@ -39,17 +39,28 @@ export default function Events() {
 
     const handleSave = async () => {
         try {
+            const payload = { ...form, campusId };
+            delete payload.id;
+            if (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) {
+                payload.date = new Date(`${payload.date}T00:00:00.000Z`).toISOString();
+            }
+
             if (form.id) {
-                await eventsApi.update(form.id, { ...form, campusId });
+                await eventsApi.update(form.id, payload);
                 toast({ title: 'Event updated', status: 'success' });
             } else {
-                await eventsApi.create({ ...form, campusId });
+                await eventsApi.create(payload);
                 toast({ title: 'Event created', status: 'success' });
             }
             fetchEvents();
             onClose();
         } catch (error) {
-            toast({ title: 'Error saving event', status: 'error' });
+            const msg =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                'Error saving event';
+            toast({ title: 'Error saving event', description: msg, status: 'error' });
         }
     };
 

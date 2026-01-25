@@ -49,7 +49,12 @@ export default function Category() {
             fetchCategories();
             onClose();
         } catch (error) {
-            toast({ title: 'Error saving category', status: 'error' });
+            const msg =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                'Error saving category';
+            toast({ title: 'Error saving category', description: msg, status: 'error' });
         }
     };
 

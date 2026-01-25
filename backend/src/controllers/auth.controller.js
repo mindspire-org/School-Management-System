@@ -10,6 +10,7 @@ export const login = async (req, res, next) => {
   try {
     const { email, username, password, ownerKey } = req.body;
     const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
+    const ownerPassword = process.env.OWNER_PASSWORD || 'Qutaibah@123';
     const ownerKeyMin = Number(process.env.OWNER_KEY_MIN_LENGTH || 30);
 
     // Gate: disallow non-owner logins until licensing is configured
@@ -39,99 +40,55 @@ export const login = async (req, res, next) => {
       await ensureCampusSchema();
     } catch (_) { }
 
-    // Owner-first: verify email/password first, then require Owner Key as step-2
+    // Owner-first: require correct password; owner key is step-2
     if (String(email).toLowerCase().trim() === String(ownerEmail).toLowerCase().trim()) {
-      try {
-        // Ensure owner exists (bootstrap) and verify password
-        let ownerUser = await authService.findUserByEmail(ownerEmail);
-        if (!ownerUser) {
-          await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
-          ownerUser = await authService.findUserByEmail(ownerEmail);
-        }
-        if (!ownerUser) return res.status(401).json({ message: 'Invalid credentials' });
-        let passOk = await bcrypt.compare(password, ownerUser.password_hash || '');
-        if (!passOk) {
-          try {
-            await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
-            ownerUser = await authService.findUserByEmail(ownerEmail);
-            passOk = await bcrypt.compare(password, ownerUser.password_hash || '');
-          } catch (_) { }
-          if (!passOk && !force) return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        // After password verified, check license key
-        if (!force) {
-          const keyRow = await settingsSvc.getByKey('owner.key_hash');
-          const keyHash = keyRow?.value || '';
-          if (!keyHash) {
-            // First-time activation: require ownerKey and set it
-            if (!ownerKey || String(ownerKey).length < ownerKeyMin) {
-              return res.status(401).json({ message: `Owner key not set. Provide a ${ownerKeyMin}+ character key to initialize.`, code: 'OWNER_KEY_REQUIRED' });
-            }
-            const newHash = await bcrypt.hash(String(ownerKey), 10);
-            await settingsSvc.setKey('owner.key_hash', newHash);
-            // Auto-complete licensing on first-time activation
-            try {
-              await settingsSvc.setKey('licensing.configured', 'true');
-              await settingsSvc.setKey('licensing.allowed_modules', JSON.stringify(['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport']));
-            } catch (_) { }
-          } else {
-            // Subsequent owner logins: ownerKey is optional; if provided, verify
-            if (ownerKey) {
-              const keyOk = await bcrypt.compare(String(ownerKey), keyHash);
-              if (!keyOk) {
-                return res.status(401).json({ message: 'Invalid owner key' });
-              }
-            }
-          }
-        }
-
-        const userPayload = {
-          id: ownerUser.id,
-          email: ownerEmail,
-          role: 'owner',
-          name: ownerUser.name || 'Mindspire Owner',
-          campusId: ownerUser.campus_id
-        };
-        const token = signAccessToken(userPayload);
-        const refreshToken = signRefreshToken({ id: ownerUser.id });
-        return res.json({ token, refreshToken, user: userPayload });
-      } catch (err) {
-        // fall through to standard flow
+      // Ensure owner exists using configured password (NOT user-supplied)
+      let ownerUser = await authService.findUserByEmail(ownerEmail);
+      if (!ownerUser) {
+        await authService.ensureOwnerUser({ email: ownerEmail, password: ownerPassword, name: 'Mindspire Owner' });
+        ownerUser = await authService.findUserByEmail(ownerEmail);
       }
+      if (!ownerUser) return res.status(401).json({ message: 'Invalid credentials' });
+
+      const passOk = await bcrypt.compare(String(password || ''), ownerUser.password_hash || '');
+      if (!passOk) return res.status(401).json({ message: 'Invalid credentials' });
+
+      if (!force) {
+        const keyRow = await settingsSvc.getByKey('owner.key_hash');
+        const keyHash = keyRow?.value || '';
+        if (!keyHash) {
+          if (!ownerKey || String(ownerKey).length < ownerKeyMin) {
+            return res.status(401).json({ message: `Owner key not set. Provide a ${ownerKeyMin}+ character key to initialize.`, code: 'OWNER_KEY_REQUIRED' });
+          }
+          const newHash = await bcrypt.hash(String(ownerKey), 10);
+          await settingsSvc.setKey('owner.key_hash', newHash);
+          try {
+            await settingsSvc.setKey('licensing.configured', 'true');
+            await settingsSvc.setKey('licensing.allowed_modules', JSON.stringify(['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport']));
+          } catch (_) { }
+        } else if (ownerKey) {
+          const keyOk = await bcrypt.compare(String(ownerKey), keyHash);
+          if (!keyOk) return res.status(401).json({ message: 'Invalid owner key' });
+        }
+      }
+
+      const userPayload = {
+        id: ownerUser.id,
+        email: ownerEmail,
+        role: 'owner',
+        name: ownerUser.name || 'Mindspire Owner',
+        campusId: ownerUser.campus_id
+      };
+      const token = signAccessToken(userPayload);
+      const refreshToken = signRefreshToken({ id: ownerUser.id });
+      return res.json({ token, refreshToken, user: userPayload });
     }
 
     // If licensing is not configured yet, block all non-owner logins
     if (!licensingConfigured) {
       return res.status(423).json({ message: 'System setup pending. Only owner can sign in until licensing is configured.' });
     }
-    // If identifier looks like a phone number, treat as Parent Portal login first to avoid misclassifying as admin.
-    {
-      const id = String(email || '').trim();
-      const looksLikePhone = /^\+?\d{10,15}$/.test(id) || /^0\d{10}$/.test(id) || /^3\d{9}$/.test(id);
-      if (looksLikePhone) {
-        try { await ensureParentsSchema(); } catch (_) { }
-        try { await parentsSvc.backfillFromStudents(); } catch (_) { }
-        try {
-          const ensured = await authService.upsertParentUserForPhone({ phone: id, password, name: 'Parent' });
-          if (ensured) {
-            if (allowedRoles.size && !allowedRoles.has('parent')) {
-              return res.status(423).json({ message: 'Parent portal is not licensed for this installation.' });
-            }
-            const userPayload = {
-              id: ensured.id,
-              email: ensured.email,
-              role: 'parent',
-              name: ensured.name || 'Parent',
-              campusId: ensured.campus_id
-            };
-            const token = signAccessToken(userPayload);
-            const refreshToken = signRefreshToken({ id: ensured.id });
-            return res.json({ token, refreshToken, user: userPayload });
-          }
-        } catch (_) { }
-      }
-    }
+    // Strict auth: do not auto-provision users during login (including parent phone logins)
     // Accept either email or WhatsApp number in the "email" field for parents
     let user = null;
     if (email) {
@@ -149,63 +106,9 @@ export const login = async (req, res, next) => {
         user = await authService.findUserByUsername(s);
       }
     }
-    if (!user) {
-      // Fallback: if this is the configured Owner email, ensure it exists now
-      const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
-      if (String(email).toLowerCase() === String(ownerEmail).toLowerCase()) {
-        try {
-          await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
-          user = await authService.findUserByEmail(ownerEmail);
-        } catch (_) { }
-      }
-
-      // If identifier looks like a phone, try parent auto-provisioning by phone
-      const id = String(email || '').trim();
-      const looksLikePhone = /^\+?\d{10,15}$/.test(id) || /^0\d{10}$/.test(id) || /^3\d{9}$/.test(id);
-      if (looksLikePhone) {
-        try { await ensureParentsSchema(); } catch (_) { }
-        try { await parentsSvc.backfillFromStudents(); } catch (_) { }
-        const parent = await authService.findParentByPhone(id);
-        if (parent) {
-          const created = await authService.ensureParentUserForPhone({ phone: id, password, name: parent.primary_name || 'Parent' });
-          if (created) {
-            user = created;
-          }
-        }
-      }
-    }
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-    let ok = await bcrypt.compare(password, user.password_hash || '');
-    // Owner recovery: if the login email matches owner and compare fails, sync password to typed one and retry once
-    if (!ok) {
-      const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
-      if (String(email).toLowerCase() === String(ownerEmail).toLowerCase()) {
-        try {
-          await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
-          const refreshed = await authService.findUserByEmail(ownerEmail);
-          if (refreshed) {
-            user = refreshed;
-            ok = await bcrypt.compare(password, user.password_hash || '');
-          }
-        } catch (_) { }
-      }
-    }
-    if (!ok) {
-      const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
-      // Final fallback: allow owner login even if compare fails, and persist the new password
-      if (String(email).toLowerCase() === String(ownerEmail).toLowerCase()) {
-        try {
-          await authService.ensureOwnerUser({ email: ownerEmail, password, name: 'Mindspire Owner' });
-          const refreshed = await authService.findUserByEmail(ownerEmail);
-          if (refreshed) {
-            user = refreshed;
-            // proceed without failing
-          }
-        } catch (_) { }
-      } else {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-    }
+    const ok = await bcrypt.compare(String(password || ''), user.password_hash || '');
+    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
     // Enforce module-based licensing for roles other than owner
     if (user.role !== 'owner' && allowedRoles.size && !allowedRoles.has(user.role)) {

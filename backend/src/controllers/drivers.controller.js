@@ -135,6 +135,18 @@ export const updatePayrollStatus = async (req, res, next) => {
     } catch (e) { next(e); }
 };
 
+export const deleteDriverPayroll = async (req, res, next) => {
+    try {
+        const driverId = Number(req.params.id);
+        const payrollId = Number(req.params.payrollId);
+        if (!driverId || !payrollId) return res.status(400).json({ message: 'Invalid id' });
+
+        const deleted = await service.deleteDriverPayroll({ driverId, payrollId });
+        if (!deleted) return res.status(404).json({ message: 'Payroll not found' });
+        res.json({ success: true });
+    } catch (e) { next(e); }
+};
+
 // Count drivers
 export const countDrivers = async (req, res, next) => {
     try {

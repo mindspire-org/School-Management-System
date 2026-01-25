@@ -852,6 +852,11 @@ export const updatePayroll = async (id, payload = {}) => {
   return rows[0] ? await getPayrollById(rows[0].id) : null;
 };
 
+export const deletePayroll = async (id) => {
+  const { rows } = await query('DELETE FROM teacher_payrolls WHERE id = $1 RETURNING id', [id]);
+  return rows[0] || null;
+};
+
 export const listPerformanceReviews = async ({ periodType, teacherId }) => {
   const params = [];
   const where = [];

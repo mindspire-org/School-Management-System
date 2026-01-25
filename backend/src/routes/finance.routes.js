@@ -171,7 +171,7 @@ router.get(
 router.post(
   '/receipts',
   authenticate,
-  authorize('admin'),
+  authorize('admin', 'owner'),
   [body('paymentId').isInt().withMessage('Payment ID is required')],
   validate,
   controller.createReceipt

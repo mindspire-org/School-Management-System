@@ -26,6 +26,13 @@ export default function GenerateAdmitCard() {
         fetchData();
     }, [campusId]);
 
+    const asArray = (data) => {
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.items)) return data.items;
+        if (Array.isArray(data?.rows)) return data.rows;
+        return [];
+    };
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -34,9 +41,9 @@ export default function GenerateAdmitCard() {
                 admitCardTemplateApi.list({ campusId }),
                 generatedAdmitCardApi.list({ campusId })
             ]);
-            setStudents(studentsData || []);
-            setTemplates(templatesData || []);
-            setGeneratedCards(cardsData || []);
+            setStudents(asArray(studentsData));
+            setTemplates(asArray(templatesData));
+            setGeneratedCards(asArray(cardsData));
         } catch (error) {
             toast({ title: 'Error fetching data', status: 'error' });
         } finally {

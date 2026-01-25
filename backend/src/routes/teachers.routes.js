@@ -190,6 +190,15 @@ router.patch(
   teacherController.updatePayroll
 );
 
+router.delete(
+  '/payrolls/:id',
+  authenticate,
+  authorize('admin', 'owner', 'superadmin'),
+  [param('id').isInt()],
+  validate,
+  teacherController.deletePayroll
+);
+
 router.get(
   '/performance',
   authenticate,

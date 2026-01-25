@@ -6,9 +6,9 @@ import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents, mockAttendanceLogs } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
 import * as attendanceApi from '../../../services/api/attendance';
+import * as studentsApi from '../../../services/api/students';
 
 export default function DailyRecord() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -16,28 +16,35 @@ export default function DailyRecord() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [records, setRecords] = useState([]);
-  const student = useMemo(() => {
-    if (user?.role === 'student') {
-      const byEmail = mockStudents.find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s => s.name?.toLowerCase() === user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id: 999, name: user.name, rollNumber: 'STU999', class: '10', section: 'A', email: user.email };
-    }
-    return mockStudents[0];
-  }, [user]);
+  const [student, setStudent] = useState(null);
 
   const todayLogs = useMemo(() => {
-    const logs = mockAttendanceLogs.filter(l => l.studentName === student.name);
-    if (logs.length > 0) return logs;
-    return [];
-  }, [student]);
+    const today = new Date().toISOString().slice(0, 10);
+    const rec = records.find(r => String(r?.date || '').slice(0, 10) === today);
+    if (!rec) return [];
+    const list = [];
+    if (rec.checkInTime) list.push({ type: 'checkIn', time: rec.checkInTime });
+    if (rec.checkOutTime) list.push({ type: 'checkOut', time: rec.checkOutTime });
+    return list;
+  }, [records]);
 
   // Fetch last 7 days attendance for the logged-in student
   useEffect(() => {
-    const sidRaw = user?.studentId ?? user?.id;
-    const sid = typeof sidRaw === 'string' ? parseInt(sidRaw, 10) : sidRaw;
-    if (!sid || Number.isNaN(sid)) return; // cannot fetch without a numeric student id
+    const loadSelf = async () => {
+      try {
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
+        setStudent(rows?.[0] || null);
+      } catch {
+        setStudent(null);
+      }
+    };
+    if (user?.role === 'student') loadSelf();
+  }, [user]);
+
+  useEffect(() => {
+    const sid = student?.id;
+    if (!sid) return; // cannot fetch without a numeric student id
 
     const toISO = (d) => d.toISOString().slice(0, 10);
     const end = new Date();
@@ -61,7 +68,7 @@ export default function DailyRecord() {
       }
     };
     load();
-  }, [user]);
+  }, [student?.id]);
 
   const last7 = useMemo(() => {
     const byDate = new Map();
@@ -80,7 +87,12 @@ export default function DailyRecord() {
       let status = 'N/A';
       if (rec?.status === 'present' || rec?.status === 'late') status = 'Present';
       else if (rec?.status === 'absent') status = 'Absent';
-      days.push({ day: weekday, status, in: '-', out: '-' });
+      days.push({
+        day: weekday,
+        status,
+        in: rec?.checkInTime || '-',
+        out: rec?.checkOutTime || '-',
+      });
     }
     return days;
   }, [records]);
@@ -104,7 +116,11 @@ export default function DailyRecord() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Daily Attendance</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {student?.class ? ` • Class ${student.class}${student.section || ''}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -134,6 +150,10 @@ export default function DailyRecord() {
           />
         </Flex>
       </Box>
+
+      {!!error && (
+        <Text fontSize='sm' color='red.500' mb='12px'>{error}</Text>
+      )}
 
       <Card p='16px' mb='16px'>
         <HStack justify='space-between' mb='12px'>

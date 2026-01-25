@@ -14,6 +14,8 @@ if (connectionDetails && connectionDetails.url) {
   sequelize = new Sequelize(connectionDetails.url, {
     dialect: 'postgres',
     logging: false,
+    define: { schema: 'public' },
+    searchPath: 'public',
     dialectOptions: connectionDetails.ssl ? { ssl: { require: true, rejectUnauthorized: false } } : {},
   });
 } else {
@@ -110,7 +112,13 @@ async function initDb() {
     await sequelize.authenticate();
     // Sync all models including the new ones
     await sequelize.sync();
-    console.log('PostgreSQL connected and models synced via Sequelize');
+    try {
+      const [rows] = await sequelize.query("SELECT current_database() AS db");
+      const db = rows?.[0]?.db;
+      console.log(`PostgreSQL connected and models synced via Sequelize (db=${db || 'unknown'})`);
+    } catch (_) {
+      console.log('PostgreSQL connected and models synced via Sequelize');
+    }
   } catch (error) {
     console.error('Sequelize connection error:', error);
   }
@@ -129,5 +137,5 @@ export {
 export const { Product, Category, Store, Supplier, Unit, Purchase, Sale, Issue } = InventoryModels;
 export const { AdmissionEnquiry, PostalRecord, CallLog, VisitorLog, Complaint, ReceptionConfig } = ReceptionModels;
 export const { IdCardTemplate, GeneratedIdCard, AdmitCardTemplate, GeneratedAdmitCard } = CardManagementModels;
-export const { Event, Certificate, QRAttendance } = EventsCertificatesModels;
+export const { Event, Certificate, CertificateTemplate, IssuedCertificate, QRAttendance, QRAttendanceSession } = EventsCertificatesModels;
 export const { Payroll, AdvanceSalary, Leave, Award } = HumanResourceModels;

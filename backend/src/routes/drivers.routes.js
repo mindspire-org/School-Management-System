@@ -155,4 +155,16 @@ router.patch(
     controller.updatePayrollStatus
 );
 
+router.delete(
+    '/:id/payroll/:payrollId',
+    authenticate,
+    authorize('admin', 'owner'),
+    [
+        param('id').isInt(),
+        param('payrollId').isInt(),
+    ],
+    validate,
+    controller.deleteDriverPayroll
+);
+
 export default router;

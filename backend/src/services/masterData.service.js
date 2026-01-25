@@ -40,7 +40,7 @@ export const getDesignations = async (campusId) => {
 export const createDesignation = async (data, campusId) => {
     const { title, department, isShared } = data;
     const { rows } = await query(
-        `INSERT INTO designations (title, department, campus_id, is_shared) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        `INSERT INTO designations (title, department, campus_id, is_shared) VALUES ($1, $2, $3, $4) RETURNING *`,
         [title, department, campusId, isShared || false]
     );
     return rows[0];

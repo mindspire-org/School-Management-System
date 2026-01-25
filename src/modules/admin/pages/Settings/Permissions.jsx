@@ -32,7 +32,7 @@ export default function Permissions() {
   const [search, setSearch] = useState('');
   const [assignments, setAssignments] = useState({});
   // Only allowed roles that can be created by admin
-  const [roles, setRoles] = useState(['student', 'teacher', 'driver', 'parent']);
+  const [roles, setRoles] = useState(['admin', 'student', 'teacher', 'driver', 'parent']);
   // When Owner is viewing, we should respect modules assigned to Admin (licensed by Owner)
   const [adminAllowed, setAdminAllowed] = useState(null);
   const [licAllowed, setLicAllowed] = useState([]);
@@ -41,8 +41,8 @@ export default function Permissions() {
     const load = async () => {
       try {
         const data = await rbacApi.getPermissions();
-        // Filter to only show allowed roles (exclude admin and owner)
-        const rs = Array.isArray(data?.roles) ? data.roles.filter(r => ['student', 'teacher', 'driver', 'parent'].includes(r)) : ['student', 'teacher', 'driver', 'parent'];
+        // Filter to only show allowed roles (exclude owner)
+        const rs = Array.isArray(data?.roles) ? data.roles.filter(r => ['admin', 'student', 'teacher', 'driver', 'parent'].includes(r)) : ['admin', 'student', 'teacher', 'driver', 'parent'];
         setRoles(rs);
         setAssignments(data?.assignments || {});
       } catch (_) { }

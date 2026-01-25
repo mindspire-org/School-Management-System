@@ -15,6 +15,7 @@ export const saveAttendance = (data) => http.post('/teachers/attendance', data);
 export const getPayrolls = (params) => http.get('/teachers/payrolls', { params });
 export const createPayroll = (data) => http.post('/teachers/payrolls', data);
 export const updatePayroll = (id, data) => http.patch(`/teachers/payrolls/${id}`, data);
+export const deletePayroll = (id) => http.delete(`/teachers/payrolls/${id}`);
 export const getPerformanceReviews = (params) => http.get('/teachers/performance', { params });
 export const createPerformanceReview = (data) => http.post('/teachers/performance', data);
 export const updatePerformanceReview = (id, data) => http.patch(`/teachers/performance/${id}`, data);

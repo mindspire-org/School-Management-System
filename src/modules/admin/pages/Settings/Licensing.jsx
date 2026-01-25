@@ -5,13 +5,21 @@ import { rbacApi, settingsApi } from '../../../../services/api';
 
 const ALL_MODULES = [
   'Dashboard',
+  'Campuses',
   'Parents',
   'Students',
   'Teachers',
   'Academics',
   'Attendance',
   'Transport',
+  'Inventory',
+  'Reception',
+  'Card Management',
   'Finance',
+  'Reports',
+  'Events',
+  'Certificates',
+  'Human Resource',
   'Settings',
 ];
 

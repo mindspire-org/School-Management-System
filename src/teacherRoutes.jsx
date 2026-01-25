@@ -28,6 +28,7 @@ import ClassList from './modules/teachers/classes/ClassList';
 import SubjectWiseStudents from './modules/teachers/classes/SubjectWiseStudents';
 import ClassTimetable from './modules/teachers/classes/ClassTimetable';
 import DailyAttendance from './modules/teachers/attendance/DailyAttendance';
+import MyAttendance from './modules/teachers/attendance/MyAttendance';
 import TeacherQRAttendance from './modules/teachers/QRCodeAttendance';
 import StudentList from './modules/teachers/students/StudentList';
 import StudentProfile from './modules/teachers/students/StudentProfile';
@@ -91,25 +92,11 @@ const teacherRoutes = [
     collapse: true,
     items: [
       {
-        name: 'Daily Attendance',
+        name: 'My Attendance',
         layout: '/teacher',
-        path: '/attendance/daily',
+        path: '/attendance/my',
         icon: <Icon as={MdCheckCircle} width="16px" height="16px" color="inherit" />,
-        component: <DailyAttendance />,
-      },
-      {
-        name: 'Attendance History',
-        layout: '/teacher',
-        path: '/attendance/history',
-        icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <TeacherModulePlaceholder title='Attendance History' subtitle='Coming soon' />,
-      },
-      {
-        name: 'Monthly Report',
-        layout: '/teacher',
-        path: '/attendance/monthly',
-        icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <TeacherModulePlaceholder title='Monthly Report' subtitle='Coming soon' />,
+        component: <MyAttendance />,
       },
       {
         name: 'QR Attendance',
@@ -128,6 +115,13 @@ const teacherRoutes = [
     icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
     collapse: true,
     items: [
+      {
+        name: 'Student Daily Attendance',
+        layout: '/teacher',
+        path: '/students/attendance/daily',
+        icon: <Icon as={MdCheckCircle} width="16px" height="16px" color="inherit" />,
+        component: <DailyAttendance />,
+      },
       {
         name: 'Student List',
         layout: '/teacher',
