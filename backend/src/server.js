@@ -5,8 +5,8 @@ import * as authService from './services/auth.service.js';
 import fs from 'fs';
 import path from 'path';
 import url from 'url';
-import { pool } from './config/db.js';
-import { ensureAuthSchema, ensureCampusSchema, ensureCardManagementSchema, ensureCertificatesSchema, ensureMasterDataSchema } from './db/autoMigrate.js';
+import { pool, ensureAppDatabaseExists } from './config/db.js';
+import { ensureAuthSchema, ensureCampusSchema, ensureCardManagementSchema, ensureCertificatesSchema, ensureMasterDataSchema, ensurePayrollSchema } from './db/autoMigrate.js';
 import { initDb } from './models/index.js';
 
 loadEnv();
@@ -38,33 +38,6 @@ async function ensureBaseSchema() {
 }
 
 async function boot() {
-  // Ensure base schema + auth + campus schema exists before starting server
-  try {
-    await ensureBaseSchema();
-    await ensureAuthSchema();
-    await ensureCampusSchema();
-    await ensureCardManagementSchema();
-    await ensureCertificatesSchema();
-    await ensureMasterDataSchema();
-  } catch (e) {
-    try { console.error('Auto-migration failed:', e?.stack || e); } catch (_) {}
-  }
-
-  // Ensure Sequelize-managed module tables exist
-  try {
-    await initDb();
-  } catch (e) {
-    try { console.error('Sequelize init failed:', e?.stack || e); } catch (_) {}
-  }
-
-  // Seed or ensure Owner account exists BEFORE starting server to avoid race
-  try {
-    const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
-    const ownerPassword = process.env.OWNER_PASSWORD || 'Qutaibah@123';
-    const ownerName = process.env.OWNER_NAME || 'Mindspire Owner';
-    await authService.ensureOwnerUser({ email: ownerEmail, password: ownerPassword, name: ownerName });
-  } catch (_) {}
-
   const server = http.createServer(app);
   const start = (p) => {
     port = p;
@@ -87,6 +60,47 @@ async function boot() {
     }
   });
   start(port);
+
+  // Run database init tasks in the background so /health becomes reachable immediately.
+  // This avoids Electron timing out on slower/unreachable Postgres.
+  const withTimeout = async (label, fn, ms) => {
+    const timeoutMs = Number(ms) || 20000;
+    return await Promise.race([
+      (async () => {
+        try {
+          return await fn();
+        } catch (e) {
+          try { console.error(`${label} failed:`, e?.stack || e); } catch (_) {}
+          return null;
+        }
+      })(),
+      new Promise((resolve) => setTimeout(() => {
+        try { console.error(`${label} timed out after ${timeoutMs}ms`); } catch (_) {}
+        resolve(null);
+      }, timeoutMs)),
+    ]);
+  };
+
+  (async () => {
+    await withTimeout('DB ensure database', () => ensureAppDatabaseExists(), Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 15000);
+    await withTimeout('DB base schema', () => ensureBaseSchema(), Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 20000);
+    await withTimeout('DB auto-migration', async () => {
+      await ensureAuthSchema();
+      await ensureCampusSchema();
+      await ensureCardManagementSchema();
+      await ensureCertificatesSchema();
+      await ensureMasterDataSchema();
+      await ensurePayrollSchema();
+    }, Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 30000);
+    await withTimeout('Sequelize init', () => initDb(), Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 30000);
+
+    await withTimeout('Ensure owner user', async () => {
+      const ownerEmail = process.env.OWNER_EMAIL || 'qutaibah@mindspire.org';
+      const ownerPassword = process.env.OWNER_PASSWORD || 'Qutaibah@123';
+      const ownerName = process.env.OWNER_NAME || 'Mindspire Owner';
+      await authService.ensureOwnerUser({ email: ownerEmail, password: ownerPassword, name: ownerName });
+    }, Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 15000);
+  })();
 }
 
 boot();

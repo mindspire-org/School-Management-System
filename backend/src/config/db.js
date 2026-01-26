@@ -9,6 +9,18 @@ const { Pool, Client } = pg;
 const defaultSchool = 'postgres://postgres:12345@localhost:5432/school_db';
 const defaultPostgres = 'postgres://postgres:12345@localhost:5432/postgres';
 
+const CONNECT_TIMEOUT_MS = Number(process.env.PG_CONNECT_TIMEOUT_MS) || 5000;
+
+const normalizeLocalhost = (rawUrl) => {
+  try {
+    const u = new URL(rawUrl);
+    if (u.hostname === 'localhost') u.hostname = '127.0.0.1';
+    return u.toString();
+  } catch (_) {
+    return rawUrl;
+  }
+};
+
 const toSSL = (url) => {
   try {
     const u = new URL(url);
@@ -22,17 +34,7 @@ const toSSL = (url) => {
   }
 };
 
-const forceSchoolDbUrl = (rawUrl) => {
-  try {
-    const u = new URL(rawUrl);
-    u.pathname = '/school_db';
-    return u.toString();
-  } catch (_) {
-    return defaultSchool;
-  }
-};
-
-const forcePostgresDbUrl = (rawUrl) => {
+const toAdminUrl = (rawUrl) => {
   try {
     const u = new URL(rawUrl);
     u.pathname = '/postgres';
@@ -44,12 +46,13 @@ const forcePostgresDbUrl = (rawUrl) => {
 
 async function ensureDatabaseExists({ adminUrl, dbName }) {
   const ssl = toSSL(adminUrl);
-  const client = new Client({ connectionString: adminUrl, ssl });
+  const client = new Client({ connectionString: adminUrl, ssl, connectionTimeoutMillis: CONNECT_TIMEOUT_MS });
   try {
     await client.connect();
     const exists = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
     if (exists?.rowCount) return true;
-    await client.query(`CREATE DATABASE ${dbName}`);
+    const safeName = String(dbName || '').replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${safeName}"`);
     return true;
   } catch (_) {
     return false;
@@ -58,16 +61,10 @@ async function ensureDatabaseExists({ adminUrl, dbName }) {
   }
 }
 
-// FORCE: Always use school_db
 const envUrl = process.env.DATABASE_URL;
-const baseUrl = envUrl || defaultSchool;
-const schoolUrl = forceSchoolDbUrl(baseUrl);
-const adminUrl = forcePostgresDbUrl(baseUrl);
+const baseUrl = normalizeLocalhost(envUrl || defaultSchool);
 
-// Best-effort: create school_db if it doesn't exist
-await ensureDatabaseExists({ adminUrl, dbName: 'school_db' });
-
-const detected = { url: schoolUrl, ssl: toSSL(schoolUrl) };
+const detected = { url: baseUrl, ssl: toSSL(baseUrl) };
 
 try {
   const u = new URL(detected.url);
@@ -79,7 +76,24 @@ try {
 
 export const connectionDetails = detected;
 
-export const pool = new Pool({ connectionString: detected.url, ssl: detected.ssl });
+export async function ensureAppDatabaseExists() {
+  const enabled = String(process.env.SMS_AUTO_CREATE_DB || 'true').toLowerCase() !== 'false';
+  if (!enabled) return false;
+  try {
+    const u = new URL(detected.url);
+    const dbName = (u.pathname || '').replace(/^\//, '') || 'school_db';
+    const adminUrl = normalizeLocalhost(toAdminUrl(detected.url));
+    return await ensureDatabaseExists({ adminUrl, dbName });
+  } catch (_) {
+    return false;
+  }
+}
+
+export const pool = new Pool({
+  connectionString: detected.url,
+  ssl: detected.ssl,
+  connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+});
 
 export const query = (text, params) => pool.query(text, params);
 
