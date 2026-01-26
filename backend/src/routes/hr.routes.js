@@ -187,6 +187,13 @@ const mapPayrollRow = (row) => {
         netSalary: row.netSalary,
         status,
         paymentDate: row.paymentDate,
+        paymentMethod: row.paymentMethod,
+        bankName: row.bankName,
+        accountTitle: row.accountTitle,
+        accountNumber: row.accountNumber,
+        iban: row.iban,
+        chequeNumber: row.chequeNumber,
+        transactionReference: row.transactionReference,
         campusId: row.campusId,
     };
 };
@@ -209,6 +216,13 @@ router.get('/payroll', async (req, res) => {
                 tp.total_amount::numeric AS "netSalary",
                 tp.status AS status,
                 tp.paid_on AS "paymentDate",
+                tp.payment_method AS "paymentMethod",
+                tp.bank_name AS "bankName",
+                tp.account_title AS "accountTitle",
+                tp.account_number AS "accountNumber",
+                tp.iban AS "iban",
+                tp.cheque_number AS "chequeNumber",
+                tp.transaction_reference AS "transactionReference",
                 tp.campus_id AS "campusId"
              FROM teacher_payrolls tp
              JOIN teachers t ON t.id = tp.teacher_id
@@ -300,6 +314,13 @@ router.get('/payroll/:id', async (req, res) => {
                 tp.total_amount::numeric AS "netSalary",
                 tp.status AS status,
                 tp.paid_on AS "paymentDate",
+                tp.payment_method AS "paymentMethod",
+                tp.bank_name AS "bankName",
+                tp.account_title AS "accountTitle",
+                tp.account_number AS "accountNumber",
+                tp.iban AS "iban",
+                tp.cheque_number AS "chequeNumber",
+                tp.transaction_reference AS "transactionReference",
                 tp.campus_id AS "campusId"
              FROM teacher_payrolls tp
              JOIN teachers t ON t.id = tp.teacher_id
@@ -334,6 +355,13 @@ router.get('/payroll/:id/slip', async (req, res) => {
                 tp.total_amount::numeric AS "netSalary",
                 tp.status AS status,
                 tp.paid_on AS "paymentDate",
+                tp.payment_method AS "paymentMethod",
+                tp.bank_name AS "bankName",
+                tp.account_title AS "accountTitle",
+                tp.account_number AS "accountNumber",
+                tp.iban AS "iban",
+                tp.cheque_number AS "chequeNumber",
+                tp.transaction_reference AS "transactionReference",
                 tp.campus_id AS "campusId"
              FROM teacher_payrolls tp
              JOIN teachers t ON t.id = tp.teacher_id

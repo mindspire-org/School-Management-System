@@ -409,6 +409,11 @@ export const createPayroll = async (req, res, next) => {
       bonuses: req.body.bonuses,
       status: req.body.status,
       paymentMethod: req.body.paymentMethod,
+      bankName: req.body.bankName,
+      accountTitle: req.body.accountTitle,
+      accountNumber: req.body.accountNumber,
+      iban: req.body.iban,
+      chequeNumber: req.body.chequeNumber,
       transactionReference: req.body.transactionReference,
       paidOn: req.body.paidOn,
       notes: req.body.notes,
@@ -622,6 +627,40 @@ export const getDashboardStats = async (req, res, next) => {
 
     const stats = await teachers.getDashboardStats(teacherId);
     return res.json(stats);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listMyClasses = async (req, res, next) => {
+  try {
+    let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
+    if (!teacherId) return res.status(400).json({ message: 'Teacher ID required' });
+    const rows = await teachers.getMyClassesSummary(teacherId);
+    return res.json({ rows });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listStudentsBySubject = async (req, res, next) => {
+  try {
+    let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
+    if (!teacherId) return res.status(400).json({ message: 'Teacher ID required' });
+    const data = await teachers.getStudentsBySubject(teacherId, {
+      q: req.query.q || req.query.search,
+      grade: req.query.grade || req.query.className || req.query.class,
+      subject: req.query.subject,
+    });
+    return res.json({ rows: data });
   } catch (e) {
     next(e);
   }

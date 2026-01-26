@@ -10,6 +10,8 @@ export const listSchedules = (params) => http.get('/teachers/schedules', { param
 export const createScheduleSlot = (data) => http.post('/teachers/schedules', data);
 export const updateScheduleSlot = (id, data) => http.put(`/teachers/schedules/${id}`, data);
 export const deleteScheduleSlot = (id) => http.delete(`/teachers/schedules/${id}`);
+export const listMyClasses = (params) => http.get('/teachers/my-classes', { params });
+export const listStudentsBySubject = (params) => http.get('/teachers/students-by-subject', { params });
 export const getAttendance = (params) => http.get('/teachers/attendance', { params });
 export const saveAttendance = (data) => http.post('/teachers/attendance', data);
 export const getPayrolls = (params) => http.get('/teachers/payrolls', { params });

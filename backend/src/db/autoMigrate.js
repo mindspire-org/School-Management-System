@@ -68,6 +68,24 @@ export async function ensureStudentExtendedColumns() {
   `);
 }
 
+export async function ensurePayrollSchema() {
+  await query(`
+    ALTER TABLE teacher_payrolls
+      ADD COLUMN IF NOT EXISTS bank_name TEXT,
+      ADD COLUMN IF NOT EXISTS account_title TEXT,
+      ADD COLUMN IF NOT EXISTS account_number TEXT,
+      ADD COLUMN IF NOT EXISTS iban TEXT,
+      ADD COLUMN IF NOT EXISTS cheque_number TEXT;
+
+    ALTER TABLE driver_payrolls
+      ADD COLUMN IF NOT EXISTS bank_name TEXT,
+      ADD COLUMN IF NOT EXISTS account_title TEXT,
+      ADD COLUMN IF NOT EXISTS account_number TEXT,
+      ADD COLUMN IF NOT EXISTS iban TEXT,
+      ADD COLUMN IF NOT EXISTS cheque_number TEXT;
+  `);
+}
+
 export async function ensureCardManagementSchema() {
   await query(`
     ALTER TABLE admit_card_templates

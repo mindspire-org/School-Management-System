@@ -180,6 +180,9 @@ export const getDriverPayroll = async (driverId, { page = 1, pageSize = 12 } = {
     SELECT id, driver_id AS "driverId", period_month AS "periodMonth",
            base_salary AS "baseSalary", allowances, deductions, bonuses,
            total_amount AS "totalAmount", status, payment_method AS "paymentMethod",
+           bank_name AS "bankName", account_title AS "accountTitle",
+           account_number AS "accountNumber", iban AS "iban",
+           cheque_number AS "chequeNumber",
            transaction_reference AS "transactionReference", paid_on AS "paidOn",
            notes, created_at AS "createdAt"
     FROM driver_payrolls
@@ -193,23 +196,67 @@ export const getDriverPayroll = async (driverId, { page = 1, pageSize = 12 } = {
 // Create driver payroll
 export const createDriverPayroll = async (data) => {
   const { driverId, periodMonth, baseSalary, allowances, deductions, bonuses, notes, createdBy } = data;
+  const paymentMethod = data.paymentMethod ?? null;
+  const bankName = data.bankName ?? null;
+  const accountTitle = data.accountTitle ?? null;
+  const accountNumber = data.accountNumber ?? null;
+  const iban = data.iban ?? null;
+  const chequeNumber = data.chequeNumber ?? null;
+  const transactionReference = data.transactionReference ?? null;
+  const status = data.status ?? 'pending';
+  const paidOn = data.paidOn ?? null;
+
   const totalAmount = (Number(baseSalary) || 0) + (Number(allowances) || 0) + (Number(bonuses) || 0) - (Number(deductions) || 0);
 
   const { rows } = await query(`
-    INSERT INTO driver_payrolls (driver_id, period_month, base_salary, allowances, deductions, bonuses, total_amount, notes, created_by)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO driver_payrolls (driver_id, period_month, base_salary, allowances, deductions, bonuses, total_amount, status, payment_method, bank_name, account_title, account_number, iban, cheque_number, transaction_reference, paid_on, notes, created_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     ON CONFLICT (driver_id, period_month) DO UPDATE SET
       base_salary = EXCLUDED.base_salary,
       allowances = EXCLUDED.allowances,
       deductions = EXCLUDED.deductions,
       bonuses = EXCLUDED.bonuses,
       total_amount = EXCLUDED.total_amount,
+      status = EXCLUDED.status,
+      payment_method = EXCLUDED.payment_method,
+      bank_name = EXCLUDED.bank_name,
+      account_title = EXCLUDED.account_title,
+      account_number = EXCLUDED.account_number,
+      iban = EXCLUDED.iban,
+      cheque_number = EXCLUDED.cheque_number,
+      transaction_reference = EXCLUDED.transaction_reference,
+      paid_on = EXCLUDED.paid_on,
       notes = EXCLUDED.notes,
       updated_at = NOW()
     RETURNING id, driver_id AS "driverId", period_month AS "periodMonth",
-              base_salary AS "baseSalary", allowances, deductions, bonuses,
-              total_amount AS "totalAmount", status, created_at AS "createdAt"
-  `, [driverId, periodMonth, baseSalary || 0, allowances || 0, deductions || 0, bonuses || 0, totalAmount, notes || null, createdBy || null]);
+             base_salary AS "baseSalary", allowances, deductions, bonuses,
+             total_amount AS "totalAmount", status, payment_method AS "paymentMethod",
+             bank_name AS "bankName", account_title AS "accountTitle",
+             account_number AS "accountNumber", iban AS "iban",
+             cheque_number AS "chequeNumber",
+             transaction_reference AS "transactionReference",
+             paid_on AS "paidOn",
+             notes, created_at AS "createdAt"
+  `, [
+    driverId,
+    periodMonth,
+    baseSalary || 0,
+    allowances || 0,
+    deductions || 0,
+    bonuses || 0,
+    totalAmount,
+    status,
+    paymentMethod,
+    bankName,
+    accountTitle,
+    accountNumber,
+    iban,
+    chequeNumber,
+    transactionReference,
+    paidOn,
+    notes || null,
+    createdBy || null,
+  ]);
   return rows[0];
 };
 

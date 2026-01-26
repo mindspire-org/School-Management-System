@@ -95,6 +95,7 @@ export const getSMSRoutes = () => {
       layout: '/admin',
       path: '/campuses-list',
       icon: <Icon as={MdSchool} width="20px" height="20px" color="inherit" />,
+      ownerOnly: true,
       component: lazy(() => import('./modules/admin/pages/Settings/CampusesList')),
     },
 
@@ -1005,6 +1006,7 @@ export const getSMSRoutes = () => {
           name: 'Licensing',
           layout: '/admin',
           path: '/settings/licensing',
+          ownerOnly: true,
           component: lazy(() => import('./modules/admin/pages/Settings/Licensing')),
         },
         {
@@ -1017,6 +1019,7 @@ export const getSMSRoutes = () => {
           name: 'Campuses',
           layout: '/admin',
           path: '/settings/campuses',
+          ownerOnly: true,
           component: lazy(() => import('./modules/admin/pages/Settings/Campuses')),
         },
         {

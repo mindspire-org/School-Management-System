@@ -153,7 +153,13 @@ router.post(
     body('deductions').optional({ checkFalsy: true }).isFloat({ min: 0 }),
     body('bonuses').optional({ checkFalsy: true }).isFloat({ min: 0 }),
     body('status').optional().isIn(payrollStatuses),
+    body('paymentMethod').optional({ checkFalsy: true }).isIn(['bank', 'cash', 'cheque']),
     optionalString('paymentMethod'),
+    optionalString('bankName'),
+    optionalString('accountTitle'),
+    optionalString('accountNumber'),
+    optionalString('iban'),
+    optionalString('chequeNumber'),
     optionalString('transactionReference'),
     optionalString('notes'),
     body('paidOn').optional({ checkFalsy: true }).isISO8601(),
@@ -181,7 +187,13 @@ router.patch(
     body('deductions').optional({ checkFalsy: true }).isFloat({ min: 0 }),
     body('bonuses').optional({ checkFalsy: true }).isFloat({ min: 0 }),
     body('status').optional().isIn(payrollStatuses),
+    body('paymentMethod').optional({ checkFalsy: true }).isIn(['bank', 'cash', 'cheque']),
     optionalString('paymentMethod'),
+    optionalString('bankName'),
+    optionalString('accountTitle'),
+    optionalString('accountNumber'),
+    optionalString('iban'),
+    optionalString('chequeNumber'),
     optionalString('transactionReference'),
     optionalString('notes'),
     body('paidOn').optional({ checkFalsy: true }).isISO8601(),
@@ -312,6 +324,30 @@ router.get(
   ],
   validate,
   teacherController.listSubjectAssignments
+);
+
+router.get(
+  '/my-classes',
+  authenticate,
+  [query('teacherId').optional().isInt({ min: 1 }), query('q').optional().isString()],
+  validate,
+  teacherController.listMyClasses
+);
+
+router.get(
+  '/students-by-subject',
+  authenticate,
+  [
+    query('teacherId').optional().isInt({ min: 1 }),
+    query('q').optional().isString(),
+    query('search').optional().isString(),
+    query('grade').optional().isString(),
+    query('className').optional().isString(),
+    query('class').optional().isString(),
+    query('subject').optional().isString(),
+  ],
+  validate,
+  teacherController.listStudentsBySubject
 );
 
 router.post(

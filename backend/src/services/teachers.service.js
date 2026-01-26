@@ -1,5 +1,10 @@
 import { query } from '../config/db.js';
 
+const getTeacherCampusId = async (teacherId) => {
+  const { rows } = await query('SELECT campus_id FROM teachers WHERE id = $1', [teacherId]);
+  return rows[0]?.campus_id ? Number(rows[0].campus_id) : null;
+};
+
 const teacherSelect = `
   id,
   name,
@@ -98,6 +103,11 @@ const payrollSelect = `
   tp.total_amount AS "totalAmount",
   tp.status,
   tp.payment_method AS "paymentMethod",
+  tp.bank_name AS "bankName",
+  tp.account_title AS "accountTitle",
+  tp.account_number AS "accountNumber",
+  tp.iban AS "iban",
+  tp.cheque_number AS "chequeNumber",
   tp.transaction_reference AS "transactionReference",
   tp.paid_on AS "paidOn",
   tp.notes,
@@ -757,6 +767,11 @@ export const createPayroll = async (payload = {}) => {
     totalAmount,
     status,
     payload.paymentMethod ?? null,
+    payload.bankName ?? null,
+    payload.accountTitle ?? null,
+    payload.accountNumber ?? null,
+    payload.iban ?? null,
+    payload.chequeNumber ?? null,
     payload.transactionReference ?? null,
     payload.paidOn ?? null,
     payload.notes ?? null,
@@ -764,8 +779,8 @@ export const createPayroll = async (payload = {}) => {
   ];
 
   const { rows } = await query(
-    `INSERT INTO teacher_payrolls (teacher_id, period_month, base_salary, allowances, deductions, bonuses, total_amount, status, payment_method, transaction_reference, paid_on, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    `INSERT INTO teacher_payrolls (teacher_id, period_month, base_salary, allowances, deductions, bonuses, total_amount, status, payment_method, bank_name, account_title, account_number, iban, cheque_number, transaction_reference, paid_on, notes, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT ON CONSTRAINT teacher_payrolls_teacher_id_period_month_key
      DO UPDATE SET
        base_salary = EXCLUDED.base_salary,
@@ -775,6 +790,11 @@ export const createPayroll = async (payload = {}) => {
        total_amount = EXCLUDED.total_amount,
        status = EXCLUDED.status,
        payment_method = EXCLUDED.payment_method,
+       bank_name = EXCLUDED.bank_name,
+       account_title = EXCLUDED.account_title,
+       account_number = EXCLUDED.account_number,
+       iban = EXCLUDED.iban,
+       cheque_number = EXCLUDED.cheque_number,
        transaction_reference = EXCLUDED.transaction_reference,
        paid_on = EXCLUDED.paid_on,
        notes = EXCLUDED.notes,
@@ -816,6 +836,26 @@ export const updatePayroll = async (id, payload = {}) => {
   if ('paymentMethod' in payload) {
     values.push(payload.paymentMethod ?? null);
     updates.push(`payment_method = $${values.length}`);
+  }
+  if ('bankName' in payload) {
+    values.push(payload.bankName ?? null);
+    updates.push(`bank_name = $${values.length}`);
+  }
+  if ('accountTitle' in payload) {
+    values.push(payload.accountTitle ?? null);
+    updates.push(`account_title = $${values.length}`);
+  }
+  if ('accountNumber' in payload) {
+    values.push(payload.accountNumber ?? null);
+    updates.push(`account_number = $${values.length}`);
+  }
+  if ('iban' in payload) {
+    values.push(payload.iban ?? null);
+    updates.push(`iban = $${values.length}`);
+  }
+  if ('chequeNumber' in payload) {
+    values.push(payload.chequeNumber ?? null);
+    updates.push(`cheque_number = $${values.length}`);
   }
   if ('transactionReference' in payload) {
     values.push(payload.transactionReference ?? null);
@@ -1162,6 +1202,145 @@ export const updateSubjectAssignment = async (id, payload = {}) => {
 export const removeSubjectAssignment = async (id) => {
   const { rowCount } = await query('DELETE FROM teacher_subject_assignments WHERE id = $1', [id]);
   return rowCount > 0;
+};
+
+export const getMyClassesSummary = async (teacherId) => {
+  const campusId = await getTeacherCampusId(teacherId);
+  const { rows: classRows } = await query(
+    `SELECT DISTINCT ts.class AS "className", ts.section
+       FROM teacher_schedules ts
+      WHERE ts.teacher_id = $1
+        AND ts.class IS NOT NULL
+        AND ts.section IS NOT NULL
+      ORDER BY ts.class, ts.section`,
+    [teacherId]
+  );
+
+  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const dayIdx = normalizeDayOfWeek(todayName);
+  const nowTime = new Date().toTimeString().slice(0, 8);
+
+  const out = [];
+  for (const row of classRows) {
+    const className = row.className;
+    const section = row.section;
+
+    const { rows: subjRows } = await query(
+      `SELECT ts.subject, COUNT(*)::int AS c
+         FROM teacher_schedules ts
+        WHERE ts.teacher_id = $1 AND ts.class = $2 AND ts.section = $3
+          AND ts.subject IS NOT NULL AND ts.subject <> ''
+        GROUP BY ts.subject
+        ORDER BY c DESC, ts.subject ASC
+        LIMIT 1`,
+      [teacherId, className, section]
+    );
+    const subject = subjRows[0]?.subject || null;
+
+    let strength = 0;
+    if (campusId) {
+      const { rows: cntRows } = await query(
+        `SELECT COUNT(*)::int AS c
+           FROM students
+          WHERE status = 'active'
+            AND campus_id = $1
+            AND class = $2
+            AND section = $3`,
+        [campusId, className, section]
+      );
+      strength = cntRows[0]?.c || 0;
+    }
+
+    let next = null;
+    if (dayIdx) {
+      const { rows: nextRows } = await query(
+        `SELECT start_time AS "startTime"
+           FROM teacher_schedules
+          WHERE teacher_id = $1
+            AND day_of_week = $2
+            AND class = $3
+            AND section = $4
+            AND start_time > $5
+          ORDER BY start_time ASC
+          LIMIT 1`,
+        [teacherId, dayIdx, className, section, nowTime]
+      );
+      next = nextRows[0]?.startTime || null;
+    }
+
+    out.push({
+      id: `${className}-${section}`,
+      className,
+      section,
+      subject,
+      strength,
+      next,
+    });
+  }
+  return out;
+};
+
+export const getStudentsBySubject = async (teacherId, { q, grade, subject } = {}) => {
+  const campusId = await getTeacherCampusId(teacherId);
+  if (!campusId) return [];
+
+  const params = [teacherId, campusId];
+  const where = [
+    'ts.teacher_id = $1',
+    's.campus_id = $2',
+    "s.status = 'active'",
+    'ts.class IS NOT NULL',
+    'ts.section IS NOT NULL',
+    'ts.subject IS NOT NULL',
+    "ts.subject <> ''",
+  ];
+
+  if (subject) {
+    params.push(subject);
+    where.push(`ts.subject = $${params.length}`);
+  }
+  if (grade) {
+    params.push(grade);
+    where.push(`s.class = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    where.push(`(s.name ILIKE $${params.length} OR COALESCE(s.roll_number,'') ILIKE $${params.length})`);
+  }
+
+  const { rows } = await query(
+    `SELECT DISTINCT
+        ts.subject,
+        s.id AS "studentId",
+        s.name,
+        s.roll_number AS "rollNumber",
+        s.class AS "className",
+        s.section,
+        s.avatar
+     FROM teacher_schedules ts
+     JOIN students s
+       ON s.class = ts.class
+      AND s.section = ts.section
+     WHERE ${where.join(' AND ')}
+     ORDER BY ts.subject ASC, s.class ASC, s.section ASC, s.name ASC`,
+    params
+  );
+
+  const by = new Map();
+  for (const r of rows) {
+    const key = r.subject || 'Unknown';
+    if (!by.has(key)) by.set(key, []);
+    by.get(key).push({
+      id: r.studentId,
+      name: r.name,
+      rollNumber: r.rollNumber,
+      className: r.className,
+      section: r.section,
+      avatar: r.avatar,
+    });
+  }
+
+  return Array.from(by.entries()).map(([subj, students]) => ({ subject: subj, students }));
 };
 // Dashboard Stats
 export const getDashboardStats = async (teacherId) => {

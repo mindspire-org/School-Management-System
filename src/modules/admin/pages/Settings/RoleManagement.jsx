@@ -32,9 +32,10 @@ export default function RoleManagement() {
   const buildModuleDefs = (roleId) => {
     try {
       const r = String(roleId || '').toLowerCase();
+      const includeOwnerOnly = r === 'owner';
       let routes = [];
       let layout = null;
-      if (r === 'admin') {
+      if (r === 'admin' || r === 'owner') {
         routes = getSMSRoutes();
         layout = '/admin';
       } else if (r === 'teacher') {
@@ -52,13 +53,20 @@ export default function RoleManagement() {
       }
       if (!layout) return [];
 
-      const collectPaths = (node) => {
+      const collectPages = (node, prefix = []) => {
         const out = [];
         if (!node) return out;
-        if (node.layout === layout && node.path) out.push(node.path);
+        if (node.hidden) return out;
+        if (node.ownerOnly && !includeOwnerOnly) return out;
+
+        const labelParts = [...prefix, node.name].filter(Boolean);
+        if (node.layout === layout && node.path) {
+          out.push({ path: node.path, label: labelParts.length ? labelParts.join(' > ') : node.path });
+        }
         if (Array.isArray(node.items)) {
+          const nextPrefix = node.collapse ? labelParts : prefix;
           node.items.forEach((it) => {
-            out.push(...collectPaths(it));
+            out.push(...collectPages(it, nextPrefix));
           });
         }
         return out;
@@ -69,14 +77,20 @@ export default function RoleManagement() {
         .filter(Boolean);
 
       const defs = topLevel
-        .filter((rt) => rt.layout === layout)
+        .filter((rt) => rt.layout === layout && !rt.hidden && (!rt.ownerOnly || includeOwnerOnly))
         .map((rt) => {
           if (rt.collapse && Array.isArray(rt.items)) {
-            const subroutes = Array.from(new Set(collectPaths({ ...rt, path: null }))).filter(Boolean);
-            return { name: rt.name, subroutes };
+            const pages = (rt.items || []).flatMap((it) => collectPages(it, [rt.name]));
+            const byPath = new Map();
+            pages.forEach((p) => {
+              if (p && p.path && !byPath.has(p.path)) byPath.set(p.path, p);
+            });
+            return { name: rt.name, subroutes: Array.from(byPath.values()) };
           }
-          const subroutes = rt.path ? [rt.path] : [];
-          return { name: rt.name, subroutes: subroutes.filter(Boolean) };
+          const pages = (rt.path && !rt.hidden && (!rt.ownerOnly || includeOwnerOnly))
+            ? [{ path: rt.path, label: rt.name || rt.path }]
+            : [];
+          return { name: rt.name, subroutes: pages };
         });
       return defs;
     } catch (_) {
@@ -111,10 +125,22 @@ export default function RoleManagement() {
 
   // Sync current role's assignments to local state
   useEffect(() => {
+    if (String(selectedRole).toLowerCase() === 'owner') {
+      setAllowModules(new Set(moduleDefs.map((d) => d.name).filter(Boolean)));
+      setAllowSubroutes(
+        new Set(
+          moduleDefs
+            .flatMap((d) => Array.isArray(d.subroutes) ? d.subroutes : [])
+            .map((s) => s?.path)
+            .filter(Boolean)
+        )
+      );
+      return;
+    }
     const a = moduleAssignments?.[selectedRole] || { allowModules: [], allowSubroutes: [] };
     setAllowModules(new Set(a.allowModules || []));
     setAllowSubroutes(new Set(a.allowSubroutes || []));
-  }, [selectedRole, moduleAssignments]);
+  }, [selectedRole, moduleAssignments, moduleDefs]);
 
   const toggleModule = (name, checked) => {
     setAllowModules((prev) => {
@@ -127,7 +153,7 @@ export default function RoleManagement() {
       if (def && def.subroutes?.length) {
         setAllowSubroutes((prev) => {
           const next = new Set(prev);
-          def.subroutes.forEach((p) => next.delete(p));
+          def.subroutes.forEach((p) => next.delete(p?.path));
           return next;
         });
       }
@@ -143,6 +169,16 @@ export default function RoleManagement() {
   };
 
   const saveModules = async () => {
+    if (String(selectedRole).toLowerCase() === 'owner') {
+      toast({
+        title: 'Owner access is always full',
+        description: 'Owner module access is not configurable from this screen.',
+        status: 'info',
+        duration: 3500,
+        isClosable: true,
+      });
+      return;
+    }
     const payload = {
       allowModules: Array.from(allowModules),
       allowSubroutes: Array.from(allowSubroutes),
@@ -251,25 +287,45 @@ export default function RoleManagement() {
           <Heading size='md'>Module Access</Heading>
           <Flex gap={3} align='center'>
             <Select maxW='220px' value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
-              {roles.filter((r) => ['admin', 'teacher', 'student', 'driver'].includes(r.id)).map(r => (
+              {roles.filter((r) => ['owner', 'admin', 'teacher', 'student', 'driver'].includes(r.id)).map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </Select>
-            <Button variant='outline' onClick={() => { setAllowModules(new Set()); setAllowSubroutes(new Set()); }}>Reset</Button>
-            <Button colorScheme='blue' onClick={saveModules}>Save</Button>
+            <Button
+              variant='outline'
+              isDisabled={String(selectedRole).toLowerCase() === 'owner'}
+              onClick={() => { setAllowModules(new Set()); setAllowSubroutes(new Set()); }}
+            >
+              Reset
+            </Button>
+            <Button colorScheme='blue' isDisabled={String(selectedRole).toLowerCase() === 'owner'} onClick={saveModules}>Save</Button>
           </Flex>
         </Flex>
+        {String(selectedRole).toLowerCase() === 'owner' && (
+          <Text mb={4} color={textColorSecondary}>
+            Owner always has full access. Configure access for other roles (Admin/Teacher/Student/Driver) from the dropdown.
+          </Text>
+        )}
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
           {moduleDefs.map((m) => (
             <Box key={m.name} borderWidth='1px' borderRadius='md' p={4}>
-              <Checkbox isChecked={allowModules.has(m.name)} onChange={(e) => toggleModule(m.name, e.target.checked)}>
+              <Checkbox
+                isChecked={allowModules.has(m.name)}
+                isDisabled={String(selectedRole).toLowerCase() === 'owner'}
+                onChange={(e) => toggleModule(m.name, e.target.checked)}
+              >
                 <Text fontWeight='600'>{m.name}</Text>
               </Checkbox>
               {allowModules.has(m.name) && m.subroutes?.length > 0 && (
                 <Stack mt={3} pl={6} spacing={2}>
                   {m.subroutes.map((p) => (
-                    <Checkbox key={p} isChecked={allowSubroutes.has(p)} onChange={(e) => toggleSubroute(p, e.target.checked)}>
-                      {p}
+                    <Checkbox
+                      key={p.path}
+                      isChecked={allowSubroutes.has(p.path)}
+                      isDisabled={String(selectedRole).toLowerCase() === 'owner'}
+                      onChange={(e) => toggleSubroute(p.path, e.target.checked)}
+                    >
+                      {p.label || p.path}
                     </Checkbox>
                   ))}
                 </Stack>

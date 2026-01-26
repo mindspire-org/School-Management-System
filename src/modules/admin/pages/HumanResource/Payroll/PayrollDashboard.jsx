@@ -18,8 +18,10 @@ import {
     Icon,
 } from '@chakra-ui/react';
 import { MdAdd, MdAttachMoney, MdDateRange, MdDownload } from 'react-icons/md';
+import jsPDF from 'jspdf';
 import Card from '../../../../../components/card/Card';
 import { payrollApi } from '../../../../../services/moduleApis';
+import { settingsApi } from '../../../../../services/api';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function PayrollDashboard() {
@@ -27,6 +29,7 @@ export default function PayrollDashboard() {
     const toast = useToast();
     const [payrolls, setPayrolls] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [slipLoadingId, setSlipLoadingId] = useState(null);
 
     // Colors
     const textColor = useColorModeValue('secondaryGray.900', 'white');
@@ -75,20 +78,159 @@ export default function PayrollDashboard() {
         }
     };
 
+    const formatMoney = (value) => {
+        const n = Number(value ?? 0);
+        return Number.isFinite(n) ? n.toLocaleString() : '0';
+    };
+
+    const formatDate = (d) => {
+        if (!d) return '—';
+        const dt = new Date(d);
+        if (Number.isNaN(dt.getTime())) return String(d);
+        return dt.toLocaleDateString();
+    };
+
+    const safeFilePart = (v) => String(v || '').replace(/[^a-z0-9\-_. ]/gi, '').trim().replace(/\s+/g, '_');
+
+    const buildPayslipPdf = ({ payroll, profile }) => {
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 40;
+        const headerH = 78;
+        const top = 32;
+
+        const schoolName = profile?.name || 'School';
+        const branch = profile?.branch || '';
+        const session = profile?.session || '';
+        const address = profile?.address || '';
+        const phone = profile?.phone || '';
+        const email = profile?.email || '';
+
+        doc.setFillColor(22, 41, 74);
+        doc.roundedRect(margin, top, pageWidth - margin * 2, headerH, 10, 10, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text(schoolName, margin + 18, top + 30);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        const metaLine = [branch, session].filter(Boolean).join('  •  ');
+        if (metaLine) doc.text(metaLine, margin + 18, top + 48);
+
+        const rightX = pageWidth - margin - 18;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('PAYSLIP', rightX, top + 30, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`${payroll?.month || ''} ${payroll?.year || ''}`.trim() || '—', rightX, top + 48, { align: 'right' });
+
+        doc.setTextColor(30, 41, 59);
+        let y = top + headerH + 26;
+
+        const sectionW = pageWidth - margin * 2;
+        doc.setDrawColor(226, 232, 240);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(margin, y, sectionW, 110, 10, 10, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('Employee Details', margin + 16, y + 22);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        const leftColX = margin + 16;
+        const midColX = margin + sectionW / 2 + 10;
+
+        doc.text(`Employee: ${payroll?.employeeName || '—'}`, leftColX, y + 44);
+        doc.text(`Employee ID: ${payroll?.employeeId ?? '—'}`, leftColX, y + 62);
+        doc.text(`Campus ID: ${payroll?.campusId ?? campusId ?? '—'}`, leftColX, y + 80);
+
+        doc.text(`Status: ${payroll?.status || 'Pending'}`, midColX, y + 44);
+        doc.text(`Payment Date: ${formatDate(payroll?.paymentDate)}`, midColX, y + 62);
+        doc.text(`Generated On: ${formatDate(new Date())}`, midColX, y + 80);
+
+        y = y + 110 + 18;
+
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(margin, y, sectionW, 110, 10, 10, 'FD');
+        doc.setDrawColor(226, 232, 240);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('Payment Details', margin + 16, y + 22);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        const pm = payroll?.paymentMethod ? String(payroll.paymentMethod).toUpperCase() : '—';
+        doc.text(`Method: ${pm}`, margin + 16, y + 44);
+        doc.text(`Transaction Ref: ${payroll?.transactionReference || '—'}`, margin + 16, y + 62);
+        const bankLine = [
+            payroll?.bankName ? `Bank: ${payroll.bankName}` : null,
+            payroll?.accountTitle ? `Title: ${payroll.accountTitle}` : null,
+            payroll?.accountNumber ? `A/C: ${payroll.accountNumber}` : null,
+            payroll?.iban ? `IBAN: ${payroll.iban}` : null,
+            payroll?.chequeNumber ? `Cheque: ${payroll.chequeNumber}` : null,
+        ].filter(Boolean).join('  •  ');
+        doc.text(bankLine || '—', margin + 16, y + 80, { maxWidth: sectionW - 32 });
+
+        y = y + 110 + 18;
+
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(margin, y, sectionW, 160, 10, 10, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('Salary Breakdown', margin + 16, y + 22);
+
+        const rowY = y + 44;
+        const labelX = margin + 16;
+        const valueX = margin + sectionW - 16;
+
+        const line = (label, value, yy, bold = false) => {
+            doc.setFont('helvetica', bold ? 'bold' : 'normal');
+            doc.setFontSize(10);
+            doc.text(label, labelX, yy);
+            doc.text(String(value), valueX, yy, { align: 'right' });
+        };
+
+        line('Basic Salary', formatMoney(payroll?.basicSalary), rowY);
+        line('Allowances', formatMoney(payroll?.allowances), rowY + 22);
+        line('Deductions', formatMoney(payroll?.deductions), rowY + 44);
+
+        doc.setDrawColor(226, 232, 240);
+        doc.line(margin + 16, rowY + 58, margin + sectionW - 16, rowY + 58);
+        line('Net Salary', formatMoney(payroll?.netSalary), rowY + 82, true);
+
+        y = y + 160 + 18;
+
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(margin, y, sectionW, 84, 10, 10, 'FD');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const contact = [address, phone ? `Phone: ${phone}` : null, email ? `Email: ${email}` : null].filter(Boolean).join('  •  ');
+        doc.text(contact || '—', margin + 16, y + 26, { maxWidth: sectionW - 32 });
+        doc.text('This is a system-generated payslip.', margin + 16, y + 46);
+
+        doc.setDrawColor(148, 163, 184);
+        doc.line(margin + 16, y + 72, margin + 200, y + 72);
+        doc.setFontSize(9);
+        doc.text('Authorized Signature', margin + 16, y + 82);
+
+        return doc;
+    };
+
     const handleOpenSlip = async (id) => {
+        setSlipLoadingId(id);
         try {
-            const data = await payrollApi.getSalarySlip(id);
-            const url = data?.slipUrl;
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
-                return;
-            }
-            toast({
-                title: 'Slip not available',
-                status: 'warning',
-                duration: 3000,
-                isClosable: true,
-            });
+            const [payroll, profile] = await Promise.all([
+                payrollApi.get(id),
+                settingsApi.getSchoolProfile().catch(() => null),
+            ]);
+
+            const doc = buildPayslipPdf({ payroll, profile });
+            const filename = `Payslip_${safeFilePart(payroll?.employeeName)}_${safeFilePart(payroll?.month)}_${safeFilePart(payroll?.year)}.pdf`;
+            doc.save(filename);
         } catch (error) {
             toast({
                 title: 'Error fetching salary slip',
@@ -97,6 +239,8 @@ export default function PayrollDashboard() {
                 duration: 3000,
                 isClosable: true,
             });
+        } finally {
+            setSlipLoadingId(null);
         }
     };
 
@@ -181,7 +325,14 @@ export default function PayrollDashboard() {
                                             </Badge>
                                         </Td>
                                         <Td>
-                                            <Button size='sm' leftIcon={<MdDownload />} variant='ghost' onClick={() => handleOpenSlip(payroll.id)}>
+                                            <Button
+                                                size='sm'
+                                                leftIcon={<MdDownload />}
+                                                variant='ghost'
+                                                isLoading={slipLoadingId === payroll.id}
+                                                loadingText='Generating'
+                                                onClick={() => handleOpenSlip(payroll.id)}
+                                            >
                                                 Slip
                                             </Button>
                                         </Td>

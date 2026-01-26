@@ -167,12 +167,14 @@ export default function Dashboard(props) {
       .map((r) => {
         // Only include /admin items in Admin layout
         if (r.layout !== '/admin') return null;
+        if (r.ownerOnly) return null;
         if (r.collapse && r.items) {
           if (!isModuleAllowed(r.name)) return null;
           let inner = r.items || [];
           if (user.role !== 'owner') {
             inner = inner.filter((it) => it.path !== '/settings/licensing');
           }
+          inner = inner.filter((it) => !it.ownerOnly);
           const filteredItems = inner.filter((it) => isSubrouteAllowed(it.path));
           if (filteredItems.length === 0) return null;
           return { ...r, items: filteredItems };
@@ -251,6 +253,18 @@ export default function Dashboard(props) {
                     {user && user.role !== 'owner' && (
                       <Route
                         path="settings/licensing"
+                        element={<Navigate to="/admin/dashboard" replace />}
+                      />
+                    )}
+                    {user && user.role !== 'owner' && (
+                      <Route
+                        path="campuses-list"
+                        element={<Navigate to="/admin/dashboard" replace />}
+                      />
+                    )}
+                    {user && user.role !== 'owner' && (
+                      <Route
+                        path="settings/campuses"
                         element={<Navigate to="/admin/dashboard" replace />}
                       />
                     )}

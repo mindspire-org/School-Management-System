@@ -56,6 +56,11 @@ export default function Payroll() {
     status: 'pending',
     transactionReference: '',
     paymentMethod: '',
+    bankName: '',
+    accountTitle: '',
+    accountNumber: '',
+    iban: '',
+    chequeNumber: '',
     notes: '',
   });
   const [creating, setCreating] = useState(false);
@@ -137,6 +142,11 @@ export default function Payroll() {
       status: 'pending',
       transactionReference: '',
       paymentMethod: '',
+      bankName: '',
+      accountTitle: '',
+      accountNumber: '',
+      iban: '',
+      chequeNumber: '',
       notes: '',
     });
     setEditingRow(null);
@@ -170,6 +180,11 @@ export default function Payroll() {
             bonuses: Number(createForm.bonuses),
             status: createForm.status,
             paymentMethod: createForm.paymentMethod || null,
+            bankName: createForm.bankName || null,
+            accountTitle: createForm.accountTitle || null,
+            accountNumber: createForm.accountNumber || null,
+            iban: createForm.iban || null,
+            chequeNumber: createForm.chequeNumber || null,
             transactionReference: createForm.transactionReference || null,
             notes: createForm.notes,
             paidOn: createForm.status === 'paid' ? new Date().toISOString() : null,
@@ -184,6 +199,11 @@ export default function Payroll() {
             bonuses: Number(createForm.bonuses),
             status: createForm.status,
             paymentMethod: createForm.paymentMethod || null,
+            bankName: createForm.bankName || null,
+            accountTitle: createForm.accountTitle || null,
+            accountNumber: createForm.accountNumber || null,
+            iban: createForm.iban || null,
+            chequeNumber: createForm.chequeNumber || null,
             transactionReference: createForm.transactionReference || null,
             notes: createForm.notes,
             paidOn: createForm.status === 'paid' ? new Date().toISOString() : null,
@@ -191,20 +211,23 @@ export default function Payroll() {
         }
       } else {
         const driverId = createForm.user.id;
-        const saved = await driversApi.createPayroll(driverId, {
+        await driversApi.createPayroll(driverId, {
           periodMonth: createForm.periodMonth + '-01',
           baseSalary: Number(createForm.baseSalary),
           allowances: Number(createForm.allowances),
           deductions: Number(createForm.deductions),
           bonuses: Number(createForm.bonuses),
+          status: createForm.status,
+          paymentMethod: createForm.paymentMethod || null,
+          bankName: createForm.bankName || null,
+          accountTitle: createForm.accountTitle || null,
+          accountNumber: createForm.accountNumber || null,
+          iban: createForm.iban || null,
+          chequeNumber: createForm.chequeNumber || null,
+          transactionReference: createForm.transactionReference || null,
+          paidOn: createForm.status === 'paid' ? new Date().toISOString() : null,
           notes: createForm.notes,
         });
-        if (createForm.status && createForm.status !== 'pending') {
-          await driversApi.updatePayrollStatus(driverId, saved?.id || editingRow?.id, {
-            status: createForm.status,
-            transactionReference: createForm.transactionReference || undefined,
-          });
-        }
       }
 
       toast({ title: editingRow ? 'Payroll updated successfully' : 'Payroll created successfully', status: 'success', duration: 3000 });
@@ -236,6 +259,7 @@ export default function Payroll() {
   const releasePayslip = (row) => {
     const monthLabel = row?.periodMonth ? String(row.periodMonth).slice(0, 7) : '';
     const paidOn = row?.paidOn ? String(row.paidOn).slice(0, 10) : '';
+    const method = row?.paymentMethod ? String(row.paymentMethod).toUpperCase() : '';
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Payslip</title>
       <style>
         :root{--brand:#2b6cb0;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc}
@@ -275,6 +299,7 @@ export default function Payroll() {
             <div class="chip"><div class="k">Pay Period</div><div class="v">${monthLabel}</div></div>
             <div class="chip"><div class="k">Status</div><div class="v">${String(row?.status || '').toUpperCase()}</div></div>
             <div class="chip"><div class="k">Paid On</div><div class="v">${paidOn || '-'}</div></div>
+            <div class="chip"><div class="k">Payment Method</div><div class="v">${method || '-'}</div></div>
           </div>
 
           <div class="grid">
@@ -296,6 +321,14 @@ export default function Payroll() {
             <div class="card">
               <h2>Notes</h2>
               <div style="font-size:13px;line-height:1.45;color:var(--text)">${row?.notes ? String(row.notes) : '—'}</div>
+              <div style="margin-top:14px;font-size:12px;color:var(--muted)">
+                ${row?.transactionReference ? `Ref: ${String(row.transactionReference)}` : ''}
+              </div>
+              <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+                ${(row?.paymentMethod === 'bank' || row?.paymentMethod === 'cheque') && (row?.bankName || row?.accountNumber || row?.iban || row?.accountTitle || row?.chequeNumber)
+                  ? `Bank: ${row?.bankName || '-'}  •  A/C: ${row?.accountNumber || '-'}  •  IBAN: ${row?.iban || '-'}  ${row?.chequeNumber ? ` •  Cheque: ${row.chequeNumber}` : ''}`
+                  : ''}
+              </div>
               <div style="margin-top:14px;font-size:12px;color:var(--muted)">This document is system generated.</div>
             </div>
           </div>
@@ -324,6 +357,11 @@ export default function Payroll() {
       status: row.status || 'pending',
       transactionReference: row.transactionReference || '',
       paymentMethod: row.paymentMethod || '',
+      bankName: row.bankName || '',
+      accountTitle: row.accountTitle || '',
+      accountNumber: row.accountNumber || '',
+      iban: row.iban || '',
+      chequeNumber: row.chequeNumber || '',
       notes: row.notes || '',
       id: row.id,
     });
@@ -492,6 +530,19 @@ export default function Payroll() {
                 <Text><strong>Bonuses:</strong> Rs. {Number(selected.bonuses || 0).toLocaleString()}</Text>
                 <Text><strong>Net:</strong> Rs. {Number(selected.totalAmount).toLocaleString()}</Text>
                 <Text><strong>Status:</strong> {selected.status}</Text>
+                <Text><strong>Payment Method:</strong> {selected.paymentMethod || '—'}</Text>
+                {selected.transactionReference && (
+                  <Text><strong>Transaction Ref:</strong> {selected.transactionReference}</Text>
+                )}
+                {(selected.bankName || selected.accountTitle || selected.accountNumber || selected.iban || selected.chequeNumber) && (
+                  <Box mt={2}>
+                    {selected.bankName && <Text><strong>Bank:</strong> {selected.bankName}</Text>}
+                    {selected.accountTitle && <Text><strong>Account Title:</strong> {selected.accountTitle}</Text>}
+                    {selected.accountNumber && <Text><strong>Account Number:</strong> {selected.accountNumber}</Text>}
+                    {selected.iban && <Text><strong>IBAN:</strong> {selected.iban}</Text>}
+                    {selected.chequeNumber && <Text><strong>Cheque No:</strong> {selected.chequeNumber}</Text>}
+                  </Box>
+                )}
               </Box>
             )}
           </ModalBody>
@@ -536,6 +587,10 @@ export default function Payroll() {
                 baseSalary: Number(user?.baseSalary || 0),
                 allowances: Number(user?.allowances || 0),
                 deductions: Number(user?.deductions || 0),
+                paymentMethod: user?.paymentMethod || f.paymentMethod,
+                bankName: user?.bankName || f.bankName,
+                accountNumber: user?.accountNumber || f.accountNumber,
+                iban: user?.iban || f.iban,
               }))}
               isRequired
               label="Select Employee"
@@ -590,6 +645,47 @@ export default function Payroll() {
                 <Input value={createForm.transactionReference} onChange={(e) => setCreateForm(f => ({ ...f, transactionReference: e.target.value }))} placeholder='Optional' />
               </FormControl>
             </SimpleGrid>
+
+            <SimpleGrid columns={2} spacing={4} mt={4}>
+              <FormControl>
+                <FormLabel>Payment Method</FormLabel>
+                <Select value={createForm.paymentMethod} onChange={(e) => setCreateForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                  <option value=''>Select</option>
+                  <option value='cash'>Cash</option>
+                  <option value='bank'>Bank Transfer</option>
+                  <option value='cheque'>Cheque</option>
+                </Select>
+              </FormControl>
+
+              {createForm.paymentMethod === 'cheque' ? (
+                <FormControl>
+                  <FormLabel>Cheque No</FormLabel>
+                  <Input value={createForm.chequeNumber} onChange={(e) => setCreateForm(f => ({ ...f, chequeNumber: e.target.value }))} placeholder='Required for cheque' />
+                </FormControl>
+              ) : (
+                <FormControl>
+                  <FormLabel>Account Title</FormLabel>
+                  <Input value={createForm.accountTitle} onChange={(e) => setCreateForm(f => ({ ...f, accountTitle: e.target.value }))} placeholder='Optional' />
+                </FormControl>
+              )}
+            </SimpleGrid>
+
+            {(createForm.paymentMethod === 'bank' || createForm.paymentMethod === 'cheque') && (
+              <SimpleGrid columns={2} spacing={4} mt={4}>
+                <FormControl>
+                  <FormLabel>Bank Name</FormLabel>
+                  <Input value={createForm.bankName} onChange={(e) => setCreateForm(f => ({ ...f, bankName: e.target.value }))} placeholder='e.g., HBL / UBL' />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Account Number</FormLabel>
+                  <Input value={createForm.accountNumber} onChange={(e) => setCreateForm(f => ({ ...f, accountNumber: e.target.value }))} placeholder='Optional' />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>IBAN</FormLabel>
+                  <Input value={createForm.iban} onChange={(e) => setCreateForm(f => ({ ...f, iban: e.target.value }))} placeholder='Optional' />
+                </FormControl>
+              </SimpleGrid>
+            )}
 
             <Box mt={4} p={3} bg={useColorModeValue('blue.50', 'blue.900')} borderRadius='md'>
               <Text fontWeight='600'>Net Salary: Rs. {computeNet(createForm).toLocaleString()}</Text>

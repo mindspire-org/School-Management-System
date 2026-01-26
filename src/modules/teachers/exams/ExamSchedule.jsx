@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -36,12 +36,7 @@ import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
 
-const sampleSchedule = [
-  { id: 1, date: '2024-03-15', time: '09:00', subject: 'Mathematics', cls: '10', section: 'A', room: '201' },
-  { id: 2, date: '2024-03-17', time: '09:00', subject: 'Physics', cls: '10', section: 'A', room: '202' },
-  { id: 3, date: '2024-03-19', time: '09:00', subject: 'Chemistry', cls: '10', section: 'B', room: '203' },
-  { id: 4, date: '2024-03-21', time: '11:00', subject: 'English', cls: '9', section: 'A', room: '104' },
-];
+import * as examsApi from '../../../services/api/exams';
 
 export default function ExamSchedule() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -55,9 +50,45 @@ export default function ExamSchedule() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [row, setRow] = useState(null);
 
-  const filtered = useMemo(() => sampleSchedule.filter(r =>
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await examsApi.list({});
+        const data = Array.isArray(res?.items) ? res.items : [];
+        if (mounted) setItems(data);
+      } catch (e) {
+        console.error('Failed to load exams', e);
+        if (mounted) setItems([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const rows = useMemo(() => {
+    return items.map((e) => {
+      const rawDate = e.examDate || e.startDate || e.endDate || null;
+      const dateObj = rawDate ? new Date(rawDate) : null;
+      const date = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toISOString().slice(0, 10) : '';
+      const time = dateObj && !Number.isNaN(dateObj.getTime()) ? dateObj.toTimeString().slice(0, 5) : '';
+
+      return {
+        id: e.id,
+        date,
+        time,
+        subject: e.subject || e.title || '-',
+        cls: e.class || e.className || '',
+        section: e.section || '',
+        room: '-',
+      };
+    });
+  }, [items]);
+
+  const filtered = useMemo(() => rows.filter(r =>
     (!cls || r.cls === cls) && (!section || r.section === section) && (!q || `${r.subject}${r.room}`.toLowerCase().includes(q.toLowerCase()))
-  ), [cls, section, q]);
+  ), [cls, section, q, rows]);
 
   const kpis = useMemo(() => {
     const total = filtered.length;
@@ -126,10 +157,14 @@ export default function ExamSchedule() {
         <Flex gap={3} flexWrap='wrap' justify='space-between' align='center'>
           <HStack spacing={3} flexWrap='wrap' rowGap={3}>
             <Select placeholder='Class' value={cls} onChange={e=>setCls(e.target.value)} size='sm' maxW='160px'>
-              <option>9</option><option>10</option>
+              {Array.from(new Set(rows.map(r => String(r.cls)).filter(Boolean))).sort((a,b)=>Number(a)-Number(b)).map(v => (
+                <option key={v}>{v}</option>
+              ))}
             </Select>
             <Select placeholder='Section' value={section} onChange={e=>setSection(e.target.value)} size='sm' maxW='160px'>
-              <option>A</option><option>B</option>
+              {Array.from(new Set(rows.map(r => String(r.section)).filter(Boolean))).sort().map(v => (
+                <option key={v}>{v}</option>
+              ))}
             </Select>
             <HStack>
               <Input placeholder='Search subject/room' value={q} onChange={e=>setQ(e.target.value)} size='sm' maxW='240px' />

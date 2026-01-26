@@ -174,14 +174,22 @@ export const getUsersByType = async (userType) => {
       sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation,
                     COALESCE(base_salary, 0)::numeric AS "baseSalary",
                     COALESCE(allowances, 0)::numeric AS allowances,
-                    COALESCE(deductions, 0)::numeric AS deductions
+                    COALESCE(deductions, 0)::numeric AS deductions,
+                    payment_method AS "paymentMethod",
+                    bank_name AS "bankName",
+                    account_number AS "accountNumber",
+                    iban AS "iban"
              FROM teachers ORDER BY name`;
       break;
     case 'driver':
       sql = `SELECT id, name, email, license_number AS "licenseNumber", phone,
                     COALESCE(base_salary, 0)::numeric AS "baseSalary",
                     COALESCE(allowances, 0)::numeric AS allowances,
-                    COALESCE(deductions, 0)::numeric AS deductions
+                    COALESCE(deductions, 0)::numeric AS deductions,
+                    payment_method AS "paymentMethod",
+                    bank_name AS "bankName",
+                    account_number AS "accountNumber",
+                    iban AS "iban"
              FROM drivers ORDER BY name`;
       break;
     default:
@@ -209,14 +217,22 @@ export const getUsersByTypeScoped = async (userType, { campusId } = {}) => {
       sql = `SELECT id, name, email, employee_id AS "employeeId", department, designation,
                     COALESCE(base_salary, 0)::numeric AS "baseSalary",
                     COALESCE(allowances, 0)::numeric AS allowances,
-                    COALESCE(deductions, 0)::numeric AS deductions
+                    COALESCE(deductions, 0)::numeric AS deductions,
+                    payment_method AS "paymentMethod",
+                    bank_name AS "bankName",
+                    account_number AS "accountNumber",
+                    iban AS "iban"
              FROM teachers ${whereSql} ORDER BY name`;
       break;
     case 'driver':
       sql = `SELECT id, name, email, license_number AS "licenseNumber", phone,
                     COALESCE(base_salary, 0)::numeric AS "baseSalary",
                     COALESCE(allowances, 0)::numeric AS allowances,
-                    COALESCE(deductions, 0)::numeric AS deductions
+                    COALESCE(deductions, 0)::numeric AS deductions,
+                    payment_method AS "paymentMethod",
+                    bank_name AS "bankName",
+                    account_number AS "accountNumber",
+                    iban AS "iban"
              FROM drivers ${whereSql} ORDER BY name`;
       break;
     default:
@@ -707,7 +723,14 @@ export const getPayrollSummary = async ({ role, periodMonth, status, campusId, p
       SELECT tp.id, 'teacher' AS role, tp.teacher_id AS "userId", t.name AS "userName",
              tp.period_month AS "periodMonth", tp.base_salary AS "baseSalary",
              tp.allowances, tp.deductions, tp.bonuses, tp.total_amount AS "totalAmount",
-             tp.status, tp.paid_on AS "paidOn"
+             tp.status, tp.paid_on AS "paidOn",
+             tp.payment_method AS "paymentMethod",
+             tp.bank_name AS "bankName",
+             tp.account_title AS "accountTitle",
+             tp.account_number AS "accountNumber",
+             tp.iban AS "iban",
+             tp.cheque_number AS "chequeNumber",
+             tp.transaction_reference AS "transactionReference"
       FROM teacher_payrolls tp
       JOIN teachers t ON tp.teacher_id = t.id
       ${tWhereSql}
@@ -729,7 +752,14 @@ export const getPayrollSummary = async ({ role, periodMonth, status, campusId, p
       SELECT dp.id, 'driver' AS role, dp.driver_id AS "userId", d.name AS "userName",
              dp.period_month AS "periodMonth", dp.base_salary AS "baseSalary",
              dp.allowances, dp.deductions, dp.bonuses, dp.total_amount AS "totalAmount",
-             dp.status, dp.paid_on AS "paidOn"
+             dp.status, dp.paid_on AS "paidOn",
+             dp.payment_method AS "paymentMethod",
+             dp.bank_name AS "bankName",
+             dp.account_title AS "accountTitle",
+             dp.account_number AS "accountNumber",
+             dp.iban AS "iban",
+             dp.cheque_number AS "chequeNumber",
+             dp.transaction_reference AS "transactionReference"
       FROM driver_payrolls dp
       JOIN drivers d ON dp.driver_id = d.id
       ${dWhereSql}
