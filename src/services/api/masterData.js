@@ -18,8 +18,15 @@ export const createFeeRule = (data) => http.post('/master-data/fee-rules', data)
 export const updateFeeRule = (id, data) => http.put(`/master-data/fee-rules/${id}`, data);
 export const deleteFeeRule = (id) => http.delete(`/master-data/fee-rules/${id}`);
 
+// Departments
+export const getDepartments = () => http.get('/master-data/departments');
+export const createDepartment = (data) => http.post('/master-data/departments', data);
+export const updateDepartment = (id, data) => http.put(`/master-data/departments/${id}`, data);
+export const deleteDepartment = (id) => http.delete(`/master-data/departments/${id}`);
+
 export default {
     getSubjects, createSubject, updateSubject, deleteSubject,
     getDesignations, createDesignation, updateDesignation, deleteDesignation,
-    getFeeRules, createFeeRule, updateFeeRule, deleteFeeRule
+    getFeeRules, createFeeRule, updateFeeRule, deleteFeeRule,
+    getDepartments, createDepartment, updateDepartment, deleteDepartment
 };

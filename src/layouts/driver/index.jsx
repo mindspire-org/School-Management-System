@@ -16,7 +16,7 @@ export default function DriverLayout(props) {
   const [toggleSidebar, setToggleSidebar] = useState(false);
   const sidebarWidth = toggleSidebar ? 80 : 260;
 
-  const { campusId } = useAuth();
+  const { campusId, user, moduleAccess } = useAuth();
 
   const getActiveRoute = (routes) => {
     let activeRoute = 'Driver';
@@ -49,6 +49,40 @@ export default function DriverLayout(props) {
 
   const routes = getDriverRoutes();
 
+  const filterRoutesByAccess = (allRoutes) => {
+    // For non-owner roles, when moduleAccess is missing or 'ALL', treat as allow all modules
+    const allowedModules = (!moduleAccess || moduleAccess.allowModules === 'ALL')
+      ? 'ALL'
+      : new Set(moduleAccess.allowModules || []);
+    const allowedSubroutes = new Set(
+      moduleAccess && moduleAccess.allowSubroutes === 'ALL' ? ['ALL'] : (moduleAccess?.allowSubroutes || [])
+    );
+
+    const isModuleAllowed = (name) => (allowedModules === 'ALL') || allowedModules.has(name);
+    const isSubrouteAllowed = (subPath) => allowedSubroutes.has('ALL') || allowedSubroutes.has(subPath);
+
+    const filterTree = (items) => items
+      .map((r) => {
+        if (r.layout !== '/driver') return null;
+        if (r.collapse && r.items) {
+          if (!isModuleAllowed(r.name)) return null;
+          const filteredItems = (r.items || []).filter((it) => isSubrouteAllowed(it.path));
+          if (filteredItems.length === 0) return null;
+          return { ...r, items: filteredItems };
+        }
+        if (!r.collapse && r.name) {
+          if (!isModuleAllowed(r.name)) return null;
+          return r;
+        }
+        return r;
+      })
+      .filter(Boolean);
+
+    return filterTree(allRoutes);
+  };
+
+  const effectiveRoutes = useMemo(() => filterRoutesByAccess(routes), [routes, moduleAccess, user]);
+
   const getRoutes = (routes) =>
     routes
       .flatMap((route) => {
@@ -72,15 +106,15 @@ export default function DriverLayout(props) {
   document.documentElement.dir = 'ltr';
   const { onOpen } = useDisclosure();
   const location = useLocation();
-  const brandText = useMemo(() => getActiveRoute(routes), [location.pathname]);
-  const secondary = useMemo(() => getActiveNavbar(routes), [location.pathname]);
-  const message = useMemo(() => getActiveNavbarText(routes), [location.pathname]);
+  const brandText = useMemo(() => getActiveRoute(effectiveRoutes), [location.pathname, effectiveRoutes]);
+  const secondary = useMemo(() => getActiveNavbar(effectiveRoutes), [location.pathname, effectiveRoutes]);
+  const message = useMemo(() => getActiveNavbarText(effectiveRoutes), [location.pathname, effectiveRoutes]);
 
   return (
     <Box>
       <Box>
         <SidebarContext.Provider value={{ toggleSidebar, setToggleSidebar }}>
-          <Sidebar routes={routes} sidebarWidth={sidebarWidth} display="none" {...rest} />
+          <Sidebar routes={effectiveRoutes} sidebarWidth={sidebarWidth} display="none" {...rest} />
           <Box
             float="right"
             minHeight="100vh"
@@ -119,8 +153,9 @@ export default function DriverLayout(props) {
                 }
               >
                 <Routes key={campusId || 'no-campus'}>
-                  {getRoutes(routes)}
+                  {getRoutes(effectiveRoutes)}
                   <Route path="/" element={<Navigate to="/driver/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/driver/dashboard" replace />} />
                 </Routes>
               </Suspense>
             </Box>

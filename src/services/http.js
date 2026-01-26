@@ -26,8 +26,21 @@ const withTimeout = (promise, ms) => {
 // Fallback to VITE_API_URL and then to localhost dev API
 const electronBase = (typeof window !== 'undefined' && window.ELECTRON_CONFIG && window.ELECTRON_CONFIG.API_BASE_URL) ||
   (typeof window !== 'undefined' && window.__API_BASE_URL);
-// Default to relative '/api' so Vite dev proxy handles cross-origin and preflights locally
-const baseURL = (electronBase || config.API_BASE_URL || '/api').replace(/\/$/, '');
+
+const normalizeApiBase = (raw) => {
+  const s = String(raw || '').replace(/\/$/, '');
+  if (!s) return '';
+  if (s.endsWith('/api')) return s;
+  // If user provided host only (e.g. http://localhost:59201), ensure /api is included.
+  return s + '/api';
+};
+
+// In Vite dev, always use relative '/api' so the proxy routes to the correct backend.
+// This prevents accidental 404s when VITE_API_URL is set to an old/stale backend.
+const baseURL = (
+  electronBase ||
+  (import.meta?.env?.DEV ? '/api' : (normalizeApiBase(config.API_BASE_URL) || '/api'))
+).replace(/\/$/, '');
 
 const request = async (method, url, { params, data, headers } = {}) => {
   // Drop undefined/null query params to avoid sending 'undefined' strings

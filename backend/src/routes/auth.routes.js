@@ -37,7 +37,13 @@ router.post(
     body('email').isEmail(),
     body('password').isString().isLength({ min: 6 }),
     body('name').optional().isString(),
-    body('role').optional().isIn(['teacher', 'student', 'driver', 'parent']),
+    body('role').optional().custom((value, { req }) => {
+      const v = String(value || '').trim();
+      if (!v) return true;
+      if (['teacher', 'student', 'driver', 'parent'].includes(v)) return true;
+      if (v === 'admin' && req.user?.role === 'owner') return true;
+      throw new Error('Invalid role');
+    }),
     body('campusId').optional().isInt({ min: 1 }),
   ],
   validate,

@@ -24,7 +24,7 @@ const roleDisplayMap = {
 };
 
 export default function UserManagement() {
-  const { campusId } = useAuth();
+  const { campusId, user } = useAuth();
   const [role, setRole] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -389,8 +389,15 @@ export default function UserManagement() {
                 <option value='teacher'>Teacher</option>
                 <option value='driver'>Driver</option>
                 <option value='parent'>Parent</option>
+                {(user?.role === 'owner' || user?.role === 'superadmin') && (
+                  <option value='admin'>Administrator</option>
+                )}
               </Select>
-              <FormHelperText>Only Student, Teacher, Driver, and Parent roles can be created</FormHelperText>
+              <FormHelperText>
+                {(user?.role === 'owner' || user?.role === 'superadmin')
+                  ? 'Only Student, Teacher, Driver, Parent, and Administrator roles can be created'
+                  : 'Only Student, Teacher, Driver, and Parent roles can be created'}
+              </FormHelperText>
             </FormControl>
             <FormControl display='flex' alignItems='center'>
               <FormLabel mb='0' flex='1'>Active</FormLabel>
@@ -417,6 +424,17 @@ export default function UserManagement() {
                 return;
               }
 
+              if (!campusId) {
+                toast({
+                  title: 'Select a campus',
+                  description: 'Campus/branch is required to create a user.',
+                  status: 'warning',
+                  duration: 3500,
+                  isClosable: true,
+                });
+                return;
+              }
+
               if (formData.password.length < 6) {
                 toast({
                   title: 'Validation Error',
@@ -430,12 +448,16 @@ export default function UserManagement() {
 
               try {
                 setIsCreating(true);
+                const numericCampusId = Number(campusId);
+                const campusIdToSend = Number.isFinite(numericCampusId) && numericCampusId > 0
+                  ? numericCampusId
+                  : undefined;
                 await authApi.register({
                   name: formData.name,
                   email: formData.email,
                   password: formData.password,
                   role: formData.role,
-                  campusId: campusId || undefined
+                  campusId: campusIdToSend
                 });
 
                 toast({
@@ -452,9 +474,16 @@ export default function UserManagement() {
                 // Refresh the page to show new user
                 setTimeout(() => window.location.reload(), 1000);
               } catch (error) {
+                const validationErrors = error?.data?.errors;
+                const firstErr = Array.isArray(validationErrors) && validationErrors.length
+                  ? validationErrors[0]
+                  : null;
+                const validationText = firstErr
+                  ? `${firstErr.path || firstErr.param || 'field'}: ${firstErr.msg || 'Invalid value'}`
+                  : null;
                 toast({
                   title: 'Error',
-                  description: error?.data?.message || error?.message || 'Failed to create user',
+                  description: validationText || error?.data?.message || error?.message || 'Failed to create user',
                   status: 'error',
                   duration: 5000,
                   isClosable: true,
@@ -489,6 +518,9 @@ export default function UserManagement() {
                 <option value='teacher'>Teacher</option>
                 <option value='driver'>Driver</option>
                 <option value='parent'>Parent</option>
+                {(user?.role === 'owner' || user?.role === 'superadmin') && (
+                  <option value='admin'>Administrator</option>
+                )}
               </Select>
             </FormControl>
             <FormControl mb={4}>

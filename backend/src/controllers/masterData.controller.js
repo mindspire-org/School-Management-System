@@ -97,3 +97,32 @@ export const deleteFeeRule = async (req, res, next) => {
         res.json(data);
     } catch (err) { next(err); }
 };
+
+// --- Departments ---
+export const getDepartments = async (req, res, next) => {
+    try {
+        const data = await service.getDepartments(resolveCampusId(req));
+        res.json(data);
+    } catch (err) { next(err); }
+};
+
+export const createDepartment = async (req, res, next) => {
+    try {
+        const data = await service.createDepartment(req.body, resolveCampusId(req));
+        res.json(data);
+    } catch (err) { next(err); }
+};
+
+export const updateDepartment = async (req, res, next) => {
+    try {
+        const data = await service.updateDepartment(req.params.id, req.body);
+        res.json(data);
+    } catch (err) { next(err); }
+};
+
+export const deleteDepartment = async (req, res, next) => {
+    try {
+        const data = await service.deleteDepartment(req.params.id);
+        res.json(data);
+    } catch (err) { next(err); }
+};

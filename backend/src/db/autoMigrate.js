@@ -146,6 +146,23 @@ export async function ensureMasterDataSchema() {
             frequency TEXT NOT NULL DEFAULT ''Monthly'',
             class_id INTEGER,
             campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE,
+            is_shared BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'departments'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE departments (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            code TEXT,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE,
+            is_shared BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
           )
@@ -159,6 +176,23 @@ export async function ensureMasterDataSchema() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='subjects' AND column_name='is_shared') THEN
           EXECUTE 'ALTER TABLE subjects ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE';
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='subjects' AND column_name='campus_id') THEN
+          EXECUTE 'ALTER TABLE subjects ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE';
+        END IF;
+        IF default_campus_id IS NOT NULL THEN
+          EXECUTE 'UPDATE subjects SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+          BEGIN
+            EXECUTE 'ALTER TABLE subjects ALTER COLUMN campus_id SET DEFAULT ' || default_campus_id;
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+          BEGIN
+            EXECUTE 'ALTER TABLE subjects ALTER COLUMN campus_id SET NOT NULL';
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+        END IF;
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_subjects_campus_id ON subjects(campus_id)';
       END IF;
 
       IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'designations') THEN
@@ -185,6 +219,9 @@ export async function ensureMasterDataSchema() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='fee_structures' AND column_name='campus_id') THEN
           EXECUTE 'ALTER TABLE fee_structures ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE';
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='fee_structures' AND column_name='is_shared') THEN
+          EXECUTE 'ALTER TABLE fee_structures ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE';
+        END IF;
         IF default_campus_id IS NOT NULL THEN
           EXECUTE 'UPDATE fee_structures SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
           BEGIN
@@ -199,6 +236,29 @@ export async function ensureMasterDataSchema() {
           END;
         END IF;
         EXECUTE 'CREATE INDEX IF NOT EXISTS idx_fee_structures_campus_id ON fee_structures(campus_id)';
+      END IF;
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'departments') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='departments' AND column_name='campus_id') THEN
+          EXECUTE 'ALTER TABLE departments ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE CASCADE';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='departments' AND column_name='is_shared') THEN
+          EXECUTE 'ALTER TABLE departments ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE';
+        END IF;
+        IF default_campus_id IS NOT NULL THEN
+          EXECUTE 'UPDATE departments SET campus_id = ' || default_campus_id || ' WHERE campus_id IS NULL';
+          BEGIN
+            EXECUTE 'ALTER TABLE departments ALTER COLUMN campus_id SET DEFAULT ' || default_campus_id;
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+          BEGIN
+            EXECUTE 'ALTER TABLE departments ALTER COLUMN campus_id SET NOT NULL';
+          EXCEPTION WHEN others THEN
+            NULL;
+          END;
+        END IF;
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_departments_campus_id ON departments(campus_id)';
       END IF;
     END $$;
   `);

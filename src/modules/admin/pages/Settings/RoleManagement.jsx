@@ -7,6 +7,9 @@ import IconBox from '../../../../components/icons/IconBox';
 import StatCard from '../../../../components/card/StatCard';
 import { rbacApi } from '../../../../services/api';
 import { getSMSRoutes } from '../../../../smsRoutesConfig';
+import getTeacherRoutes from '../../../../teacherRoutes';
+import getStudentRoutes from '../../../../studentRoutes';
+import getDriverRoutes from '../../../../driverRoutes';
 
 const allPerms = ['students.view', 'students.edit', 'teachers.view', 'teachers.edit', 'finance.view', 'finance.edit', 'transport.view', 'transport.edit', 'attendance.view', 'attendance.edit', 'attendance.export', 'reports.view', 'reports.export', 'communication.send', 'settings.manage'];
 
@@ -26,6 +29,61 @@ export default function RoleManagement() {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const toast = useToast();
 
+  const buildModuleDefs = (roleId) => {
+    try {
+      const r = String(roleId || '').toLowerCase();
+      let routes = [];
+      let layout = null;
+      if (r === 'admin') {
+        routes = getSMSRoutes();
+        layout = '/admin';
+      } else if (r === 'teacher') {
+        routes = getTeacherRoutes();
+        layout = '/teacher';
+      } else if (r === 'student') {
+        routes = getStudentRoutes();
+        layout = '/student';
+      } else if (r === 'driver') {
+        routes = getDriverRoutes();
+        layout = '/driver';
+      } else {
+        routes = [];
+        layout = null;
+      }
+      if (!layout) return [];
+
+      const collectPaths = (node) => {
+        const out = [];
+        if (!node) return out;
+        if (node.layout === layout && node.path) out.push(node.path);
+        if (Array.isArray(node.items)) {
+          node.items.forEach((it) => {
+            out.push(...collectPaths(it));
+          });
+        }
+        return out;
+      };
+
+      const topLevel = routes
+        .flatMap((rt) => (rt && rt.category && Array.isArray(rt.items)) ? rt.items : [rt])
+        .filter(Boolean);
+
+      const defs = topLevel
+        .filter((rt) => rt.layout === layout)
+        .map((rt) => {
+          if (rt.collapse && Array.isArray(rt.items)) {
+            const subroutes = Array.from(new Set(collectPaths({ ...rt, path: null }))).filter(Boolean);
+            return { name: rt.name, subroutes };
+          }
+          const subroutes = rt.path ? [rt.path] : [];
+          return { name: rt.name, subroutes: subroutes.filter(Boolean) };
+        });
+      return defs;
+    } catch (_) {
+      return [];
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -41,20 +99,15 @@ export default function RoleManagement() {
         setModuleAssignments(mods?.assignments || {});
       } catch (_) { }
       try {
-        const smsRoutes = getSMSRoutes();
-        const defs = smsRoutes
-          .filter(r => r.layout === '/admin')
-          .map((r) => {
-            if (r.collapse && Array.isArray(r.items)) {
-              return { name: r.name, subroutes: r.items.map(it => it.path) };
-            }
-            return { name: r.name, subroutes: r.path ? [r.path] : [] };
-          });
-        setModuleDefs(defs);
+        setModuleDefs(buildModuleDefs(selectedRole));
       } catch (_) { }
     };
     load();
   }, []);
+
+  useEffect(() => {
+    setModuleDefs(buildModuleDefs(selectedRole));
+  }, [selectedRole]);
 
   // Sync current role's assignments to local state
   useEffect(() => {
@@ -198,7 +251,7 @@ export default function RoleManagement() {
           <Heading size='md'>Module Access</Heading>
           <Flex gap={3} align='center'>
             <Select maxW='220px' value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
-              {roles.map(r => (
+              {roles.filter((r) => ['admin', 'teacher', 'student', 'driver'].includes(r.id)).map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </Select>

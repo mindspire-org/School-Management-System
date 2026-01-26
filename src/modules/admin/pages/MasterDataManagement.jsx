@@ -34,7 +34,7 @@ import {
     Badge,
     Switch,
 } from '@chakra-ui/react';
-import { MdAdd, MdEdit, MdDelete, MdSchool, MdWork, MdAttachMoney } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSchool, MdWork, MdAttachMoney, MdApartment } from 'react-icons/md';
 import Card from '../../../components/card/Card'; // Check correct path
 import { masterDataApi } from '../../../services/api';
 
@@ -67,6 +67,9 @@ export default function MasterDataManagement() {
                             <Tab _selected={{ color: 'white', bg: 'brand.500' }}>
                                 <Icon as={MdAttachMoney} mr='2' /> Fee Rules
                             </Tab>
+                            <Tab _selected={{ color: 'white', bg: 'brand.500' }}>
+                                <Icon as={MdApartment} mr='2' /> Departments
+                            </Tab>
                         </TabList>
                         <TabPanels>
                             <TabPanel>
@@ -77,6 +80,9 @@ export default function MasterDataManagement() {
                             </TabPanel>
                             <TabPanel>
                                 <FeeRulesManager />
+                            </TabPanel>
+                            <TabPanel>
+                                <DepartmentsManager />
                             </TabPanel>
                         </TabPanels>
                     </Tabs>
@@ -92,7 +98,7 @@ const SubjectsManager = () => {
     const [data, setData] = useState([]);
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ name: '', code: '', category: 'General' });
+    const [form, setForm] = useState({ name: '', code: '', category: 'General', isShared: true });
     const toast = useToast();
 
     const load = async () => {
@@ -117,7 +123,7 @@ const SubjectsManager = () => {
             }
             onClose();
             setEditing(null);
-            setForm({ name: '', code: '', category: 'General' });
+            setForm({ name: '', code: '', category: 'General', isShared: true });
             load();
         } catch (e) {
             toast({ title: 'Error', description: e.message, status: 'error' });
@@ -126,7 +132,12 @@ const SubjectsManager = () => {
 
     const handleEdit = (item) => {
         setEditing(item);
-        setForm({ name: item.name, code: item.code, category: item.category });
+        setForm({
+            name: item.name,
+            code: item.code,
+            category: item.category,
+            isShared: item.is_shared ?? item.isShared ?? true,
+        });
         onOpen();
     };
 
@@ -144,7 +155,7 @@ const SubjectsManager = () => {
     return (
         <Box>
             <Flex justify='flex-end' mb='4'>
-                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ name: '', code: '', category: 'General' }); onOpen(); }}>
+                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ name: '', code: '', category: 'General', isShared: true }); onOpen(); }}>
                     Add Subject
                 </Button>
             </Flex>
@@ -201,7 +212,7 @@ const SubjectsManager = () => {
                             </FormLabel>
                             <Switch
                                 id='isSharedSub'
-                                isChecked={form.isShared || false}
+                                isChecked={form.isShared ?? true}
                                 onChange={(e) => setForm({ ...form, isShared: e.target.checked })}
                             />
                         </FormControl>
@@ -219,7 +230,7 @@ const DesignationsManager = () => {
     const [data, setData] = useState([]);
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ title: '', department: '' });
+    const [form, setForm] = useState({ title: '', department: '', isShared: true });
     const toast = useToast();
 
     const load = async () => {
@@ -244,7 +255,7 @@ const DesignationsManager = () => {
             }
             onClose();
             setEditing(null);
-            setForm({ title: '', department: '' });
+            setForm({ title: '', department: '', isShared: true });
             load();
         } catch (e) {
             toast({ title: 'Error', description: e.message, status: 'error' });
@@ -265,7 +276,7 @@ const DesignationsManager = () => {
     return (
         <Box>
             <Flex justify='flex-end' mb='4'>
-                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ title: '', department: '' }); onOpen(); }}>
+                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ title: '', department: '', isShared: true }); onOpen(); }}>
                     Add Designation
                 </Button>
             </Flex>
@@ -277,7 +288,7 @@ const DesignationsManager = () => {
                             <Td fontWeight='bold'>{item.title}</Td>
                             <Td>{item.department}</Td>
                             <Td>
-                                <IconButton icon={<MdEdit />} size='sm' mr='2' onClick={() => { setEditing(item); setForm({ title: item.title, department: item.department }); onOpen(); }} />
+                                <IconButton icon={<MdEdit />} size='sm' mr='2' onClick={() => { setEditing(item); setForm({ title: item.title, department: item.department, isShared: item.is_shared ?? item.isShared ?? true }); onOpen(); }} />
                                 <IconButton icon={<MdDelete />} size='sm' colorScheme='red' onClick={() => handleDelete(item.id)} />
                             </Td>
                         </Tr>
@@ -305,7 +316,7 @@ const DesignationsManager = () => {
                             </FormLabel>
                             <Switch
                                 id='isSharedDes'
-                                isChecked={form.isShared || false}
+                                isChecked={form.isShared ?? true}
                                 onChange={(e) => setForm({ ...form, isShared: e.target.checked })}
                             />
                         </FormControl>
@@ -321,7 +332,7 @@ const FeeRulesManager = () => {
     const [data, setData] = useState([]);
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null });
+    const [form, setForm] = useState({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null, isShared: true });
     const toast = useToast();
 
     const load = async () => {
@@ -344,7 +355,7 @@ const FeeRulesManager = () => {
             }
             onClose();
             setEditing(null);
-            setForm({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null });
+            setForm({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null, isShared: true });
             load();
         } catch (e) {
             toast({ title: 'Error', description: e.message, status: 'error' });
@@ -365,7 +376,7 @@ const FeeRulesManager = () => {
     return (
         <Box>
             <Flex justify='flex-end' mb='4'>
-                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null }); onOpen(); }}>
+                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ fee_type: 'Tuition', amount: 0, frequency: 'Monthly', class_id: null, isShared: true }); onOpen(); }}>
                     Add Rule
                 </Button>
             </Flex>
@@ -378,7 +389,7 @@ const FeeRulesManager = () => {
                             <Td>{item.amount}</Td>
                             <Td><Badge colorScheme='purple'>{item.frequency}</Badge></Td>
                             <Td>
-                                <IconButton icon={<MdEdit />} size='sm' mr='2' onClick={() => { setEditing(item); setForm({ ...item }); onOpen(); }} />
+                                <IconButton icon={<MdEdit />} size='sm' mr='2' onClick={() => { setEditing(item); setForm({ ...item, isShared: item.is_shared ?? item.isShared ?? true }); onOpen(); }} />
                                 <IconButton icon={<MdDelete />} size='sm' colorScheme='red' onClick={() => handleDelete(item.id)} />
                             </Td>
                         </Tr>
@@ -414,8 +425,134 @@ const FeeRulesManager = () => {
                                 <option value='Annual'>Annual</option>
                             </Select>
                         </FormControl>
+                        <FormControl mb='3' display='flex' alignItems='center'>
+                            <FormLabel htmlFor='isSharedFee' mb='0'>
+                                Share across all campuses?
+                            </FormLabel>
+                            <Switch
+                                id='isSharedFee'
+                                isChecked={form.isShared ?? true}
+                                onChange={(e) => setForm({ ...form, isShared: e.target.checked })}
+                            />
+                        </FormControl>
                     </ModalBody>
                     <ModalFooter><Button colorScheme='brand' onClick={handleSave}>Save</Button></ModalFooter>
+                </ModalContent>
+            </Modal>
+        </Box>
+    );
+};
+
+const DepartmentsManager = () => {
+    const [data, setData] = useState([]);
+    const { isOpen, onOpen, onClose } = useDisclosure();
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({ name: '', code: '', isShared: true });
+    const toast = useToast();
+
+    const load = async () => {
+        try {
+            const res = await masterDataApi.getDepartments();
+            setData(res.data || res);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const handleSave = async () => {
+        try {
+            if (editing) {
+                await masterDataApi.updateDepartment(editing.id, form);
+                toast({ title: 'Updated', status: 'success' });
+            } else {
+                await masterDataApi.createDepartment(form);
+                toast({ title: 'Created', status: 'success' });
+            }
+            onClose();
+            setEditing(null);
+            setForm({ name: '', code: '', isShared: true });
+            load();
+        } catch (e) {
+            toast({ title: 'Error', description: e.message, status: 'error' });
+        }
+    };
+
+    const handleEdit = (item) => {
+        setEditing(item);
+        setForm({ name: item.name, code: item.code || '', isShared: item.is_shared ?? item.isShared ?? true });
+        onOpen();
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure?')) return;
+        try {
+            await masterDataApi.deleteDepartment(id);
+            toast({ title: 'Deleted', status: 'success' });
+            load();
+        } catch (e) {
+            toast({ title: 'Error', status: 'error' });
+        }
+    };
+
+    return (
+        <Box>
+            <Flex justify='flex-end' mb='4'>
+                <Button leftIcon={<MdAdd />} colorScheme='brand' onClick={() => { setEditing(null); setForm({ name: '', code: '', isShared: true }); onOpen(); }}>
+                    Add Department
+                </Button>
+            </Flex>
+            <Table variant='simple'>
+                <Thead>
+                    <Tr>
+                        <Th>Name</Th>
+                        <Th>Code</Th>
+                        <Th>Actions</Th>
+                    </Tr>
+                </Thead>
+                <Tbody>
+                    {data.map((item) => (
+                        <Tr key={item.id}>
+                            <Td fontWeight='bold'>{item.name}</Td>
+                            <Td><Badge>{item.code || '-'}</Badge></Td>
+                            <Td>
+                                <IconButton icon={<MdEdit />} size='sm' mr='2' onClick={() => handleEdit(item)} />
+                                <IconButton icon={<MdDelete />} size='sm' colorScheme='red' onClick={() => handleDelete(item.id)} />
+                            </Td>
+                        </Tr>
+                    ))}
+                </Tbody>
+            </Table>
+
+            <Modal isOpen={isOpen} onClose={onClose}>
+                <ModalOverlay />
+                <ModalContent>
+                    <ModalHeader>{editing ? 'Edit Department' : 'Add Department'}</ModalHeader>
+                    <ModalCloseButton />
+                    <ModalBody>
+                        <FormControl mb='3'>
+                            <FormLabel>Name</FormLabel>
+                            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                        </FormControl>
+                        <FormControl mb='3'>
+                            <FormLabel>Code</FormLabel>
+                            <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+                        </FormControl>
+                        <FormControl mb='3' display='flex' alignItems='center'>
+                            <FormLabel htmlFor='isSharedDept' mb='0'>
+                                Share across all campuses?
+                            </FormLabel>
+                            <Switch
+                                id='isSharedDept'
+                                isChecked={form.isShared ?? true}
+                                onChange={(e) => setForm({ ...form, isShared: e.target.checked })}
+                            />
+                        </FormControl>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button colorScheme='brand' onClick={handleSave}>Save</Button>
+                    </ModalFooter>
                 </ModalContent>
             </Modal>
         </Box>

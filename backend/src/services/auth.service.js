@@ -2,8 +2,8 @@ import { query } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-// Roles that can be created by admin/owner (excludes admin and owner for security)
-export const ALLOWED_USER_ROLES = ['student', 'teacher', 'driver', 'parent'];
+// Roles that can be created by admin/owner (admin creation is restricted by controllers/routes)
+export const ALLOWED_USER_ROLES = ['student', 'teacher', 'driver', 'parent', 'admin'];
 
 // Normalize Pakistan WhatsApp numbers to +92 format for consistent login identifiers
 const normalizePkPhone = (raw) => {

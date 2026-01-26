@@ -53,7 +53,7 @@ export default function TeacherQRAttendance() {
         let mounted = true;
         const loadSelf = async () => {
             try {
-                const payload = await teachersApi.list({ pageSize: 1 });
+                const payload = await teachersApi.list();
                 const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
                 const self = rows && rows.length ? rows[0] : null;
                 if (mounted) setTeacherProfile(self);
@@ -215,6 +215,12 @@ export default function TeacherQRAttendance() {
                 <Box>
                     <Heading as="h3" size="lg" mb={1}>QR Code Attendance</Heading>
                     <Text color={textColorSecondary}>Scan a QR code to mark your attendance</Text>
+                    {(teacherProfile?.id || teacherProfile?.name) && (
+                        <Text color={textColorSecondary} fontSize="sm">
+                            {teacherProfile?.name ? `Teacher: ${teacherProfile.name}` : 'Teacher'}
+                            {teacherProfile?.id ? ` (ID: ${teacherProfile.id})` : ''}
+                        </Text>
+                    )}
                 </Box>
                 <HStack spacing={3}>
                     {!isScanning ? (

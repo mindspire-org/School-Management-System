@@ -26,4 +26,10 @@ router.post('/fee-rules', controller.createFeeRule);
 router.put('/fee-rules/:id', controller.updateFeeRule);
 router.delete('/fee-rules/:id', controller.deleteFeeRule);
 
+// Departments
+router.get('/departments', controller.getDepartments);
+router.post('/departments', controller.createDepartment);
+router.put('/departments/:id', controller.updateDepartment);
+router.delete('/departments/:id', controller.deleteDepartment);
+
 export default router;

@@ -1,17 +1,26 @@
 import { query } from '../config/db.js';
 
+const ensureCampusId = async (campusId) => {
+    const num = Number(campusId);
+    if (Number.isFinite(num) && num > 0) return num;
+    const { rows } = await query('SELECT id FROM campuses ORDER BY id ASC LIMIT 1');
+    if (!rows?.[0]?.id) throw new Error('Campus is required');
+    return rows[0].id;
+};
+
 // --- Subjects ---
 export const getSubjects = async (campusId) => {
-    const whereSql = campusId ? `WHERE campus_id = ${Number(campusId)} OR is_shared = true` : '';
-    const { rows } = await query(`SELECT * FROM subjects ${whereSql} ORDER BY name ASC`);
+    const { rows } = await query(`SELECT * FROM subjects ORDER BY name ASC`);
     return rows;
 };
 
 export const createSubject = async (data, campusId) => {
     const { name, code, category, isShared } = data;
+    const sharedFlag = isShared ?? true;
+    const ensuredCampusId = await ensureCampusId(campusId);
     const { rows } = await query(
         `INSERT INTO subjects (name, code, category, campus_id, is_shared) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [name, code, category, campusId, isShared || false]
+        [name, code, category, ensuredCampusId, sharedFlag]
     );
     return rows[0];
 };
@@ -32,16 +41,17 @@ export const deleteSubject = async (id) => {
 
 // --- Designations ---
 export const getDesignations = async (campusId) => {
-    const whereSql = campusId ? `WHERE campus_id = ${Number(campusId)} OR is_shared = true` : '';
-    const { rows } = await query(`SELECT * FROM designations ${whereSql} ORDER BY title ASC`);
+    const { rows } = await query(`SELECT * FROM designations ORDER BY title ASC`);
     return rows;
 };
 
 export const createDesignation = async (data, campusId) => {
     const { title, department, isShared } = data;
+    const sharedFlag = isShared ?? true;
+    const ensuredCampusId = await ensureCampusId(campusId);
     const { rows } = await query(
         `INSERT INTO designations (title, department, campus_id, is_shared) VALUES ($1, $2, $3, $4) RETURNING *`,
-        [title, department, campusId, isShared || false]
+        [title, department, ensuredCampusId, sharedFlag]
     );
     return rows[0];
 };
@@ -62,26 +72,26 @@ export const deleteDesignation = async (id) => {
 
 // --- Fee Rules ---
 export const getFeeRules = async (campusId) => {
-    const whereSql = campusId ? `WHERE campus_id = ${Number(campusId)}` : '';
-    const { rows } = await query(`SELECT * FROM fee_structures ${whereSql} ORDER BY created_at DESC`);
+    const { rows } = await query(`SELECT * FROM fee_structures ORDER BY created_at DESC`);
     return rows;
 };
 
 export const createFeeRule = async (data, campusId) => {
     const { fee_type, amount, frequency, class_id, isShared } = data;
-    // Note: Fee Structures might be campus specific usually, but supporting shared if needed
+    const sharedFlag = isShared ?? true;
+    const ensuredCampusId = await ensureCampusId(campusId);
     const { rows } = await query(
-        `INSERT INTO fee_structures (fee_type, amount, frequency, class_id, campus_id) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [fee_type, amount, frequency, class_id, campusId]
+        `INSERT INTO fee_structures (fee_type, amount, frequency, class_id, campus_id, is_shared) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [fee_type, amount, frequency, class_id, ensuredCampusId, sharedFlag]
     );
     return rows[0];
 };
 
 export const updateFeeRule = async (id, data) => {
-    const { fee_type, amount, frequency, class_id } = data;
+    const { fee_type, amount, frequency, class_id, isShared } = data;
     const { rows } = await query(
-        `UPDATE fee_structures SET fee_type = $1, amount = $2, frequency = $3, class_id = $4 WHERE id = $5 RETURNING *`,
-        [fee_type, amount, frequency, class_id, id]
+        `UPDATE fee_structures SET fee_type = $1, amount = $2, frequency = $3, class_id = $4, is_shared = COALESCE($6, is_shared) WHERE id = $5 RETURNING *`,
+        [fee_type, amount, frequency, class_id, id, isShared]
     );
     return rows[0];
 };
@@ -91,8 +101,40 @@ export const deleteFeeRule = async (id) => {
     return rows[0];
 };
 
+// --- Departments ---
+export const getDepartments = async (campusId) => {
+    const { rows } = await query(`SELECT * FROM departments ORDER BY name ASC`);
+    return rows;
+};
+
+export const createDepartment = async (data, campusId) => {
+    const { name, code, isShared } = data;
+    const sharedFlag = isShared ?? true;
+    const ensuredCampusId = await ensureCampusId(campusId);
+    const { rows } = await query(
+        `INSERT INTO departments (name, code, campus_id, is_shared) VALUES ($1, $2, $3, $4) RETURNING *`,
+        [name, code ?? null, ensuredCampusId, sharedFlag]
+    );
+    return rows[0];
+};
+
+export const updateDepartment = async (id, data) => {
+    const { name, code, isShared } = data;
+    const { rows } = await query(
+        `UPDATE departments SET name = $1, code = $2, is_shared = COALESCE($4, is_shared) WHERE id = $3 RETURNING *`,
+        [name, code ?? null, id, isShared]
+    );
+    return rows[0];
+};
+
+export const deleteDepartment = async (id) => {
+    const { rows } = await query(`DELETE FROM departments WHERE id = $1 RETURNING id`, [id]);
+    return rows[0];
+};
+
 export default {
     getSubjects, createSubject, updateSubject, deleteSubject,
     getDesignations, createDesignation, updateDesignation, deleteDesignation,
-    getFeeRules, createFeeRule, updateFeeRule, deleteFeeRule
+    getFeeRules, createFeeRule, updateFeeRule, deleteFeeRule,
+    getDepartments, createDepartment, updateDepartment, deleteDepartment
 };
