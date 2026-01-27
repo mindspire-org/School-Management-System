@@ -292,9 +292,28 @@ export const getFees = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const listFeePayments = async (req, res, next) => {
+  try {
+    await ensureFinanceConstraints();
+    const studentId = Number(req.params.id);
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== studentId) return res.status(403).json({ message: 'Forbidden' });
+    }
+    const rows = await students.listFeePayments(studentId);
+    return res.json({ items: rows });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const recordPayment = async (req, res, next) => {
   try {
     await ensureFinanceConstraints();
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self || self.id !== Number(req.params.id)) return res.status(403).json({ message: 'Forbidden' });
+    }
     const created = await students.recordPayment(Number(req.params.id), req.body);
     if (!created) return res.status(404).json({ message: 'Invoice not found for student' });
     return res.status(201).json(created);
@@ -341,6 +360,59 @@ export const updateTransport = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const updateSelfProfile = async (req, res, next) => {
+  try {
+    await ensureStudentExtendedColumns();
+    if (req.user?.role !== 'student') return res.status(403).json({ message: 'Forbidden' });
+    const self = await students.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Student profile not found' });
+    const allowed = {
+      name: req.body?.name,
+      email: req.body?.email,
+      parentName: req.body?.parentName,
+      parentPhone: req.body?.parentPhone,
+      personal: req.body?.personal,
+      parent: req.body?.parent,
+      avatar: req.body?.avatar,
+    };
+    delete allowed.campusId;
+
+    const updated = await students.update(self.id, allowed);
+    if (!updated) return res.status(404).json({ message: 'Student profile not found' });
+    return res.json(updated);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const changeMyPassword = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'student') return res.status(403).json({ message: 'Forbidden' });
+
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const full = req.user?.email
+      ? await authSvc.findUserByEmail(req.user.email)
+      : null;
+    if (!full) return res.status(404).json({ message: 'User not found' });
+    const ok = await bcrypt.compare(String(currentPassword), full.password_hash || '');
+    if (!ok) return res.status(401).json({ message: 'Invalid current password' });
+
+    const passwordHash = await bcrypt.hash(String(newPassword), 10);
+    await authSvc.updateUser(req.user.id, { passwordHash });
+
+    return res.json({ success: true });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const getDashboardStats = async (req, res, next) => {
   try {
     let studentId = req.params.id ? Number(req.params.id) : undefined;
@@ -373,6 +445,18 @@ export const getAttendanceTrend = async (req, res, next) => {
     if (!studentId) return res.status(400).json({ message: 'Student ID required' });
     const trend = await students.getAttendanceTrend(studentId);
     return res.json(trend);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listMySubjectTeachers = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'student') return res.status(403).json({ message: 'Forbidden' });
+    const self = await students.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Student profile not found' });
+    const rows = await students.listSubjectTeachers({ studentId: self.id, campusId: req.user?.campusId });
+    return res.json({ items: rows });
   } catch (e) {
     next(e);
   }

@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Text, SimpleGrid, VStack, HStack, Select, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, SimpleGrid, VStack, HStack, Select, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex, useToast } from '@chakra-ui/react';
 import { MdFileDownload, MdVisibility, MdRefresh, MdDateRange, MdNextWeek, MdError, MdPendingActions } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
-import { mockAssignments, mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as assignmentsApi from '../../../services/api/assignments';
 
 function formatDate(d){ return d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }); }
 function daysBetween(a,b){ const MS=24*60*60*1000; return Math.ceil((b.getTime()-a.getTime())/MS); }
@@ -15,34 +16,67 @@ export default function DueDates(){
   const textSecondary = useColorModeValue('gray.600','gray.400');
   const { user } = useAuth();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(() => {
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t=>t.classes?.includes(classSection)).map(t=>t.subject))), [classSection]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
 
-  // Build synthetic upcoming schedule while keeping assignment content
+      try {
+        const payload = await assignmentsApi.list({ page: 1, pageSize: 500 });
+        setRows(Array.isArray(payload?.rows) ? payload.rows : []);
+      } catch (e) {
+        setRows([]);
+        toast({ title: 'Failed to load due dates', description: e?.message || 'Request failed', status: 'error', duration: 3500, isClosable: true });
+      }
+    };
+    load();
+  }, [user?.role, toast]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
+
   const today = useMemo(()=>{ const t=new Date(); t.setHours(0,0,0,0); return t; },[]);
-  const items = useMemo(()=>{
-    const base = mockAssignments.filter(a => subjects.length===0 || subjects.includes(a.subject));
-    return base.map((a,i)=>{
-      const dueOn = new Date(today);
-      if (i===0) { dueOn.setDate(dueOn.getDate()-2); } else { dueOn.setDate(dueOn.getDate() + (i*3 + 2)); }
-      const daysLeft = daysBetween(today, dueOn);
-      const bucket = daysLeft < 0 ? 'Overdue' : (daysLeft <= 7 ? 'This Week' : (daysLeft <= 14 ? 'Next Week' : 'Later'));
-      return { ...a, dueOn, daysLeft, bucket, status: a.status==='graded' ? 'graded' : (daysLeft<0 ? 'pending' : a.status) };
+
+  const items = useMemo(() => {
+    return (rows || []).map((a) => {
+      const dueOn = a.dueDate ? new Date(a.dueDate) : null;
+      const normalizedDue = dueOn ? new Date(dueOn.getFullYear(), dueOn.getMonth(), dueOn.getDate()) : null;
+      const daysLeft = normalizedDue ? daysBetween(today, normalizedDue) : null;
+      const bucket = daysLeft === null ? 'Later' : daysLeft < 0 ? 'Overdue' : (daysLeft <= 7 ? 'This Week' : (daysLeft <= 14 ? 'Next Week' : 'Later'));
+
+      const isSubmitted = !!a.submissionId;
+      const isGraded = a.score !== null && a.score !== undefined;
+      const status = isGraded ? 'graded' : isSubmitted ? 'submitted' : 'pending';
+
+      return {
+        id: a.id,
+        title: a.title,
+        subject: a.subject || a.class || '-',
+        teacher: a.createdByName || '—',
+        description: a.description || '',
+        dueOn: normalizedDue,
+        daysLeft: daysLeft === null ? '-' : daysLeft,
+        bucket,
+        status,
+      };
     });
-  },[subjects, today]);
+  }, [rows, today]);
+
+  const subjects = useMemo(
+    () => Array.from(new Set(items.map((a) => a.subject).filter(Boolean))),
+    [items]
+  );
 
   const kpis = useMemo(()=>({
     thisWeek: items.filter(x=>x.bucket==='This Week').length,
@@ -64,7 +98,7 @@ export default function DueDates(){
 
   const exportCSV = () => {
     const header = ['Title','Subject','Teacher','Due Date','Days Left','Bucket','Status'];
-    const rows = filtered.map(a => [a.title, a.subject, a.teacher, formatDate(a.dueOn), a.daysLeft, a.bucket, a.status]);
+    const rows = filtered.map(a => [a.title, a.subject, a.teacher, a.dueOn ? formatDate(a.dueOn) : '-', a.daysLeft, a.bucket, a.status]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const an = document.createElement('a'); an.href=url; an.download='student_due_dates.csv'; an.click(); URL.revokeObjectURL(url);
@@ -73,7 +107,11 @@ export default function DueDates(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Due Dates</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -141,7 +179,7 @@ export default function DueDates(){
                 <Td>{a.title}</Td>
                 <Td>{a.subject}</Td>
                 <Td>{a.teacher}</Td>
-                <Td>{formatDate(a.dueOn)}</Td>
+                <Td>{a.dueOn ? formatDate(a.dueOn) : '-'}</Td>
                 <Td>{a.daysLeft}</Td>
                 <Td>{a.bucket}</Td>
                 <Td><Badge colorScheme={a.bucket==='Overdue'?'red':(a.bucket==='This Week'?'yellow':'blue')}>{a.status}</Badge></Td>
@@ -167,7 +205,7 @@ export default function DueDates(){
               <VStack align='start' spacing={2}>
                 <Text><b>Subject:</b> {selected.subject}</Text>
                 <Text><b>Teacher:</b> {selected.teacher}</Text>
-                <Text><b>Due Date:</b> {formatDate(selected.dueOn)}</Text>
+                <Text><b>Due Date:</b> {selected.dueOn ? formatDate(selected.dueOn) : '-'}</Text>
                 <Text><b>Days Left:</b> {selected.daysLeft}</Text>
                 <Text><b>Status:</b> {selected.status}</Text>
                 <Text><b>Description:</b> {selected.description}</Text>

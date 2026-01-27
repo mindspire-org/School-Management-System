@@ -24,6 +24,7 @@ import parentsRoutes from './parents.routes.js';
 import expensesRoutes from './expenses.routes.js';
 import campusRoutes from './campuses.routes.js';
 import masterDataRoutes from './masterData.routes.js';
+import sharedContentRoutes from './sharedContent.routes.js';
 
 // New module routes
 import inventoryRoutes from './inventory.routes.js';
@@ -60,6 +61,7 @@ router.use('/parents', parentsRoutes);
 router.use('/expenses', expensesRoutes);
 router.use('/campuses', campusRoutes);
 router.use('/master-data', masterDataRoutes);
+router.use('/shared-content', sharedContentRoutes);
 
 // New module routes
 router.use('/inventory', inventoryRoutes);

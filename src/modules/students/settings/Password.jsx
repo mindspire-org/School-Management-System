@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Button, Icon, useColorModeValue, FormControl, FormLabel, Input, InputGroup, InputRightElement, Progress, useToast, Flex } from '@chakra-ui/react';
 import { MdSave, MdRefresh, MdVisibility, MdVisibilityOff, MdSecurity, MdListAlt, MdLightbulb } from 'react-icons/md';
 import Card from '../../../components/card/Card';
-import { mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import * as studentsApi from '../../../services/api/students';
 
 function strengthScore(p){
   let s = 0; if (!p) return 0; if (p.length>=8) s++; if (/[A-Z]/.test(p)) s++; if (/[a-z]/.test(p)) s++; if (/[0-9]/.test(p)) s++; if (/[^A-Za-z0-9]/.test(p)) s++; return Math.min(s,5);
@@ -16,17 +16,23 @@ export default function Password(){
   const { user } = useAuth();
   const toast = useToast();
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
+  const [student, setStudent] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+    };
+    load();
+  }, [user?.role]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -38,10 +44,15 @@ export default function Password(){
   const score = strengthScore(next);
   const valid = next && confirm && next===confirm && score>=3;
 
-  const onSave = ()=>{
+  const onSave = async ()=>{
     if (!valid) { toast({ status:'error', title:'Check password requirements' }); return; }
-    toast({ status:'success', title:'Password updated (demo)' });
-    setCurrent(''); setNext(''); setConfirm('');
+    try {
+      await studentsApi.changeMyPassword({ currentPassword: current, newPassword: next });
+      toast({ status:'success', title:'Password updated' });
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch {
+      toast({ status:'error', title:'Failed to update password' });
+    }
   };
 
   const onReset = ()=>{ setCurrent(''); setNext(''); setConfirm(''); };
@@ -49,7 +60,11 @@ export default function Password(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Password</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

@@ -1,4 +1,5 @@
 import * as classService from '../services/classes.service.js';
+import * as studentsSvc from '../services/students.service.js';
 
 const coerceString = (value) => {
   if (value === undefined) return undefined;
@@ -73,12 +74,21 @@ export const list = async (req, res, next) => {
       filterTeacherId = teacher.id;
     }
 
+    // Student: only allow listing their own class/section
+    let effectiveClassName = className;
+    let effectiveSection = section;
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      effectiveClassName = self?.class || className;
+      effectiveSection = self?.section || section;
+    }
+
     const result = await classService.list({
       page: Number(page),
       pageSize: Number(pageSize),
       search,
-      className,
-      section,
+      className: effectiveClassName,
+      section: effectiveSection,
       academicYear,
       status,
       teacherId: filterTeacherId ? Number(filterTeacherId) : undefined,
@@ -150,8 +160,13 @@ export const upsertSubjects = async (req, res, next) => {
 
 export const listSubjectsByClassSection = async (req, res, next) => {
   try {
-    const { className, section } = req.query;
-    const items = await classService.listSubjectsByClassSection({ className, section });
+    let { className, section } = req.query;
+    if (req.user?.role === 'student') {
+      const self = await studentsSvc.getByUserId(req.user.id);
+      className = self?.class || className;
+      section = self?.section || section;
+    }
+    const items = await classService.listSubjectsByClassSection({ className, section, campusId: req.user?.campusId });
     return res.json({ items });
   } catch (e) { next(e); }
 };

@@ -1,62 +1,104 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Textarea, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Textarea, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex, useToast } from '@chakra-ui/react';
 import { MdUpload, MdSend, MdVisibility, MdPendingActions, MdCheckCircle, MdClass } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockAssignments, mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as assignmentsApi from '../../../services/api/assignments';
 
 export default function SubmitWork() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { user } = useAuth();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
   const [selected, setSelected] = useState(null);
   const [file, setFile] = useState(null);
   const [comment, setComment] = useState('');
 
-  const student = useMemo(() => {
-    if (user?.role === 'student') {
-      const byEmail = mockStudents.find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s => s.name?.toLowerCase() === user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id: 999, name: user.name, rollNumber: 'STU999', class: '10', section: 'A', email: user.email };
-    }
-    return mockStudents[0];
-  }, [user]);
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t => t.classes?.includes(classSection)).map(t => t.subject))), [classSection]);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const basePending = useMemo(() => mockAssignments.filter(a => a.status === 'pending' && (subjects.length === 0 || subjects.includes(a.subject))), [subjects]);
-  const baseSubmitted = useMemo(() => mockAssignments.filter(a => a.status === 'submitted' && (subjects.length === 0 || subjects.includes(a.subject))), [subjects]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
 
-  const demoPending = useMemo(() => ([
-    { id: 'D-P1', title: 'Computer Science Lab 2', subject: subjects[0] || 'Computer Science', teacher: 'Mr. Usman Tariq', dueDate: '2025-03-22', status: 'pending', description: 'Implement and analyze sorting algorithms (Bubble vs. Insertion). Upload code and a short report.' },
-    { id: 'D-P2', title: 'Urdu Essay: Safai Nisf Iman', subject: subjects[1] || 'Urdu', teacher: 'Ms. Noor Fatima', dueDate: '2025-03-20', status: 'pending', description: '500–700 words essay. Focus on structure and references.' },
-    { id: 'D-P3', title: 'Islamiat Short Questions - Unit 3', subject: subjects[2] || 'Islamiat', teacher: 'Mr. Saad Ali', dueDate: '2025-03-24', status: 'pending', description: 'Answer all 10 questions briefly and clearly.' },
-  ]), [subjects]);
+      try {
+        const payload = await assignmentsApi.list({ page: 1, pageSize: 500 });
+        setRows(Array.isArray(payload?.rows) ? payload.rows : []);
+      } catch {
+        setRows([]);
+      }
+    };
+    load();
+  }, [user?.role]);
 
-  const demoSubmitted = useMemo(() => ([
-    { id: 'D-S1', title: 'Pakistan Studies Timeline', subject: subjects[3] || 'Pakistan Studies', teacher: 'Ms. Hina Shah', dueDate: '2025-03-10', status: 'submitted', description: 'Create a timeline of major events 1930–1947.' },
-  ]), [subjects]);
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
-  const pending = useMemo(() => [...basePending, ...demoPending], [basePending, demoPending]);
-  const submitted = useMemo(() => [...baseSubmitted, ...demoSubmitted], [baseSubmitted, demoSubmitted]);
+  const pending = useMemo(() => (rows || []).filter((a) => !a.submissionId).map((a) => ({
+    id: a.id,
+    title: a.title,
+    subject: a.subject || a.class || '-',
+    teacher: a.createdByName || '—',
+    dueDate: a.dueDate ? String(a.dueDate).slice(0, 10) : '-',
+    status: 'pending',
+    description: a.description || '',
+  })), [rows]);
+
+  const submitted = useMemo(() => (rows || []).filter((a) => !!a.submissionId).map((a) => ({
+    id: a.id,
+    title: a.title,
+    subject: a.subject || a.class || '-',
+    teacher: a.createdByName || '—',
+    dueDate: a.dueDate ? String(a.dueDate).slice(0, 10) : '-',
+    status: 'submitted',
+    description: a.description || '',
+  })), [rows]);
+
+  const subjects = useMemo(
+    () => Array.from(new Set([...pending, ...submitted].map((a) => a.subject).filter(Boolean))),
+    [pending, submitted]
+  );
 
   const [subject, setSubject] = useState('all');
   const filteredPending = useMemo(() => pending.filter(a => subject === 'all' || a.subject === subject), [pending, subject]);
 
   const beginSubmit = (a) => { setSelected(a); setFile(null); setComment(''); onOpen(); };
-  const doSubmit = () => {
-    onClose();
-    alert(`Submitted: ${selected.title}\nFile: ${file?.name || 'none'}\nComment: ${comment || '—'}`);
+  const doSubmit = async () => {
+    if (!selected?.id) return;
+    try {
+      const content = comment || (file ? `File: ${file.name}` : 'Submitted');
+      await assignmentsApi.submitWork(selected.id, { content });
+      toast({ title: 'Submitted', status: 'success', duration: 2500, isClosable: true });
+    } catch (e) {
+      toast({ title: 'Submit failed', description: e?.message || 'Request failed', status: 'error', duration: 3500, isClosable: true });
+    } finally {
+      onClose();
+      try {
+        const payload = await assignmentsApi.list({ page: 1, pageSize: 500 });
+        setRows(Array.isArray(payload?.rows) ? payload.rows : []);
+      } catch {
+        setRows([]);
+      }
+    }
   };
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Submit Work</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -105,7 +147,6 @@ export default function SubmitWork() {
                 <Td>
                   <HStack spacing={2}>
                     <Text>{a.title}</Text>
-                    {String(a.id).toString().startsWith('D-') && <Badge variant='outline' colorScheme='purple'>Demo</Badge>}
                   </HStack>
                 </Td>
                 <Td>{a.subject}</Td>

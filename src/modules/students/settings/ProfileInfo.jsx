@@ -1,56 +1,90 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Button, Icon, useColorModeValue, FormControl, FormLabel, Input, Select, Avatar, useToast, Divider, Badge, Flex } from '@chakra-ui/react';
 import { MdSave, MdRefresh, MdFileDownload, MdCameraAlt, MdClass, MdPeople, MdPermIdentity } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
 
 export default function ProfileInfo(){
   const textSecondary = useColorModeValue('gray.600','gray.400');
   const { user } = useAuth();
   const toast = useToast();
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email, parentName:'Parent', parentPhone:'', avatar:'' };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
+  const [student, setStudent] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+    };
+    load();
+  }, [user?.role]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
   const [form, setForm] = useState({
-    name: student.name,
-    roll: student.rollNumber,
-    classSection,
-    email: student.email || '',
-    phone: student.phone || '+92',
-    address: student.address || '',
-    parentName: student.parentName || '',
-    parentPhone: student.parentPhone || '',
-    emergency: student.emergency || '',
+    name: '',
+    roll: '',
+    classSection: '',
+    email: '',
+    phone: '+92',
+    address: '',
+    parentName: '',
+    parentPhone: '',
+    emergency: '',
   });
+
+  useEffect(() => {
+    if (!student) return;
+    setForm({
+      name: student.name || '',
+      roll: student.rollNumber || '',
+      classSection: `${student.class || ''}${student.section || ''}`,
+      email: student.email || '',
+      phone: student.phone || '+92',
+      address: student.address || '',
+      parentName: student.parentName || '',
+      parentPhone: student.parentPhone || '',
+      emergency: student.emergency || '',
+    });
+  }, [student?.id]);
 
   const handle = (k,v)=> setForm(prev=> ({ ...prev, [k]: v }));
 
-  const onSave = ()=>{
-    toast({ status: 'success', title: 'Profile updated (demo)', description: 'Your changes are saved locally.' });
+  const onSave = async ()=>{
+    try {
+      await studentsApi.updateMyProfile({
+        name: form.name,
+        email: form.email,
+        parentName: form.parentName,
+        parentPhone: form.parentPhone,
+      });
+      toast({ status: 'success', title: 'Profile updated' });
+      const payload = await studentsApi.list({ pageSize: 1 });
+      const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+      setStudent(me);
+    } catch (e) {
+      toast({ status: 'error', title: 'Failed to update profile' });
+    }
   };
   const onReset = ()=> setForm({
-    name: student.name,
-    roll: student.rollNumber,
+    name: student?.name || '',
+    roll: student?.rollNumber || '',
     classSection,
-    email: student.email || '',
-    phone: student.phone || '+92',
-    address: student.address || '',
-    parentName: student.parentName || '',
-    parentPhone: student.parentPhone || '',
-    emergency: student.emergency || '',
+    email: student?.email || '',
+    phone: student?.phone || '+92',
+    address: student?.address || '',
+    parentName: student?.parentName || '',
+    parentPhone: student?.parentPhone || '',
+    emergency: student?.emergency || '',
   });
 
   const exportTxt = ()=>{
@@ -69,7 +103,11 @@ export default function ProfileInfo(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Profile Info</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

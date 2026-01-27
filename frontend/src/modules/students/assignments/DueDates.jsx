@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Select, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import { MdFileDownload, MdVisibility, MdRefresh, MdDateRange, MdNextWeek, MdError, MdPendingActions } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
-import { mockAssignments, mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import { assignmentsApi, studentsApi } from '../../../services/api';
 
 function formatDate(d){ return d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }); }
 function daysBetween(a,b){ const MS=24*60*60*1000; return Math.ceil((b.getTime()-a.getTime())/MS); }
@@ -17,32 +17,66 @@ export default function DueDates(){
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(() => {
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t=>t.classes?.includes(classSection)).map(t=>t.subject))), [classSection]);
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const selfRes = await studentsApi.list();
+        const self = selfRes?.rows?.[0] || null;
+        if (!alive) return;
+        setStudent(self);
 
-  // Build synthetic upcoming schedule while keeping assignment content
+        const data = await assignmentsApi.list();
+        const list = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+        if (!alive) return;
+        setRows(list);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || 'Failed to load due dates');
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const today = useMemo(()=>{ const t=new Date(); t.setHours(0,0,0,0); return t; },[]);
-  const items = useMemo(()=>{
-    const base = mockAssignments.filter(a => subjects.length===0 || subjects.includes(a.subject));
-    return base.map((a,i)=>{
-      const dueOn = new Date(today);
-      if (i===0) { dueOn.setDate(dueOn.getDate()-2); } else { dueOn.setDate(dueOn.getDate() + (i*3 + 2)); }
-      const daysLeft = daysBetween(today, dueOn);
-      const bucket = daysLeft < 0 ? 'Overdue' : (daysLeft <= 7 ? 'This Week' : (daysLeft <= 14 ? 'Next Week' : 'Later'));
-      return { ...a, dueOn, daysLeft, bucket, status: a.status==='graded' ? 'graded' : (daysLeft<0 ? 'pending' : a.status) };
-    });
-  },[subjects, today]);
+
+  const items = useMemo(() => {
+    return (rows || [])
+      .map((a) => {
+        const due = a?.dueDate ? new Date(a.dueDate) : null;
+        const dueOn = due && !Number.isNaN(due.getTime()) ? due : null;
+        const daysLeft = dueOn ? daysBetween(today, dueOn) : null;
+        const bucket = daysLeft === null ? 'Later' : (daysLeft < 0 ? 'Overdue' : (daysLeft <= 7 ? 'This Week' : (daysLeft <= 14 ? 'Next Week' : 'Later')));
+        const statusRaw = (a?.submissionStatus || '').toLowerCase();
+        const status = statusRaw === 'graded' ? 'graded' : (statusRaw === 'submitted' ? 'submitted' : 'pending');
+        return {
+          id: a?.id,
+          title: a?.title || '-',
+          subject: a?.subject || '-',
+          teacher: a?.createdByName || '-',
+          description: a?.description || '-',
+          dueOn,
+          daysLeft,
+          bucket,
+          status,
+        };
+      })
+      .filter((a) => !!a.dueOn);
+  }, [rows, today]);
 
   const kpis = useMemo(()=>({
     thisWeek: items.filter(x=>x.bucket==='This Week').length,
@@ -53,6 +87,8 @@ export default function DueDates(){
 
   const [bucket, setBucket] = useState('all');
   const [subject, setSubject] = useState('all');
+
+  const subjects = useMemo(() => Array.from(new Set(items.map(i => i.subject))).filter(Boolean), [items]);
 
   const filtered = useMemo(()=>items.filter(a => (
     (bucket==='all' || a.bucket===bucket) &&
@@ -73,7 +109,19 @@ export default function DueDates(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Due Dates</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'}{student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}{student?.class ? ` • Class ${student.class}${student.section || ''}` : ''}</Text>
+
+      {loading ? (
+        <Card p='16px' mb='16px'>
+          <Text color={textSecondary}>Loading due dates...</Text>
+        </Card>
+      ) : null}
+
+      {error ? (
+        <Card p='16px' mb='16px'>
+          <Text color='red.500'>{error}</Text>
+        </Card>
+      ) : null}
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -141,8 +189,8 @@ export default function DueDates(){
                 <Td>{a.title}</Td>
                 <Td>{a.subject}</Td>
                 <Td>{a.teacher}</Td>
-                <Td>{formatDate(a.dueOn)}</Td>
-                <Td>{a.daysLeft}</Td>
+                <Td>{a.dueOn ? formatDate(a.dueOn) : '-'}</Td>
+                <Td>{typeof a.daysLeft === 'number' ? a.daysLeft : '-'}</Td>
                 <Td>{a.bucket}</Td>
                 <Td><Badge colorScheme={a.bucket==='Overdue'?'red':(a.bucket==='This Week'?'yellow':'blue')}>{a.status}</Badge></Td>
                 <Td><Button size='xs' leftIcon={<Icon as={MdVisibility} />} onClick={()=>{ setSelected(a); onOpen(); }}>View</Button></Td>

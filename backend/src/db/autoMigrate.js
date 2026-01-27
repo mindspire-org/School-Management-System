@@ -68,6 +68,86 @@ export async function ensureStudentExtendedColumns() {
   `);
 }
 
+export async function ensureAssignmentsSchema() {
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'assignments') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='assignments' AND column_name='subject') THEN
+          EXECUTE 'ALTER TABLE assignments ADD COLUMN subject TEXT';
+        END IF;
+      END IF;
+    END $$;
+  `);
+}
+
+export async function ensureLibrarySchema() {
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'library_books'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE library_books (
+            id SERIAL PRIMARY KEY,
+            title TEXT NOT NULL,
+            author TEXT,
+            subject TEXT,
+            pages INTEGER,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'library_issues'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE library_issues (
+            id SERIAL PRIMARY KEY,
+            book_id INTEGER NOT NULL REFERENCES library_books(id) ON DELETE CASCADE,
+            student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            issued_on DATE NOT NULL DEFAULT CURRENT_DATE,
+            due_on DATE NOT NULL,
+            returned_on DATE,
+            status TEXT NOT NULL DEFAULT ''issued'' CHECK (status IN (''issued'',''returned'')),
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_library_issues_student ON library_issues(student_id)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_library_issues_status ON library_issues(status)';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'library_fines'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE library_fines (
+            id SERIAL PRIMARY KEY,
+            student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            issue_id INTEGER REFERENCES library_issues(id) ON DELETE SET NULL,
+            fine_type TEXT NOT NULL DEFAULT ''late'' CHECK (fine_type IN (''late'',''damage'',''lost'')),
+            amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT ''unpaid'' CHECK (status IN (''unpaid'',''paid'')),
+            fine_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            details TEXT,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        ';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_library_fines_student ON library_fines(student_id)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_library_fines_status ON library_fines(status)';
+      END IF;
+    END $$;
+  `);
+}
+
 export async function ensurePayrollSchema() {
   await query(`
     ALTER TABLE teacher_payrolls
@@ -333,6 +413,76 @@ export async function ensureAuthSchema() {
       END IF;
     END $$;
     CREATE INDEX IF NOT EXISTS idx_drivers_user_id ON drivers(user_id);
+  `);
+}
+
+export async function ensureAssignmentSubmissionSchema() {
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'assignment_submissions') THEN
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS score NUMERIC(5,2)';
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS teacher_comment TEXT';
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS rubric TEXT';
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS graded_at TIMESTAMP';
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS graded_by INTEGER REFERENCES users(id) ON DELETE SET NULL';
+        EXECUTE 'ALTER TABLE assignment_submissions ADD COLUMN IF NOT EXISTS status TEXT';
+
+        UPDATE assignment_submissions SET status = ''submitted'' WHERE status IS NULL;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'assignment_submissions_assignment_student_key'
+        ) THEN
+          ALTER TABLE assignment_submissions ADD CONSTRAINT assignment_submissions_assignment_student_key UNIQUE (assignment_id, student_id);
+        END IF;
+      END IF;
+    END $$;
+  `);
+}
+
+export async function ensureSharedContentSchema() {
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'shared_contents'
+      ) THEN
+        EXECUTE '
+          CREATE TABLE shared_contents (
+            id SERIAL PRIMARY KEY,
+            teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            url TEXT,
+            subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+            class_name TEXT,
+            section TEXT,
+            status TEXT NOT NULL DEFAULT ''draft'',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            published_at TIMESTAMP,
+            campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL
+          )
+        ';
+      END IF;
+
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shared_contents' AND column_name='campus_id') THEN
+        EXECUTE 'ALTER TABLE shared_contents ADD COLUMN campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL';
+      END IF;
+
+      -- Ensure type/status constraints
+      EXECUTE 'ALTER TABLE shared_contents DROP CONSTRAINT IF EXISTS shared_contents_type_check';
+      EXECUTE 'ALTER TABLE shared_contents ADD CONSTRAINT shared_contents_type_check CHECK (type IN (''note'',''pdf'',''video'',''resource''))';
+      EXECUTE 'ALTER TABLE shared_contents DROP CONSTRAINT IF EXISTS shared_contents_status_check';
+      EXECUTE 'ALTER TABLE shared_contents ADD CONSTRAINT shared_contents_status_check CHECK (status IN (''draft'',''published''))';
+
+      -- Helpful indexes
+      EXECUTE 'CREATE INDEX IF NOT EXISTS idx_shared_contents_teacher ON shared_contents (teacher_id)';
+      EXECUTE 'CREATE INDEX IF NOT EXISTS idx_shared_contents_subject ON shared_contents (subject_id)';
+      EXECUTE 'CREATE INDEX IF NOT EXISTS idx_shared_contents_class ON shared_contents (class_name, section)';
+      EXECUTE 'CREATE INDEX IF NOT EXISTS idx_shared_contents_status ON shared_contents (status)';
+    END $$;
   `);
 }
 

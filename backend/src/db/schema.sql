@@ -565,8 +565,32 @@ CREATE TABLE IF NOT EXISTS announcements (
   message TEXT NOT NULL,
   audience TEXT DEFAULT 'all',
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL
 );
+
+-- Teacher shared content (study materials feed)
+CREATE TABLE IF NOT EXISTS shared_contents (
+  id SERIAL PRIMARY KEY,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('note','pdf','video','resource')),
+  title TEXT NOT NULL,
+  description TEXT,
+  url TEXT,
+  subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+  class_name TEXT,
+  section TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  published_at TIMESTAMP,
+  campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_contents_teacher ON shared_contents (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_shared_contents_subject ON shared_contents (subject_id);
+CREATE INDEX IF NOT EXISTS idx_shared_contents_class ON shared_contents (class_name, section);
+CREATE INDEX IF NOT EXISTS idx_shared_contents_status ON shared_contents (status);
 
 CREATE TABLE IF NOT EXISTS alerts (
   id SERIAL PRIMARY KEY,

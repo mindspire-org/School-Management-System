@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import { MdOpenInNew, MdContentCopy, MdFileDownload, MdPrint, MdVisibility, MdLink, MdLibraryBooks, MdAccessTime, MdStar } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
-import { mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import { sharedContentApi, studentsApi } from '../../../services/api';
 
 function formatDate(d){ return d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }); }
 
@@ -16,30 +16,64 @@ export default function Resources(){
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t => t.classes?.includes(classSection)).map(t => t.subject))), [classSection]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const selfRes = await studentsApi.list();
+        const self = selfRes?.rows?.[0] || null;
+        if (!alive) return;
+        setStudent(self);
+
+        const res = await sharedContentApi.list({ type: 'resource' });
+        const items = Array.isArray(res?.items) ? res.items : [];
+        if (!alive) return;
+        setRows(items);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || 'Failed to load resources');
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+    run();
+    return () => { alive = false; };
+  }, []);
+
+  const classSection = useMemo(() => {
+    if (!student) return '';
+    return `${student.class || ''}${student.section || ''}`;
+  }, [student]);
 
   const demoResources = useMemo(() => {
-    const teachersBySubject = new Map();
-    mockTeachers.forEach(t => (t.classes||[]).includes(classSection) && teachersBySubject.set(t.subject, t.name));
-    const today = new Date();
-    return [
-      { id:'R1', title:'Khan Academy: Quadratic Equations', subject: subjects[0] || 'Mathematics', teacher: teachersBySubject.get(subjects[0]) || 'Dr. Sarah Wilson', type:'Video Course', lastUpdated: new Date(today.getFullYear(), today.getMonth(), today.getDate()-3), tags:['algebra','practice'], url:'https://www.khanacademy.org/math' },
-      { id:'R2', title:'Biology LibreTexts: Cell Organelles', subject: subjects[1] || 'Biology', teacher: teachersBySubject.get(subjects[1]) || 'Ms. Aisha Khan', type:'Article', lastUpdated: new Date(today.getFullYear(), today.getMonth(), today.getDate()-8), tags:['cells','reference'], url:'https://bio.libretexts.org/' },
-      { id:'R3', title:'Urdu Ki Dunya: Grammar Basics', subject: subjects[2] || 'Urdu', teacher: teachersBySubject.get(subjects[2]) || 'Ms. Noor Fatima', type:'Website', lastUpdated: new Date(today.getFullYear(), today.getMonth(), today.getDate()-12), tags:['urdu','grammar'], url:'https://example.com/urdu' },
-      { id:'R4', title:'VisuAlgo: Sorting Visualizations', subject: subjects[3] || 'Computer Science', teacher: teachersBySubject.get(subjects[3]) || 'Mr. Usman Tariq', type:'Tool', lastUpdated: new Date(today.getFullYear(), today.getMonth(), today.getDate()-15), tags:['sorting','visual'], url:'https://visualgo.net' },
-    ];
-  }, [subjects, classSection]);
+    return (rows || []).map((it) => {
+      const dateRaw = it?.publishedAt || it?.createdAt;
+      const lastUpdated = dateRaw ? new Date(dateRaw) : new Date();
+      return {
+        id: it?.id,
+        title: it?.title || '-',
+        subject: it?.subjectName || '-',
+        teacher: it?.teacherName || '-',
+        type: 'Resource',
+        lastUpdated,
+        tags: [],
+        url: it?.url || '#',
+      };
+    });
+  }, [rows]);
+
+  const subjects = useMemo(() => {
+    return Array.from(new Set(demoResources.map((n) => n.subject))).filter(Boolean);
+  }, [demoResources]);
 
   const [subject, setSubject] = useState('all');
   const [query, setQuery] = useState('');
@@ -62,7 +96,19 @@ export default function Resources(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Resources</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'}{student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}{classSection ? ` • Class ${classSection}` : ''}</Text>
+
+      {loading ? (
+        <Card p='16px' mb='16px'>
+          <Text color={textSecondary}>Loading resources...</Text>
+        </Card>
+      ) : null}
+
+      {error ? (
+        <Card p='16px' mb='16px'>
+          <Text color='red.500'>{error}</Text>
+        </Card>
+      ) : null}
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

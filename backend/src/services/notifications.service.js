@@ -1,9 +1,10 @@
 import { query } from '../config/db.js';
 
-export const list = async ({ userId, isRead, page = 1, pageSize = 50, campusId }) => {
+export const list = async ({ userId, isRead, type, page = 1, pageSize = 50, campusId }) => {
   const params = [];
   const where = [];
   if (userId) { params.push(userId); where.push(`user_id = $${params.length}`); }
+  if (type) { params.push(type); where.push(`type = $${params.length}`); }
   if (typeof isRead !== 'undefined') { params.push(isRead); where.push(`is_read = $${params.length}`); }
   if (campusId) { params.push(campusId); where.push(`campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -21,7 +22,7 @@ export const list = async ({ userId, isRead, page = 1, pageSize = 50, campusId }
 
 export const getById = async (id) => {
   const { rows } = await query(
-    'SELECT id, user_id AS "userId", type, message, is_read AS "isRead", created_at AS "createdAt" FROM notifications WHERE id = $1',
+    'SELECT id, user_id AS "userId", type, message, is_read AS "isRead", created_at AS "createdAt", campus_id AS "campusId" FROM notifications WHERE id = $1',
     [id]
   );
   return rows[0] || null;

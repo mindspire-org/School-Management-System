@@ -12,6 +12,7 @@ router.get(
   [
     query('userId').optional().isInt(),
     query('isRead').optional().isBoolean(),
+    query('type').optional().isString(),
     query('page').optional().isInt({ min: 1 }),
     query('pageSize').optional().isInt({ min: 1, max: 200 }),
   ],

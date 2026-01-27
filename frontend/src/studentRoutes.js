@@ -14,7 +14,6 @@ import {
   MdCampaign,
   MdMessage,
   MdEvent,
-  MdEmojiEvents,
   MdLibraryBooks,
   MdPerson,
   MdSettings,
@@ -50,8 +49,6 @@ import FeeReceipts from './modules/students/fees/FeeReceipts';
 import Announcements from './modules/students/announcements/Announcements';
 import Communication from './modules/students/communication/Communication';
 import EventsCalendar from './modules/students/events/EventsCalendar';
-import Competitions from './modules/students/events/Competitions';
-import Workshops from './modules/students/events/Workshops';
 import IssuedBooks from './modules/students/library/IssuedBooks';
 import LibraryDueDates from './modules/students/library/DueDates';
 import LibraryFines from './modules/students/library/Fines';
@@ -301,35 +298,13 @@ const studentRoutes = [
     component: <Communication />,
   },
 
-  // 9) Events & Activities
+  // 9) Events
   {
-    name: 'Events & Activities',
+    name: 'Events',
     layout: '/student',
     icon: <Icon as={MdEvent} width="20px" height="20px" color="inherit" />,
-    collapse: true,
-    items: [
-      {
-        name: 'Events Calendar',
-        layout: '/student',
-        path: '/events/calendar',
-        icon: <Icon as={MdEvent} width="16px" height="16px" color="inherit" />,
-        component: <EventsCalendar />,
-      },
-      {
-        name: 'Competitions',
-        layout: '/student',
-        path: '/events/competitions',
-        icon: <Icon as={MdEmojiEvents} width="16px" height="16px" color="inherit" />,
-        component: <Competitions />,
-      },
-      {
-        name: 'Workshops',
-        layout: '/student',
-        path: '/events/workshops',
-        icon: <Icon as={MdEvent} width="16px" height="16px" color="inherit" />,
-        component: <Workshops />,
-      },
-    ],
+    path: '/events',
+    component: <EventsCalendar />,
   },
 
   // 10) Library

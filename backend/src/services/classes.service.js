@@ -200,11 +200,12 @@ export const upsertClassSubjects = async (classSectionId, items = []) => {
   return res.rows || [];
 };
 
-export const listSubjectsByClassSection = async ({ className, section }) => {
+export const listSubjectsByClassSection = async ({ className, section, campusId }) => {
   const params = [];
   const where = [];
   if (className) { params.push(className); where.push(`cs.class_name = $${params.length}`); }
   if (section) { params.push(section); where.push(`cs.section = $${params.length}`); }
+  if (campusId) { params.push(Number(campusId)); where.push(`cs.campus_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await query(
     `SELECT csu.class_section_id AS "classSectionId",

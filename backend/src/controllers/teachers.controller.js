@@ -273,6 +273,7 @@ export const listSchedules = async (req, res, next) => {
       dayOfWeek: day ?? dayOfWeek,
       className,
       section,
+      campusId: req.user?.campusId,
     });
     return res.json(schedules);
   } catch (e) {
@@ -525,6 +526,7 @@ export const listSubjectsByClass = async (req, res, next) => {
     const items = await teachers.listSubjectsByClass({
       className: req.query.className || undefined,
       section: req.query.section || undefined,
+      campusId: req.user?.campusId,
     });
     return res.json(items);
   } catch (e) {

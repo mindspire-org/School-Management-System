@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import { MdFileDownload, MdVisibility, MdPrint, MdDescription, MdLibraryBooks, MdAccessTime, MdInsertDriveFile } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
-import { mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import { sharedContentApi, studentsApi } from '../../../services/api';
 
 function formatDate(d){ return d.toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }); }
 
@@ -16,39 +16,74 @@ export default function Notes(){
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t => t.classes?.includes(classSection)).map(t => t.subject))), [classSection]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const selfRes = await studentsApi.list();
+        const self = selfRes?.rows?.[0] || null;
+        if (!alive) return;
+        setStudent(self);
+
+        const res = await sharedContentApi.list({ type: 'note' });
+        const items = Array.isArray(res?.items) ? res.items : [];
+        if (!alive) return;
+        setRows(items);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || 'Failed to load notes');
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+    run();
+    return () => { alive = false; };
+  }, []);
+
+  const classSection = useMemo(() => {
+    if (!student) return '';
+    return `${student.class || ''}${student.section || ''}`;
+  }, [student]);
 
   const demoNotes = useMemo(() => {
-    const teachersBySubject = new Map();
-    mockTeachers.forEach(t => (t.classes||[]).includes(classSection) && teachersBySubject.set(t.subject, t.name));
-    const today = new Date();
-    return [
-      { id:'N1', title:'Algebra - Quadratic Equations', subject: subjects[0] || 'Mathematics', teacher: teachersBySubject.get(subjects[0]) || 'Dr. Sarah Wilson', pages: 8, date: new Date(today.getFullYear(), today.getMonth(), today.getDate()-1), tags:['algebra','equations'] , excerpt:'Factorization, completing the square, quadratic formula with examples.'},
-      { id:'N2', title:'Biology - The Cell', subject: subjects[1] || 'Biology', teacher: teachersBySubject.get(subjects[1]) || 'Ms. Aisha Khan', pages: 6, date: new Date(today.getFullYear(), today.getMonth(), today.getDate()-3), tags:['cell','organelles'], excerpt:'Cell structure, organelles, differences between plant and animal cells.'},
-      { id:'N3', title:'Urdu - Mazmoon Nigari', subject: subjects[2] || 'Urdu', teacher: teachersBySubject.get(subjects[2]) || 'Ms. Noor Fatima', pages: 5, date: new Date(today.getFullYear(), today.getMonth(), today.getDate()-6), tags:['essay','grammar'], excerpt:'Mazmoon ki asnaf, behtareen ibarat nigari aur imla ke usool.'},
-      { id:'N4', title:'Computer Science - Sorting', subject: subjects[3] || 'Computer Science', teacher: teachersBySubject.get(subjects[3]) || 'Mr. Usman Tariq', pages: 9, date: new Date(today.getFullYear(), today.getMonth(), today.getDate()-10), tags:['sorting','algorithms'], excerpt:'Bubble vs Insertion sort, time complexity, step-by-step dry runs.'},
-    ];
-  }, [subjects, classSection]);
+    return (rows || []).map((it) => {
+      const dateRaw = it?.publishedAt || it?.createdAt;
+      const date = dateRaw ? new Date(dateRaw) : new Date();
+      return {
+        id: it?.id,
+        title: it?.title || '-',
+        subject: it?.subjectName || '-',
+        teacher: it?.teacherName || '-',
+        pages: '-',
+        date,
+        tags: [],
+        excerpt: it?.description || '-',
+        url: it?.url || null,
+      };
+    });
+  }, [rows]);
+
+  const subjects = useMemo(() => {
+    return Array.from(new Set(demoNotes.map((n) => n.subject))).filter(Boolean);
+  }, [demoNotes]);
 
   const [subject, setSubject] = useState('all');
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => demoNotes.filter(n => (
     (subject==='all' || n.subject===subject) &&
-    (!query || n.title.toLowerCase().includes(query.toLowerCase()) || n.tags.join(',').toLowerCase().includes(query.toLowerCase()))
+    (!query || n.title.toLowerCase().includes(query.toLowerCase()) || (n.tags || []).join(',').toLowerCase().includes(query.toLowerCase()))
   )), [demoNotes, subject, query]);
 
-  const kpis = useMemo(()=>({ total: demoNotes.length, subjects: new Set(demoNotes.map(n=>n.subject)).size, recent: demoNotes.filter(n => (Date.now()-n.date.getTime())/(1000*60*60*24) <= 7).length, pages: demoNotes.reduce((a,b)=>a+b.pages,0)}), [demoNotes]);
+  const kpis = useMemo(()=>({ total: demoNotes.length, subjects: new Set(demoNotes.map(n=>n.subject)).size, recent: demoNotes.filter(n => (Date.now()-n.date.getTime())/(1000*60*60*24) <= 7).length, pages: 0}), [demoNotes]);
   const chartData = useMemo(()=> ([{ name:'Notes', data: subjects.map(s => demoNotes.filter(n=>n.subject===s).length) }]), [demoNotes, subjects]);
   const chartOptions = useMemo(()=> ({ xaxis:{ categories: subjects }, colors:['#667eea'], dataLabels:{ enabled:false } }), [subjects]);
 
@@ -61,7 +96,19 @@ export default function Notes(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Notes</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'}{student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}{classSection ? ` • Class ${classSection}` : ''}</Text>
+
+      {loading ? (
+        <Card p='16px' mb='16px'>
+          <Text color={textSecondary}>Loading notes...</Text>
+        </Card>
+      ) : null}
+
+      {error ? (
+        <Card p='16px' mb='16px'>
+          <Text color='red.500'>{error}</Text>
+        </Card>
+      ) : null}
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

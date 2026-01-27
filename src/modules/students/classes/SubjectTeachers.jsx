@@ -1,36 +1,61 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, Avatar, HStack, Badge, Icon, useColorModeValue, Button, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import Card from '../../../components/card/Card';
 import { MdEmail, MdPhone, MdPerson, MdGroup, MdLibraryBooks, MdClass } from 'react-icons/md';
-import { mockTeachers, mockTodayClasses } from '../../../utils/mockData';
 import BarChart from '../../../components/charts/BarChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
 
 export default function SubjectTeachers() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
+  const { user } = useAuth();
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.listMySubjectTeachers();
+        setRows(Array.isArray(payload?.items) ? payload.items : []);
+      } catch {
+        setRows([]);
+      }
+    };
+    load();
+  }, [user?.role]);
+
   const myClass = useMemo(() => {
-    const counts = {};
-    (mockTodayClasses||[]).forEach(c=>{ counts[c.className] = (counts[c.className]||0)+1; });
-    const entry = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-    return entry ? entry[0] : '10A';
-  }, []);
+    const c = student?.class;
+    const s = student?.section;
+    if (!c) return '—';
+    return `${c}${s || ''}`;
+  }, [student?.class, student?.section]);
 
   const items = useMemo(() => {
-    const list = mockTeachers.filter(t => Array.isArray(t.classes) && t.classes.includes(myClass));
-    return list.map(t => ({
-      name: t.name,
-      subject: t.subject,
-      email: t.email,
-      phone: t.phone,
-      avatar: t.avatar,
-      classes: t.classes,
-      exp: t.experience,
+    return (rows || []).map((r) => ({
+      name: r.teacherName,
+      subject: r.subjectName,
+      email: r.teacherEmail,
+      phone: r.teacherPhone,
+      avatar: r.teacherAvatar,
+      isPrimary: !!r.isPrimary,
     }));
-  }, [myClass]);
+  }, [rows]);
 
   const chartData = useMemo(() => ([{
     name: 'Sessions/Month',

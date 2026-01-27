@@ -25,13 +25,36 @@ import {
 } from 'react-icons/md';
 
 import StudentDashboard from './modules/students/StudentDashboard';
-import StudentModulePlaceholder from './modules/students/StudentModulePlaceholder';
 import QRCodeAttendance from './modules/students/QRCodeAttendance';
 import DailyRecord from './modules/students/attendance/DailyRecord';
 import MonthlyReport from './modules/students/attendance/MonthlyReport';
 import AttendanceChart from './modules/students/attendance/AttendanceChart';
 import Results from './modules/students/exams/Results';
 import SMSLogin from './modules/authentication/Login';
+
+import ClassList from './modules/students/classes/ClassList';
+import SubjectTeachers from './modules/students/classes/SubjectTeachers';
+import WeeklyTimetable from './modules/students/classes/WeeklyTimetable';
+
+import ViewAssignments from './modules/students/assignments/ViewAssignments';
+import SubmitWork from './modules/students/assignments/SubmitWork';
+import TeacherFeedback from './modules/students/assignments/TeacherFeedback';
+import DueDates from './modules/students/assignments/DueDates';
+
+import ExamTimetable from './modules/students/exams/ExamTimetable';
+import GradeCard from './modules/students/exams/GradeCard';
+import PerformanceAnalytics from './modules/students/exams/PerformanceAnalytics';
+
+import FeeStatus from './modules/students/fees/FeeStatus';
+import DueFee from './modules/students/fees/DueFee';
+import OnlinePayment from './modules/students/fees/OnlinePayment';
+import FeeReceipts from './modules/students/fees/FeeReceipts';
+
+import Announcements from './modules/students/announcements/Announcements';
+
+import ProfileInfo from './modules/students/settings/ProfileInfo';
+import Password from './modules/students/settings/Password';
+import StudentModulePlaceholder from './modules/students/StudentModulePlaceholder';
 
 const studentRoutes = [
   {
@@ -54,21 +77,21 @@ const studentRoutes = [
         layout: '/student',
         path: '/classes/list',
         icon: <Icon as={MdSchool} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Class List' subtitle='Coming soon' />,
+        component: <ClassList />,
       },
       {
         name: 'Subject Teachers',
         layout: '/student',
         path: '/classes/teachers',
         icon: <Icon as={MdPerson} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Subject Teachers' subtitle='Coming soon' />,
+        component: <SubjectTeachers />,
       },
       {
         name: 'Weekly Timetable',
         layout: '/student',
         path: '/classes/timetable',
         icon: <Icon as={MdSchedule} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Weekly Timetable' subtitle='Coming soon' />,
+        component: <WeeklyTimetable />,
       },
     ],
   },
@@ -123,28 +146,28 @@ const studentRoutes = [
         layout: '/student',
         path: '/assignments/list',
         icon: <Icon as={MdAssignment} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='View Assignments' subtitle='Coming soon' />,
+        component: <ViewAssignments />,
       },
       {
         name: 'Submit Work',
         layout: '/student',
         path: '/assignments/submit',
         icon: <Icon as={MdAssignment} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Submit Work' subtitle='Coming soon' />,
+        component: <SubmitWork />,
       },
       {
         name: 'Teacher Feedback',
         layout: '/student',
         path: '/assignments/feedback',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Teacher Feedback' subtitle='Coming soon' />,
+        component: <TeacherFeedback />,
       },
       {
         name: 'Due Dates',
         layout: '/student',
         path: '/assignments/due-dates',
         icon: <Icon as={MdSchedule} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Due Dates' subtitle='Coming soon' />,
+        component: <DueDates />,
       },
     ],
   },
@@ -161,7 +184,7 @@ const studentRoutes = [
         layout: '/student',
         path: '/exams/timetable',
         icon: <Icon as={MdSchedule} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Exam Timetable' subtitle='Coming soon' />,
+        component: <ExamTimetable />,
       },
       {
         name: 'Results',
@@ -175,14 +198,14 @@ const studentRoutes = [
         layout: '/student',
         path: '/exams/grade-card',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Grade Card' subtitle='Coming soon' />,
+        component: <GradeCard />,
       },
       {
         name: 'Performance Analytics',
         layout: '/student',
         path: '/exams/analytics',
         icon: <Icon as={MdOutlineAnalytics} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Performance Analytics' subtitle='Coming soon' />,
+        component: <PerformanceAnalytics />,
       },
     ],
   },
@@ -237,28 +260,28 @@ const studentRoutes = [
         layout: '/student',
         path: '/fees/status',
         icon: <Icon as={MdPayments} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Fee Status' subtitle='Coming soon' />,
+        component: <FeeStatus />,
       },
       {
         name: 'Due Fee',
         layout: '/student',
         path: '/fees/due',
         icon: <Icon as={MdPayments} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Due Fee' subtitle='Coming soon' />,
+        component: <DueFee />,
       },
       {
         name: 'Online Payment',
         layout: '/student',
         path: '/fees/pay',
         icon: <Icon as={MdPayments} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Online Payment' subtitle='Coming soon' />,
+        component: <OnlinePayment />,
       },
       {
         name: 'Fee Receipts',
         layout: '/student',
         path: '/fees/receipts',
         icon: <Icon as={MdPayments} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Fee Receipts' subtitle='Coming soon' />,
+        component: <FeeReceipts />,
       },
     ],
   },
@@ -269,7 +292,7 @@ const studentRoutes = [
     layout: '/student',
     icon: <Icon as={MdCampaign} width="20px" height="20px" color="inherit" />,
     path: '/announcements',
-    component: <StudentModulePlaceholder title='Announcements' subtitle='Coming soon' />,
+    component: <Announcements />,
   },
 
   // 8) Communication (temporarily hidden)
@@ -357,14 +380,14 @@ const studentRoutes = [
         layout: '/student',
         path: '/settings/profile',
         icon: <Icon as={MdPerson} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Profile Info' subtitle='Coming soon' />,
+        component: <ProfileInfo />,
       },
       {
         name: 'Password',
         layout: '/student',
         path: '/settings/password',
         icon: <Icon as={MdLock} width="16px" height="16px" color="inherit" />,
-        component: <StudentModulePlaceholder title='Password' subtitle='Coming soon' />,
+        component: <Password />,
       },
       /* Notifications (temporarily hidden)
       {

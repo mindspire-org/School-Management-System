@@ -2,6 +2,8 @@ export * as authApi from './auth';
 export * as teachersApi from './teachers';
 export * as studentsApi from './students';
 export * as assignmentsApi from './assignments';
+export * as resultsApi from './results';
+export * as sharedContentApi from './sharedContent';
 export * as classesApi from './classes';
 export * as subjectsApi from './subjects';
 export * as campusesApi from './campuses';

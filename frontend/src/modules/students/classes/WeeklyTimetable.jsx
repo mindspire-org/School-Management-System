@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -29,50 +29,140 @@ import {
 import { MdRefresh, MdFileDownload, MdAccessTime, MdDateRange, MdClass } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import BarChart from '../../../components/charts/BarChart';
-import { mockTodayClasses } from '../../../utils/mockData';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import { studentsApi, teachersApi } from '../../../services/api';
 
-const days = ['Mon','Tue','Wed','Thu','Fri'];
-const periods = ['08:00','09:00','10:00','11:00','12:00','02:00'];
+const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const dayMap = {
+  Monday: 'Mon',
+  Tuesday: 'Tue',
+  Wednesday: 'Wed',
+  Thursday: 'Thu',
+  Friday: 'Fri',
+};
+
+const dayOfWeekToName = {
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+  7: 'Sunday',
+};
+
+const shortDayFromSlot = (slot) => {
+  const explicit = slot?.dayName ? String(slot.dayName) : null;
+  if (explicit && dayMap[explicit]) return dayMap[explicit];
+
+  const raw = slot?.dayOfWeek;
+  if (raw === undefined || raw === null) return null;
+
+  const num = Number(raw);
+  if (Number.isFinite(num) && dayOfWeekToName[num] && dayMap[dayOfWeekToName[num]]) {
+    return dayMap[dayOfWeekToName[num]];
+  }
+
+  const asStr = String(raw);
+  if (dayMap[asStr]) return dayMap[asStr];
+
+  return null;
+};
 
 export default function WeeklyTimetable() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedDetail, setSelectedDetail] = useState(null);
 
-  // Derive student's primary class from mockTodayClasses
-  const myClass = useMemo(() => {
-    const counts = {};
-    (mockTodayClasses||[]).forEach(c=>{ counts[c.className] = (counts[c.className]||0)+1; });
-    const entry = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-    return entry ? entry[0] : '10A';
+  const [loading, setLoading] = useState(true);
+  const [student, setStudent] = useState(null);
+  const [schedule, setSchedule] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const res = await studentsApi.list({ pageSize: 1 });
+        const self = res?.rows?.[0] || null;
+        if (!alive) return;
+        setStudent(self);
+
+        if (self?.class) {
+          const items = await teachersApi.listSchedules({
+            className: self.class,
+            section: self.section || undefined,
+          });
+          if (!alive) return;
+          setSchedule(Array.isArray(items) ? items : []);
+        } else {
+          setSchedule([]);
+        }
+      } catch (_) {
+        if (!alive) return;
+        setStudent(null);
+        setSchedule([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  const myClass = useMemo(() => {
+    if (!student) return '—';
+    return `${student.class || ''}${student.section || ''}` || '—';
+  }, [student]);
 
   const [selectedDay, setSelectedDay] = useState(days[0]);
 
-  // Build a simple weekly grid by rotating today's classes across the week/time slots
+  const periods = useMemo(() => {
+    const raw = (schedule || [])
+      .filter((s) => s?.dayOfWeek && s?.startTime)
+      .map((s) => String(s.timeSlotLabel || s.startTime));
+    const unique = Array.from(new Set(raw));
+    if (unique.length) return unique;
+    return ['08:00', '09:00', '10:00', '11:00', '12:00', '02:00'];
+  }, [schedule]);
+
   const weekGrid = useMemo(() => {
-    const byTime = periods.map((p, i) => ({ time: p, item: mockTodayClasses[i % mockTodayClasses.length] }));
     const grid = {};
-    days.forEach((d, di) => {
+    days.forEach((d) => {
       grid[d] = {};
-      periods.forEach((p, pi) => {
-        const src = byTime[(pi + di) % byTime.length].item;
-        grid[d][p] = { subject: src.subject, room: src.room.replace('Room ','').replace('ROOM ',''), className: src.className, teacher: '—' };
+      periods.forEach((p) => {
+        grid[d][p] = { subject: '-', room: '-', className: myClass, teacher: '-' };
       });
     });
+
+    (schedule || []).forEach((slot) => {
+      const shortDay = shortDayFromSlot(slot);
+      if (!shortDay || !grid[shortDay]) return;
+      const key = String(slot.timeSlotLabel || slot.startTime);
+      if (!key || !grid[shortDay][key]) return;
+      const room = slot.room ? String(slot.room).replace('Room ', '').replace('ROOM ', '') : '-';
+      grid[shortDay][key] = {
+        subject: slot.subject || '-',
+        room,
+        className: `${slot.className || slot.class || ''}${slot.section || ''}` || myClass,
+        teacher: slot.teacherName || '-',
+      };
+    });
     return grid;
-  }, []);
+  }, [schedule, periods, myClass]);
 
   const tableRows = useMemo(() => periods.map(p => ({
     time: p,
     cells: days.map(d => ({ day: d, time: p, ...(weekGrid[d]?.[p]||{ subject:'-', room:'-', className: myClass, teacher:'-' }) }))
-  })), [weekGrid, myClass]);
+  })), [periods, weekGrid, myClass]);
 
-  const selectedRows = useMemo(() => periods.map(p => ({ time: p, ...(weekGrid[selectedDay]?.[p]||{ subject:'-', room:'-', className: myClass, teacher:'-' }) })), [weekGrid, selectedDay, myClass]);
+  const selectedRows = useMemo(() => periods.map(p => ({ time: p, ...(weekGrid[selectedDay]?.[p]||{ subject:'-', room:'-', className: myClass, teacher:'-' }) })), [periods, weekGrid, selectedDay, myClass]);
 
-  const chartData = useMemo(() => ([{ name: 'Lessons', data: days.map(d => periods.length) }]), []);
+  const chartData = useMemo(() => ([{ name: 'Lessons', data: days.map(() => periods.length) }]), [periods]);
 
   const exportCSV = () => {
     const header = ['Class','Time',...days];
@@ -116,6 +206,12 @@ export default function WeeklyTimetable() {
         </Flex>
       </Box>
 
+      {loading ? (
+        <Card p='16px' mb='16px'>
+          <Text color={textSecondary}>Loading timetable...</Text>
+        </Card>
+      ) : null}
+
       <Card p='16px' mb='16px'>
         <HStack justify='space-between' flexWrap='wrap' rowGap={3}>
           <HStack>
@@ -149,7 +245,7 @@ export default function WeeklyTimetable() {
                 <Td>{r.subject}</Td>
                 <Td>{r.room}</Td>
                 <Td>
-                  <Button size='xs' colorScheme='purple' onClick={() => { setSelectedDetail({ day: selectedDay, time: r.time, subject: r.subject, room: r.room, className: myClass }); onOpen(); }}>View</Button>
+                  <Button size='xs' colorScheme='purple' onClick={() => { setSelectedDetail({ day: selectedDay, time: r.time, subject: r.subject, room: r.room, teacher: r.teacher, className: myClass }); onOpen(); }}>View</Button>
                 </Td>
               </Tr>
             ))}
@@ -169,12 +265,33 @@ export default function WeeklyTimetable() {
             {tableRows.map(r => (
               <Tr key={r.time}>
                 <Td fontWeight='600'>{r.time}</Td>
-                {r.cells.map(c => (
-                  <Td key={c.day}>
-                    {c.subject} {c.room && c.room!=='-' ? <Badge ml={2}>Rm {c.room}</Badge> : null}
-                    <Button ml={2} size='xs' variant='ghost' colorScheme='purple' onClick={() => { setSelectedDetail({ day: c.day, time: c.time, subject: c.subject, room: c.room, className: myClass }); onOpen(); }}>View</Button>
-                  </Td>
-                ))}
+                {r.cells.map((c) => {
+                  const cell = c || { day: '-', time: r.time, subject: '-', room: '-', teacher: '-' };
+                  return (
+                    <Td key={cell.day || r.time}>
+                      {cell.subject || '-'} {cell.room && cell.room !== '-' ? <Badge ml={2}>Rm {cell.room}</Badge> : null}
+                      <Button
+                        ml={2}
+                        size='xs'
+                        variant='ghost'
+                        colorScheme='purple'
+                        onClick={() => {
+                          setSelectedDetail({
+                            day: cell.day,
+                            time: cell.time,
+                            subject: cell.subject || '-',
+                            room: cell.room || '-',
+                            teacher: cell.teacher || '-',
+                            className: myClass,
+                          });
+                          onOpen();
+                        }}
+                      >
+                        View
+                      </Button>
+                    </Td>
+                  );
+                })}
               </Tr>
             ))}
           </Tbody>
@@ -198,8 +315,7 @@ export default function WeeklyTimetable() {
                 <Text><b>Subject:</b> {selectedDetail.subject}</Text>
                 <Text><b>Class:</b> {selectedDetail.className}</Text>
                 <Text><b>Room:</b> {selectedDetail.room}</Text>
-                <Text><b>Teacher:</b> Notified</Text>
-                <Badge colorScheme='green'>Hardcoded Demo</Badge>
+                <Text><b>Teacher:</b> {selectedDetail.teacher || '-'}</Text>
               </VStack>
             ) : null}
           </ModalBody>

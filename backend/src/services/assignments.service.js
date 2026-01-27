@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { ensureAssignmentSubmissionSchema } from '../db/autoMigrate.js';
 
 export const list = async ({ page = 1, pageSize = 50, q, campusId }) => {
   const offset = (page - 1) * pageSize;
@@ -15,21 +16,35 @@ export const list = async ({ page = 1, pageSize = 50, q, campusId }) => {
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId" FROM assignments ${whereSql} ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    `SELECT a.id,
+            a.title,
+            a.description,
+            a.subject,
+            a.due_date AS "dueDate",
+            a.class,
+            a.section,
+            a.created_by AS "createdBy",
+            u.name AS "createdByName",
+            a.campus_id AS "campusId"
+       FROM assignments a
+       LEFT JOIN users u ON u.id = a.created_by
+       ${whereSql.replace(/\bassignments\b/g, 'a')}
+       ORDER BY a.id DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );
   return { rows, total, page, pageSize };
 };
 
 export const getById = async (id) => {
-  const { rows } = await query('SELECT id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId" FROM assignments WHERE id = $1', [id]);
+  const { rows } = await query('SELECT id, title, description, subject, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId" FROM assignments WHERE id = $1', [id]);
   return rows[0] || null;
 };
 
-export const create = async ({ title, description, dueDate, class: cls, section, campusId }, user) => {
+export const create = async ({ title, description, subject, dueDate, class: cls, section, campusId }, user) => {
   const { rows } = await query(
-    'INSERT INTO assignments (title, description, due_date, class, section, created_by, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, title, description, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId"',
-    [title, description || null, dueDate || null, cls || null, section || null, user?.id || null, campusId || null]
+    'INSERT INTO assignments (title, description, subject, due_date, class, section, created_by, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, title, description, subject, due_date AS "dueDate", class, section, created_by AS "createdBy", campus_id AS "campusId"',
+    [title, description || null, subject || null, dueDate || null, cls || null, section || null, user?.id || null, campusId || null]
   );
   return rows[0];
 };
@@ -37,7 +52,7 @@ export const create = async ({ title, description, dueDate, class: cls, section,
 export const update = async (id, data) => {
   const fields = [];
   const values = [];
-  const map = { title: 'title', description: 'description', dueDate: 'due_date', class: 'class', section: 'section' };
+  const map = { title: 'title', description: 'description', subject: 'subject', dueDate: 'due_date', class: 'class', section: 'section' };
   Object.entries(data || {}).forEach(([k, v]) => { if (map[k] !== undefined) { values.push(v); fields.push(`${map[k]} = $${values.length}`); } });
   if (!fields.length) return await getById(id);
   values.push(id);
@@ -52,8 +67,22 @@ export const remove = async (id) => {
 };
 
 export const submitWork = async (assignmentId, studentId, { content }) => {
+  await ensureAssignmentSubmissionSchema();
   const { rows } = await query(
-    'INSERT INTO assignment_submissions (assignment_id, student_id, content) VALUES ($1,$2,$3) RETURNING id, assignment_id AS "assignmentId", student_id AS "studentId", content, submitted_at AS "submittedAt"',
+    `INSERT INTO assignment_submissions (assignment_id, student_id, content)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (assignment_id, student_id)
+     DO UPDATE SET content = EXCLUDED.content, submitted_at = NOW(), status = 'submitted'
+     RETURNING id,
+               assignment_id AS "assignmentId",
+               student_id AS "studentId",
+               content,
+               submitted_at AS "submittedAt",
+               status,
+               score,
+               teacher_comment AS "teacherComment",
+               rubric,
+               graded_at AS "gradedAt"`,
     [assignmentId, studentId, content]
   );
   return rows[0];
@@ -82,8 +111,21 @@ export const listByTeacher = async (teacherId, { page = 1, pageSize = 50, q }) =
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy", a.campus_id AS "campusId" 
-     FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    `SELECT a.id,
+            a.title,
+            a.description,
+            a.subject,
+            a.due_date AS "dueDate",
+            a.class,
+            a.section,
+            a.created_by AS "createdBy",
+            u.name AS "createdByName",
+            a.campus_id AS "campusId"
+       FROM assignments a
+       LEFT JOIN users u ON u.id = a.created_by
+       ${whereSql}
+       ORDER BY a.id DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );
   return { rows, total, page, pageSize };
@@ -91,7 +133,9 @@ export const listByTeacher = async (teacherId, { page = 1, pageSize = 50, q }) =
 
 // List assignments for a specific student's class/section
 export const listByStudent = async (student, { page = 1, pageSize = 50, q }) => {
+  await ensureAssignmentSubmissionSchema();
   const offset = (page - 1) * pageSize;
+  const studentId = Number(student.id);
   const params = [];
   const where = [];
 
@@ -119,9 +163,32 @@ export const listByStudent = async (student, { page = 1, pageSize = 50, q }) => 
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT a.id, a.title, a.description, a.due_date AS "dueDate", a.class, a.section, a.created_by AS "createdBy", a.campus_id AS "campusId" 
-     FROM assignments a ${whereSql} ORDER BY a.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, pageSize, offset]
+    `SELECT a.id,
+            a.title,
+            a.description,
+            a.subject,
+            a.due_date AS "dueDate",
+            a.class,
+            a.section,
+            a.created_by AS "createdBy",
+            u.name AS "createdByName",
+            a.campus_id AS "campusId",
+            s.id AS "submissionId",
+            s.submitted_at AS "submittedAt",
+            s.status AS "submissionStatus",
+            s.score,
+            s.teacher_comment AS "teacherComment",
+            s.rubric,
+            s.graded_at AS "gradedAt"
+       FROM assignments a
+       LEFT JOIN users u ON u.id = a.created_by
+       LEFT JOIN assignment_submissions s
+              ON s.assignment_id = a.id
+             AND s.student_id = $${params.length + 1}
+       ${whereSql}
+       ORDER BY a.id DESC
+       LIMIT $${params.length + 2} OFFSET $${params.length + 3}`,
+    [...params, studentId, pageSize, offset]
   );
   return { rows, total, page, pageSize };
 };

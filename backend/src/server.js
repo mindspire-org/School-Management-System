@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 import { pool, ensureAppDatabaseExists } from './config/db.js';
-import { ensureAuthSchema, ensureCampusSchema, ensureCardManagementSchema, ensureCertificatesSchema, ensureMasterDataSchema, ensurePayrollSchema } from './db/autoMigrate.js';
+import { ensureAuthSchema, ensureCampusSchema, ensureCardManagementSchema, ensureCertificatesSchema, ensureMasterDataSchema, ensurePayrollSchema, ensureSharedContentSchema } from './db/autoMigrate.js';
 import { initDb } from './models/index.js';
 
 loadEnv();
@@ -91,6 +91,7 @@ async function boot() {
       await ensureCertificatesSchema();
       await ensureMasterDataSchema();
       await ensurePayrollSchema();
+      await ensureSharedContentSchema();
     }, Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 30000);
     await withTimeout('Sequelize init', () => initDb(), Number(process.env.SMS_DB_INIT_TIMEOUT_MS) || 30000);
 

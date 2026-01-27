@@ -77,7 +77,8 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
                           ) AS "feeStatus",
                           s.bus_number AS "busNumber", s.bus_assigned AS "busAssigned", s.parent_name AS "parentName", s.parent_phone AS "parentPhone", s.status, s.admission_date AS "admissionDate", s.avatar,
                           s.avatar AS "photo", s.avatar AS "photoUrl",
-                          s.personal, s.academic, s.parent, s.transport, s.fee
+                          s.personal, s.academic, s.parent, s.transport, s.fee,
+                          s.campus_id AS "campusId"
                    FROM students s
                    LEFT JOIN inv ON inv.student_id = s.id
                    ${whereSql}
@@ -88,7 +89,7 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
 
 export const getById = async (id) => {
   const { rows } = await query(
-    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE id = $1',
+    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee, campus_id AS "campusId" FROM students WHERE id = $1',
     [id]
   );
   return rows[0] || null;
@@ -96,7 +97,7 @@ export const getById = async (id) => {
 
 export const getByUserId = async (userId) => {
   const { rows } = await query(
-    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee FROM students WHERE user_id = $1',
+    'SELECT id, name, email, roll_number AS "rollNumber", class, section, rfid_tag AS "rfidTag", attendance, fee_status AS "feeStatus", bus_number AS "busNumber", bus_assigned AS "busAssigned", parent_name AS "parentName", parent_phone AS "parentPhone", status, admission_date AS "admissionDate", avatar, avatar AS "photo", avatar AS "photoUrl", family_number AS "familyNumber", personal, academic, parent, transport, fee, campus_id AS "campusId" FROM students WHERE user_id = $1',
     [userId]
   );
   return rows[0] || null;
@@ -290,8 +291,42 @@ export const recordPayment = async (studentId, { invoiceId, amount, method }) =>
     'INSERT INTO fee_payments (invoice_id, amount, method) VALUES ($1,$2,$3) RETURNING id, invoice_id AS "invoiceId", amount::float, method, paid_at AS "paidAt"',
     [invoiceId, amount, method || null]
   );
+  try {
+    const { rows: sums } = await query(
+      `SELECT fi.amount::float AS amount, COALESCE(SUM(fp.amount),0)::float AS paid
+         FROM fee_invoices fi
+         LEFT JOIN fee_payments fp ON fp.invoice_id = fi.id
+        WHERE fi.id = $1
+        GROUP BY fi.id`,
+      [invoiceId]
+    );
+    const inv = sums[0];
+    if (inv && Number(inv.paid) >= Number(inv.amount)) {
+      await query('UPDATE fee_invoices SET status = $2 WHERE id = $1', [invoiceId, 'paid']);
+    }
+  } catch (_) {}
+
   await recomputeFeeStatus(studentId);
   return rows[0];
+};
+
+export const listFeePayments = async (studentId) => {
+  const { rows } = await query(
+    `SELECT fp.id,
+            fp.invoice_id AS "invoiceId",
+            fp.amount::float,
+            fp.method,
+            fp.paid_at AS "paidAt",
+            fi.status AS "invoiceStatus",
+            fi.due_date AS "dueDate",
+            fi.issued_at AS "issuedAt"
+       FROM fee_payments fp
+       JOIN fee_invoices fi ON fi.id = fp.invoice_id
+      WHERE fi.student_id = $1
+      ORDER BY fp.paid_at DESC, fp.id DESC`,
+    [studentId]
+  );
+  return rows;
 };
 
 export const createInvoice = async (studentId, { amount, dueDate, status }) => {
@@ -449,4 +484,43 @@ export const getAttendanceTrend = async (studentId) => {
     const present = Number(r.present_days);
     return total > 0 ? Math.round((present / total) * 100) : 0;
   });
+};
+
+export const listSubjectTeachers = async ({ studentId, campusId }) => {
+  const { rows: stRows } = await query('SELECT class, section, campus_id FROM students WHERE id = $1', [studentId]);
+  const st = stRows[0];
+  if (!st?.class) return [];
+
+  const params = [JSON.stringify([st.class])];
+  const where = ['tsa.classes @> $1::jsonb'];
+  if (st.class && st.section) {
+    params.push(JSON.stringify([`${st.class}-${st.section}`]));
+    where.push(`tsa.classes @> $${params.length}::jsonb`);
+  }
+  if (campusId) {
+    params.push(Number(campusId));
+  }
+
+  const whereSql = `WHERE (${where.join(' OR ')})`;
+  const campusSql = campusId ? `AND t.campus_id = $${params.length}` : '';
+
+  const { rows } = await query(
+    `SELECT tsa.id,
+            tsa.subject_id AS "subjectId",
+            s.name AS "subjectName",
+            tsa.teacher_id AS "teacherId",
+            t.name AS "teacherName",
+            t.email AS "teacherEmail",
+            t.phone AS "teacherPhone",
+            t.avatar AS "teacherAvatar",
+            tsa.is_primary AS "isPrimary"
+       FROM teacher_subject_assignments tsa
+       JOIN subjects s ON s.id = tsa.subject_id
+       JOIN teachers t ON t.id = tsa.teacher_id
+       ${whereSql}
+       ${campusSql}
+       ORDER BY s.name ASC, t.name ASC`,
+    params
+  );
+  return rows;
 };

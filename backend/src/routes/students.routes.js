@@ -152,6 +152,14 @@ router.get(
   studentController.getFees
 );
 
+router.get(
+  '/:id/fees/payments',
+  authenticate,
+  [param('id').isInt()],
+  validate,
+  studentController.listFeePayments
+);
+
 router.post(
   '/:id/fees/invoices',
   authenticate,
@@ -184,7 +192,7 @@ router.put(
 router.post(
   '/:id/fees/payments',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'student'),
   [
     param('id').isInt(),
     body('invoiceId').isInt(),
@@ -217,6 +225,39 @@ router.put(
   ],
   validate,
   studentController.updateTransport
+);
+router.put(
+  '/me/profile',
+  authenticate,
+  authorize('student'),
+  [
+    body('name').optional().isString(),
+    body('email').optional().isString(),
+    body('parentName').optional().isString(),
+    body('parentPhone').optional().isString(),
+  ],
+  validate,
+  studentController.updateSelfProfile
+);
+
+router.post(
+  '/me/change-password',
+  authenticate,
+  authorize('student'),
+  [
+    body('currentPassword').isString().notEmpty(),
+    body('newPassword').isString().isLength({ min: 6 }),
+  ],
+  validate,
+  studentController.changeMyPassword
+);
+
+router.get(
+  '/me/subject-teachers',
+  authenticate,
+  authorize('student'),
+  validate,
+  studentController.listMySubjectTeachers
 );
 
 export default router;

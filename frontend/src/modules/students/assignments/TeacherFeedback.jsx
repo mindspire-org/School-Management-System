@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import { MdVisibility, MdCheckCircle, MdSchedule, MdAssessment, MdLibraryBooks } from 'react-icons/md';
 import Card from '../../../components/card/Card';
@@ -6,8 +6,8 @@ import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockAssignments, mockTeachers, mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import { assignmentsApi, studentsApi } from '../../../services/api';
 
 export default function TeacherFeedback() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -15,39 +15,65 @@ export default function TeacherFeedback() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(() => {
-    if (user?.role === 'student') {
-      const byEmail = mockStudents.find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s => s.name?.toLowerCase() === user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id: 999, name: user.name, rollNumber: 'STU999', class: '10', section: 'A', email: user.email };
-    }
-    return mockStudents[0];
-  }, [user]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const classSection = `${student.class}${student.section}`;
-  const subjects = useMemo(() => Array.from(new Set(mockTeachers.filter(t => t.classes?.includes(classSection)).map(t => t.subject))), [classSection]);
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const selfRes = await studentsApi.list();
+        const self = selfRes?.rows?.[0] || null;
+        if (!alive) return;
+        setStudent(self);
 
-  const baseItems = useMemo(() => mockAssignments
-    .filter(a => (subjects.length === 0 || subjects.includes(a.subject)))
-    .filter(a => a.status === 'graded' || a.status === 'submitted')
-    .map(a => ({
-      ...a,
-      teacherComment: a.status === 'graded' ? (a.teacherComment || 'Well done. Keep up the good work.') : 'Submitted. Awaiting review.',
-      rubric: a.rubric || 'Accuracy, Completeness, Presentation',
-    })), [subjects]);
+        const data = await assignmentsApi.list();
+        const list = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+        if (!alive) return;
+        setRows(list);
+      } catch (e) {
+        if (!alive) return;
+        setError(e?.message || 'Failed to load feedback');
+        setRows([]);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  const demoGraded = useMemo(() => ([
-    { id: 'D-G1', title: 'Computer Science Project - Sorting Report', subject: 'Computer Science', teacher: 'Mr. Usman Tariq', status: 'graded', score: 89, rubric: 'Correctness, Time Complexity, Code Style', teacherComment: 'Good analysis and code style. Mentioned edge cases clearly.' },
-    { id: 'D-G2', title: 'Urdu Essay Review', subject: 'Urdu', teacher: 'Ms. Noor Fatima', status: 'graded', score: 78, rubric: 'Content, Grammar, Structure', teacherComment: 'Strong content. Improve grammar and structure in 2nd paragraph.' },
-  ]), []);
+  const classSection = useMemo(() => {
+    if (!student) return '';
+    return `${student.class || ''}${student.section || ''}`;
+  }, [student]);
 
-  const demoSubmitted = useMemo(() => ([
-    { id: 'D-S2', title: 'Islamiat Unit 3 Answers', subject: 'Islamiat', teacher: 'Mr. Saad Ali', status: 'submitted', rubric: 'Completeness, References, Clarity', teacherComment: 'Submitted. Awaiting review.' },
-  ]), []);
-
-  const items = useMemo(() => [...baseItems, ...demoGraded, ...demoSubmitted], [baseItems, demoGraded, demoSubmitted]);
+  const items = useMemo(() => {
+    return (rows || [])
+      .map((a) => {
+        const statusRaw = (a?.submissionStatus || '').toLowerCase();
+        const status = statusRaw === 'graded' ? 'graded' : (statusRaw === 'submitted' ? 'submitted' : 'pending');
+        const score = a?.score === null || a?.score === undefined ? null : Number(a.score);
+        return {
+          id: a?.id,
+          title: a?.title || '-',
+          subject: a?.subject || '-',
+          teacher: a?.createdByName || '-',
+          status,
+          score: Number.isFinite(score) ? score : null,
+          rubric: a?.rubric || '-',
+          teacherComment: a?.teacherComment || (status === 'graded' ? '-' : 'Submitted. Awaiting review.'),
+        };
+      })
+      .filter((a) => a.status === 'graded' || a.status === 'submitted');
+  }, [rows]);
 
   const graded = items.filter(i => i.status === 'graded');
   const submitted = items.filter(i => i.status === 'submitted');
@@ -66,7 +92,19 @@ export default function TeacherFeedback() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Teacher Feedback</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'}{student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}{classSection ? ` • Class ${classSection}` : ''}</Text>
+
+      {loading ? (
+        <Card p='16px' mb='16px'>
+          <Text color={textSecondary}>Loading feedback...</Text>
+        </Card>
+      ) : null}
+
+      {error ? (
+        <Card p='16px' mb='16px'>
+          <Text color='red.500'>{error}</Text>
+        </Card>
+      ) : null}
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -98,8 +136,8 @@ export default function TeacherFeedback() {
             compact
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#667eea 0%,#764ba2 100%)' icon={<Icon as={MdLibraryBooks} w='22px' h='22px' color='white' />} />}
             name='Subjects'
-            value={String(subjects.length)}
-            trendData={[1,1,2,2,subjects.length]}
+            value={String(new Set(items.map(i => i.subject)).size)}
+            trendData={[1,1,2,2,new Set(items.map(i => i.subject)).size]}
             trendColor='#667eea'
           />
         </Flex>
@@ -125,7 +163,6 @@ export default function TeacherFeedback() {
                 <Td>
                   <HStack spacing={2}>
                     <Text>{a.title}</Text>
-                    {String(a.id).toString().startsWith('D-') && <Badge variant='outline' colorScheme='purple'>Demo</Badge>}
                   </HStack>
                 </Td>
                 <Td>{a.subject}</Td>

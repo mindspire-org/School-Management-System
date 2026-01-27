@@ -40,6 +40,21 @@ export const getById = async (req, res, next) => {
   try {
     const a = await assignments.getById(Number(req.params.id));
     if (!a) return res.status(404).json({ message: 'Assignment not found' });
+
+    if (req.user?.role === 'student') {
+      const self = await students.getByUserId(req.user.id);
+      if (!self) return res.status(404).json({ message: 'Student profile not found' });
+      if (req.user?.campusId && a.campusId && Number(a.campusId) !== Number(req.user.campusId)) {
+        return res.status(404).json({ message: 'Assignment not found' });
+      }
+      if (a.class && String(a.class) !== String(self.class)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      if (a.section && String(a.section) !== String(self.section)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
+
     return res.json(a);
   } catch (e) { next(e); }
 };
@@ -69,7 +84,9 @@ export const remove = async (req, res, next) => {
 
 export const submitWork = async (req, res, next) => {
   try {
-    const submission = await assignments.submitWork(Number(req.params.id), req.user.id, req.body);
+    const self = await students.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Student profile not found' });
+    const submission = await assignments.submitWork(Number(req.params.id), self.id, req.body);
     return res.status(201).json(submission);
   } catch (e) { next(e); }
 };

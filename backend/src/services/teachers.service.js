@@ -550,7 +550,7 @@ export const remove = async (id) => {
   return rowCount > 0;
 };
 
-export const listSchedules = async ({ teacherId, dayOfWeek, className, section }) => {
+export const listSchedules = async ({ teacherId, dayOfWeek, className, section, campusId }) => {
   const params = [];
   const where = [];
   if (teacherId) {
@@ -569,6 +569,11 @@ export const listSchedules = async ({ teacherId, dayOfWeek, className, section }
   if (section) {
     params.push(section);
     where.push(`ts.section = $${params.length}`);
+  }
+
+  if (campusId) {
+    params.push(Number(campusId));
+    where.push(`t.campus_id = $${params.length}`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -1027,7 +1032,7 @@ export const listSubjects = async ({ campusId } = {}) => {
   return rows;
 };
 
-export const listSubjectsByClass = async ({ className, section }) => {
+export const listSubjectsByClass = async ({ className, section, campusId }) => {
   const params = [];
   const where = [];
   // Match by class name in classes JSONB
@@ -1040,14 +1045,19 @@ export const listSubjectsByClass = async ({ className, section }) => {
     params.push(JSON.stringify([`${className}-${section}`]));
     where.push(`tsa.classes @> $${params.length}::jsonb`);
   }
-  const whereSql = where.length ? `WHERE ${where.join(' OR ')}` : '';
+  const whereSql = where.length ? `WHERE (${where.join(' OR ')})` : '';
+  const campusFilter = campusId ? `AND t.campus_id = $${params.length + 1}` : '';
+  const finalParams = campusId ? [...params, Number(campusId)] : params;
   const { rows } = await query(
     `SELECT DISTINCT s.id, s.name, s.code, s.department, s.description
        FROM teacher_subject_assignments tsa
        JOIN subjects s ON s.id = tsa.subject_id
+       JOIN teachers t ON t.id = tsa.teacher_id
        ${whereSql}
+       ${whereSql ? '' : 'WHERE 1=1'}
+       ${campusFilter}
        ORDER BY s.name ASC`,
-    params
+    finalParams
   );
   return rows.map(r => ({ id: r.id, name: r.name, code: r.code, department: r.department, description: r.description }));
 };
