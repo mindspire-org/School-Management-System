@@ -11,6 +11,7 @@ import {
     Box,
     Badge,
 } from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 import { MdExpandMore, MdSchool } from 'react-icons/md';
 import { campusesApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +20,7 @@ export default function CampusSwitcher() {
     const { user, campusId, setCampusId } = useAuth();
     const [campuses, setCampuses] = useState([]);
     const [selectedCampus, setSelectedCampus] = useState(null);
+    const navigate = useNavigate();
 
     // Colors
     const menuBg = useColorModeValue('white', 'navy.800');
@@ -49,9 +51,10 @@ export default function CampusSwitcher() {
     }, [user, campusId]);
 
     const handleSelect = (campus) => {
+        if (String(campusId) === String(campus.id)) return;
         setSelectedCampus(campus);
         setCampusId(campus.id);
-        window.location.reload(); // Refresh to ensure all data reloads for new campus
+        navigate('/admin/dashboard', { replace: true });
     };
 
     if (user?.role !== 'admin' && user?.role !== 'owner') return null;

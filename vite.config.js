@@ -9,8 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Ensure relative asset paths for Electron file:// loading
-  base: './',
+  base: (process.env.VITE_BASE_URL || './'),
   plugins: [
     react({
       jsxRuntime: 'automatic',

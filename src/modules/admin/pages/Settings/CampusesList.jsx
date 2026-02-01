@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     SimpleGrid,
@@ -18,6 +19,7 @@ export default function CampusesList() {
     const textColor = useColorModeValue('secondaryGray.900', 'white');
     const [campuses, setCampuses] = useState([]);
     const { setCampusId } = useAuth(); // We can use this to switch context
+    const navigate = useNavigate();
 
     useEffect(() => {
         campusesApi.list({ pageSize: 100 }).then(res => {
@@ -27,7 +29,7 @@ export default function CampusesList() {
 
     const handleSwitch = (id) => {
         setCampusId(id);
-        window.location.href = '/admin/dashboard'; // Force reload to dashboard with new context
+        navigate('/admin/dashboard', { replace: true });
     };
 
     return (
