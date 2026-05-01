@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useColorModeValue, Flex, HStack, Select, Input, SimpleGrid, Badge, Table, Thead, Tbody, Tr, Th, Td, Button, Icon, Tag, TagLabel, TagCloseButton, Tooltip, IconButton } from '@chakra-ui/react';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
@@ -7,12 +7,7 @@ import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
 import { MdDownload, MdRefresh, MdOpenInNew, MdVisibility, MdEdit, MdClass, MdPeople, MdSchedule } from 'react-icons/md';
 
-const sampleClasses = [
-  { id: '7A', className: '7', section: 'A', subject: 'Mathematics', strength: 32, next: '10:30 AM' },
-  { id: '7B', className: '7', section: 'B', subject: 'Mathematics', strength: 30, next: '11:30 AM' },
-  { id: '8A', className: '8', section: 'A', subject: 'Mathematics', strength: 28, next: '12:30 PM' },
-  { id: '9A', className: '9', section: 'A', subject: 'Mathematics', strength: 35, next: '02:00 PM' },
-];
+import * as teachersApi from '../../../services/api/teachers';
 
 export default function ClassList() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -22,17 +17,33 @@ export default function ClassList() {
   const hoverShadow = useColorModeValue('lg', 'dark-lg');
   const [q, setQ] = useState('');
   const [grade, setGrade] = useState('');
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await teachersApi.listMyClasses({});
+        const data = Array.isArray(res?.rows) ? res.rows : [];
+        if (mounted) setRows(data);
+      } catch (e) {
+        console.error('Failed to load my classes', e);
+        if (mounted) setRows([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const filtered = useMemo(() => {
-    return sampleClasses.filter((c) =>
-      (!grade || c.className === grade) &&
-      (q === '' || `${c.className}${c.section}${c.subject}`.toLowerCase().includes(q.toLowerCase()))
+    return rows.filter((c) =>
+      (!grade || String(c.className) === String(grade)) &&
+      (q === '' || `${c.className}${c.section}${c.subject || ''}`.toLowerCase().includes(q.toLowerCase()))
     );
-  }, [q, grade]);
+  }, [q, grade, rows]);
 
   const kpis = useMemo(() => {
     const totalStudents = filtered.reduce((acc, c) => acc + c.strength, 0);
-    const next = filtered[0]?.next || '-';
+    const next = filtered.find((c) => c.next)?.next || '-';
     return {
       totalClasses: filtered.length,
       totalStudents,
@@ -107,17 +118,17 @@ export default function ClassList() {
           <HStack spacing={3} flexWrap='wrap'>
             <Select value={grade} onChange={(e) => setGrade(e.target.value)} w={{ base: '100%', md: '200px' }} size='sm'>
               <option value=''>All Grades</option>
-              <option value='7'>Grade 7</option>
-              <option value='8'>Grade 8</option>
-              <option value='9'>Grade 9</option>
+              {Array.from(new Set(rows.map(r => String(r.className)).filter(Boolean))).sort((a,b)=>Number(a)-Number(b)).map(g => (
+                <option key={g} value={g}>Grade {g}</option>
+              ))}
             </Select>
             <Input placeholder='Search class/section/subject' value={q} onChange={(e)=>setQ(e.target.value)} w={{ base: '100%', md: '260px' }} size='sm' />
           </HStack>
           <HStack spacing={2} flexWrap='wrap'>
             <Button size='sm' leftIcon={<Icon as={MdRefresh} />} variant='outline' onClick={()=>{ setQ(''); setGrade(''); }}>Reset</Button>
             <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdDownload} />} onClick={()=>{
-              const rows = filtered.map(c=>({Class:c.className, Section:c.section, Subject:c.subject, Students:c.strength, Next:c.next}));
-              const csv = ['Class,Section,Subject,Students,Next', ...rows.map(r=>`${r.Class},${r.Section},${r.Subject},${r.Students},${r.Next}`)].join('\n');
+              const outRows = filtered.map(c=>({Class:c.className, Section:c.section, Subject:c.subject || '', Students:c.strength, Next:c.next || ''}));
+              const csv = ['Class,Section,Subject,Students,Next', ...outRows.map(r=>`${r.Class},${r.Section},${r.Subject},${r.Students},${r.Next}`)].join('\n');
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');

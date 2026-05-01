@@ -12,6 +12,7 @@ const selectColumns = `
   cs.medium,
   cs.shift,
   cs.status,
+  cs.is_shared AS "isShared",
   cs.notes,
   cs.created_at AS "createdAt",
   cs.updated_at AS "updatedAt",
@@ -32,6 +33,7 @@ const columnMap = {
   medium: 'medium',
   shift: 'shift',
   status: 'status',
+  isShared: 'is_shared',
   notes: 'notes',
   campusId: 'campus_id',
 };
@@ -107,7 +109,7 @@ export const list = async ({
 
   if (campusId) {
     params.push(Number(campusId));
-    where.push(`cs.campus_id = $${params.length}`);
+    where.push(`(COALESCE(cs.is_shared, FALSE) = TRUE OR cs.campus_id = $${params.length})`);
   }
 
   if (search) {

@@ -1,4 +1,5 @@
 import * as service from '../services/communication.service.js';
+import * as waWeb from '../services/whatsappWeb.service.js';
 
 // Announcements
 export const listAnnouncements = async (req, res, next) => {
@@ -85,5 +86,29 @@ export const deleteAlert = async (req, res, next) => {
   try {
     await service.deleteAlert(req.params.id);
     res.json({ success: true });
+  } catch (e) { next(e); }
+};
+
+// WhatsApp Web (local machine) send
+export const whatsappWebSend = async (req, res, next) => {
+  try {
+    const { to, text } = req.body || {};
+    if (!to || !text) return res.status(400).json({ message: 'to and text are required' });
+    // Respond immediately; perform send in background to avoid client timeouts on first launch
+    setTimeout(async () => {
+      try {
+        await waWeb.start();
+        await waWeb.sendText({ to, text });
+      } catch (_) {}
+    }, 0);
+    res.status(202).json({ queued: true });
+  } catch (e) { next(e); }
+};
+
+// WhatsApp Web (local machine) start/launch for QR login
+export const whatsappWebStart = async (req, res, next) => {
+  try {
+    const out = await waWeb.start();
+    res.json(out || { ready: true });
   } catch (e) { next(e); }
 };

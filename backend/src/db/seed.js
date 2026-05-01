@@ -64,6 +64,25 @@ async function seed() {
       { email: 'student@mindspire.com', username: 'student', role: 'student', name: 'Student Ahmed', password: 'password123' },
       { email: 'driver@mindspire.com', username: 'driver', role: 'driver', name: 'Driver Umar', password: 'password123' },
     ];
+    
+    // Seed roles
+    const rolesToSeed = [
+      { id: 'owner', name: 'Owner' },
+      { id: 'admin', name: 'Administrator' },
+      { id: 'branch_admin', name: 'Branch Admin' },
+      { id: 'teacher', name: 'Teacher' },
+      { id: 'student', name: 'Student' },
+      { id: 'driver', name: 'Driver' },
+      { id: 'parent', name: 'Parent' },
+    ];
+    for (const r of rolesToSeed) {
+      await client.query(
+        'INSERT INTO roles (id, name, active) VALUES ($1, $2, true) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name',
+        [r.id, r.name]
+      );
+    }
+    console.log('Roles seeded');
+
     for (const u of usersToSeed) {
       const { rows: existing } = await client.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [u.email]);
       if (!existing.length) {

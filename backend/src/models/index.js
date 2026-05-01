@@ -32,28 +32,31 @@ const User = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING, allowNull: false },
-    email: { type: DataTypes.STRING, allowNull: false, unique: true },
-    password: { type: DataTypes.STRING, allowNull: false },
-    role: { type: DataTypes.ENUM('admin', 'teacher', 'student', 'driver'), allowNull: false, defaultValue: 'student' },
+    email: { type: DataTypes.STRING, allowNull: true, unique: true },
+    username: { type: DataTypes.STRING, allowNull: true, unique: true },
+    password_hash: { type: DataTypes.STRING, allowNull: true },
+    role: { type: DataTypes.STRING, allowNull: false, defaultValue: 'student' },
+    campus_id: { type: DataTypes.INTEGER, allowNull: true },
+    created_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     tableName: 'users',
-    timestamps: true,
-    defaultScope: { attributes: { exclude: ['password'] } },
-    scopes: { withPassword: { attributes: { include: ['password'] } } },
+    timestamps: false,
+    defaultScope: { attributes: { exclude: ['password_hash'] } },
+    scopes: { withPassword: { attributes: { include: ['password_hash'] } } },
   }
 );
 
 User.addHook('beforeCreate', async (user) => {
-  if (user.password) {
+  if (user.password_hash) {
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(user.password, salt);
+    user.password_hash = await bcrypt.hash(user.password_hash, salt);
   }
 });
 User.addHook('beforeUpdate', async (user) => {
-  if (user.changed('password')) {
+  if (user.changed('password_hash')) {
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(user.password, salt);
+    user.password_hash = await bcrypt.hash(user.password_hash, salt);
   }
 });
 
@@ -61,22 +64,21 @@ const Student = sequelize.define(
   'Student',
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
+    user_id: { type: DataTypes.INTEGER, allowNull: true },
     class: { type: DataTypes.STRING },
     section: { type: DataTypes.STRING },
   },
-  { tableName: 'students', timestamps: true }
+  { tableName: 'students', timestamps: false }
 );
 
 const Teacher = sequelize.define(
   'Teacher',
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
-    subjects: { type: DataTypes.ARRAY(DataTypes.STRING), defaultValue: [] },
+    user_id: { type: DataTypes.INTEGER, allowNull: true },
     department: { type: DataTypes.STRING },
   },
-  { tableName: 'teachers', timestamps: true }
+  { tableName: 'teachers', timestamps: false }
 );
 
 const Assignment = sequelize.define(
@@ -84,21 +86,19 @@ const Assignment = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
-    subject: { type: DataTypes.STRING, allowNull: false },
-    class: { type: DataTypes.STRING, allowNull: false },
-    section: { type: DataTypes.STRING, allowNull: false },
-    dueDate: { type: DataTypes.DATE, allowNull: false },
     description: { type: DataTypes.TEXT },
-    teacherId: { type: DataTypes.INTEGER },
-    submissions: { type: DataTypes.JSONB, defaultValue: [] },
+    due_date: { type: DataTypes.DATE, allowNull: true },
+    class: { type: DataTypes.STRING, allowNull: true },
+    section: { type: DataTypes.STRING, allowNull: true },
+    created_by: { type: DataTypes.INTEGER, allowNull: true },
   },
-  { tableName: 'assignments', timestamps: true }
+  { tableName: 'assignments', timestamps: false }
 );
 
 // Associations
-Student.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-Teacher.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-Assignment.belongsTo(User, { foreignKey: 'teacherId', as: 'teacher' });
+Student.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Teacher.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Assignment.belongsTo(User, { foreignKey: 'created_by', as: 'teacher' });
 
 // Initialize module models
 const InventoryModels = InventoryModelsInit(sequelize);
@@ -112,6 +112,25 @@ async function initDb() {
     await sequelize.authenticate();
     // Sync all models including the new ones
     await sequelize.sync();
+
+    // Best-effort schema fix: older deployments may have Leave.leaveType as a Postgres ENUM.
+    // Convert it to VARCHAR so new leave type strings (e.g., Marriage Leave) can be stored.
+    // This is safe to run multiple times.
+    try {
+      await sequelize.query(
+        'ALTER TABLE leaves ALTER COLUMN "leaveType" TYPE VARCHAR(80) USING "leaveType"::text'
+      );
+    } catch (_) {
+      // ignore (column may not exist or already converted)
+    }
+    try {
+      await sequelize.query(
+        'ALTER TABLE leaves ALTER COLUMN leave_type TYPE VARCHAR(80) USING leave_type::text'
+      );
+    } catch (_) {
+      // ignore
+    }
+
     try {
       const [rows] = await sequelize.query("SELECT current_database() AS db");
       const db = rows?.[0]?.db;

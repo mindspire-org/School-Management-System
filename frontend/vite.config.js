@@ -1,23 +1,30 @@
-import { defineConfig } from 'vite';
+import { defineConfig, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
 import svgr from 'vite-plugin-svgr';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: (process.env.VITE_BASE_URL || '/'),
   plugins: [
     react({
       jsxRuntime: 'automatic',
-      // Include .js files as JSX files
-      include: '**/*.{jsx,js}',
-      babel: {
-        plugins: [
-          ['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
-        ]
-      }
+      include: [/\.[jt]sx?(\?.*)?$/]
     }),
-    svgr() // Transform SVG files to React components
+    svgr(),
+    {
+      name: 'transform-js-as-jsx',
+      async transform(code, id) {
+        if (/src[\\/].*\.js(\?.*)?$/.test(id)) {
+          return transformWithEsbuild(code, id, { loader: 'jsx', jsx: 'automatic' });
+        }
+        return null;
+      },
+    }
   ],
   resolve: {
     alias: {
@@ -33,36 +40,37 @@ export default defineConfig({
       'variables': path.resolve(__dirname, 'src/variables'),
       'views': path.resolve(__dirname, 'src/views'),
       // Add specific files that might be imported directly
-      'routes': path.resolve(__dirname, 'src/routes.js'),
-      'routes.js': path.resolve(__dirname, 'src/routes.js')
+      'routes': path.resolve(__dirname, 'src/routes.jsx'),
+      'routes.js': path.resolve(__dirname, 'src/routes.jsx')
     },
     extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json']
   },
   esbuild: {
-    loader: 'jsx',
-    include: /src\/.*\.jsx?$/,
-    exclude: []
+    jsx: 'automatic'
+  },
+  
+  build: {
+    outDir: path.resolve(__dirname, '../dist'), // Output directory for build
+    emptyOutDir: true,
   },
   optimizeDeps: {
     esbuildOptions: {
-      plugins: [
-        {
-          name: 'load-js-files-as-jsx',
-          setup(build) {
-            build.onLoad({ filter: /src\/.*\.js$/ }, async (args) => ({
-              loader: 'jsx',
-              contents: 'import React from "react"; ' + 'export default {}',
-            }))
-          },
-        },
-      ],
-    },
-  },
-  build: {
-    outDir: 'dist', // Output directory for build
+      loader: {
+        '.js': 'jsx'
+      }
+    }
   },
   server: {
-    port: 3000, // Default port
-    open: true, // Open browser on start
+    port: 5173,
+    host: '127.0.0.1',
+    strictPort: true,
+    open: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:59201',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   }
 });

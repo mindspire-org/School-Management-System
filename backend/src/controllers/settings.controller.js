@@ -7,7 +7,9 @@ export const list = async (req, res, next) => {
 export const getByKey = async (req, res, next) => {
   try {
     const item = await service.getByKey(req.params.key);
-    if (!item) return res.status(404).json({ message: 'Setting not found' });
+    if (!item) {
+      return res.json({ key: req.params.key, value: null, updatedAt: null });
+    }
     res.json(item);
   } catch (e) { next(e); }
 };

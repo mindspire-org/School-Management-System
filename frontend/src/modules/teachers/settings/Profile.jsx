@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -22,23 +22,29 @@ import { MdRefresh, MdSave, MdClass, MdPeople, MdHistory } from 'react-icons/md'
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import * as teachersApi from '../../../services/api/teachers';
+import { useToast } from '@chakra-ui/react';
 
 const initialProfile = {
-  name: 'John Doe',
-  email: 'john.doe@school.edu',
-  phone: '+92 300 1234567',
-  designation: 'Senior Teacher',
-  department: 'Mathematics',
-  gender: 'Male',
-  address: 'House #12, Street 5, DHA, Lahore',
-  city: 'Lahore',
+  name: '',
+  email: '',
+  phone: '',
+  designation: '',
+  department: '',
+  gender: '',
+  address: '',
+  city: '',
   avatar: '',
   twoFA: false,
 };
 
 export default function Profile() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
+  const toast = useToast();
   const [form, setForm] = useState(initialProfile);
+  const [teacherId, setTeacherId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const kpis = useMemo(() => ({
     classes: 4,
@@ -46,10 +52,59 @@ export default function Profile() {
     tenure: '3y 7m',
   }), []);
 
-  const reset = () => setForm(initialProfile);
-  const save = () => {
-    // demo only
-    console.log('Profile saved', form);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const me = await teachersApi.me();
+        setTeacherId(me?.id || null);
+        setForm({
+          name: me?.name || '',
+          email: me?.email || '',
+          phone: me?.phone || '',
+          designation: me?.designation || '',
+          department: me?.department || '',
+          gender: me?.gender || '',
+          address: [me?.address1, me?.address2].filter(Boolean).join(', ') || '',
+          city: me?.city || '',
+          avatar: me?.avatar || '',
+          twoFA: false,
+        });
+      } catch (_) {
+        setForm(initialProfile);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const reset = () => setForm((s)=>({ ...s }));
+  const save = async () => {
+    try {
+      setSaving(true);
+      // Split address into line1/line2 naive split
+      const [address1='', address2=''] = String(form.address||'').split(',').map(x=>x.trim()).slice(0,2).concat(['','']).slice(0,2);
+      const payload = {
+        name: form.name,
+        phone: form.phone,
+        designation: form.designation,
+        department: form.department,
+        gender: form.gender,
+        address1,
+        address2,
+        city: form.city,
+        avatar: form.avatar,
+      };
+      // Update own profile
+      await teachersApi.updateMe(payload);
+      toast({ title: 'Profile updated', status: 'success' });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || 'Save failed';
+      toast({ title: 'Error', description: msg, status: 'error' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handle = (key) => (e) => setForm((s) => ({ ...s, [key]: e.target ? e.target.value : e }));
@@ -122,8 +177,8 @@ export default function Profile() {
             </HStack>
 
             <Flex justify='flex-end' gap={2} flexWrap='wrap' rowGap={3}>
-              <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh} />} onClick={reset}>Reset</Button>
-              <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdSave} />} onClick={save}>Save</Button>
+              <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh} />} onClick={reset} isDisabled={loading || saving}>Reset</Button>
+              <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdSave} />} onClick={save} isLoading={saving}>Save</Button>
             </Flex>
           </VStack>
         </Card>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Select, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Flex } from '@chakra-ui/react';
 import { MdFileDownload, MdPrint, MdRefresh, MdCheckCircle, MdAccessTime, MdCancel, MdTrendingUp } from 'react-icons/md';
 import Card from '../../../components/card/Card';
@@ -6,43 +6,98 @@ import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as attendanceApi from '../../../services/api/attendance';
 
-const months = [
-  { key: '2025-01', label: 'Jan 2025', days: 31 },
-  { key: '2025-02', label: 'Feb 2025', days: 28 },
-  { key: '2025-03', label: 'Mar 2025', days: 31 },
-  { key: '2025-04', label: 'Apr 2025', days: 30 },
-  { key: '2025-05', label: 'May 2025', days: 31 },
-];
+const buildRecentMonths = (count = 12) => {
+  const now = new Date();
+  return Array.from({ length: count }, (_, idx) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - idx, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return {
+      key: `${y}-${m}`,
+      label: d.toLocaleString(undefined, { month: 'short', year: 'numeric' }),
+    };
+  });
+};
+
+const months = buildRecentMonths(12);
 
 export default function MonthlyReport() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { user } = useAuth();
-  const student = useMemo(() => {
-    if (user?.role === 'student') {
-      const byEmail = mockStudents.find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s => s.name?.toLowerCase() === user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id: 999, name: user.name, rollNumber: 'STU999', class: '10', section: 'A', email: user.email };
-    }
-    return mockStudents[0];
-  }, [user]);
+  const [student, setStudent] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(months[0]);
 
+  useEffect(() => {
+    let mounted = true;
+    const loadSelf = async () => {
+      try {
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
+        if (mounted) setStudent(rows?.[0] || null);
+      } catch {
+        if (mounted) setStudent(null);
+      }
+    };
+    if (user?.role === 'student') loadSelf();
+    return () => { mounted = false; };
+  }, [user?.role]);
+
+  useEffect(() => {
+    const sid = student?.id;
+    if (!sid || !selectedMonth?.key) return;
+
+    const year = Number(String(selectedMonth.key).slice(0, 4));
+    const month = Number(String(selectedMonth.key).slice(5, 7));
+    if (!year || !month) return;
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    const startDate = start.toISOString().slice(0, 10);
+    const endDate = end.toISOString().slice(0, 10);
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await attendanceApi.list({ studentId: sid, startDate, endDate, pageSize: 200 });
+        setRecords(Array.isArray(res?.items) ? res.items : []);
+      } catch {
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [student?.id, selectedMonth?.key]);
+
   const daily = useMemo(() => {
-    const d = [];
-    for (let i = 1; i <= selectedMonth.days; i++) {
-      // Simple patterned mock: weekends absent on every 7th day, else present; day 5, 15, 25 late
-      const isLate = i % 10 === 5;
-      const isAbsent = i % 7 === 0;
-      const status = isAbsent ? 'Absent' : (isLate ? 'Late' : 'Present');
-      d.push({ day: i, status, in: isAbsent ? '-' : (isLate ? '08:35 AM' : '08:15 AM'), out: isAbsent ? '-' : '01:45 PM' });
+    const year = Number(String(selectedMonth.key).slice(0, 4));
+    const month = Number(String(selectedMonth.key).slice(5, 7));
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const byDate = new Map();
+    (records || []).forEach((r) => {
+      const key = String(r?.date || '').slice(0, 10);
+      if (key) byDate.set(key, r);
+    });
+
+    const list = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const d = new Date(year, month - 1, i);
+      const key = d.toISOString().slice(0, 10);
+      const rec = byDate.get(key);
+      let status = 'Not Marked';
+      if (rec?.status === 'present') status = 'Present';
+      else if (rec?.status === 'late') status = 'Late';
+      else if (rec?.status === 'absent') status = 'Absent';
+      else if (rec?.status === 'leave') status = 'Leave';
+      list.push({ day: i, status, in: rec?.checkInTime || '-', out: rec?.checkOutTime || '-' });
     }
-    return d;
-  }, [selectedMonth]);
+    return list;
+  }, [records, selectedMonth?.key]);
 
   const summary = useMemo(() => {
     const present = daily.filter(x => x.status === 'Present').length;
@@ -69,7 +124,11 @@ export default function MonthlyReport() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Monthly Attendance</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {student?.class ? ` • Class ${student.class}${student.section || ''}` : ''}
+      </Text>
 
       <Card p='16px' mb='16px'>
         <HStack justify='space-between' flexWrap='wrap' rowGap={3}>
@@ -86,6 +145,10 @@ export default function MonthlyReport() {
           </HStack>
         </HStack>
       </Card>
+
+      {loading && (
+        <Text fontSize='sm' color={textSecondary} mb='12px'>Loading...</Text>
+      )}
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

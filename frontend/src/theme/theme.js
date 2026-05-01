@@ -12,6 +12,7 @@ import { breakpoints } from "./foundations/breakpoints";
 import { globalStyles } from "./styles";
 export default extendTheme(
   { breakpoints }, // Breakpoints
+  { fonts: { heading: "Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'", body: "Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'" } },
   globalStyles,
   badgeStyles, // badge styles
   buttonStyles, // button styles

@@ -31,7 +31,7 @@ export const login = async (req, res, next) => {
       if (allowedModules.includes('Students')) allowedRoles.add('student');
       if (allowedModules.includes('Parents')) allowedRoles.add('parent');
       if (allowedModules.includes('Transport')) allowedRoles.add('driver');
-      if (allowedModules.includes('Dashboard') || allowedModules.includes('Settings')) allowedRoles.add('admin');
+      if (allowedModules.length > 0) { allowedRoles.add('admin'); allowedRoles.add('branch_admin'); }
     }
 
     // Ensure auth and campus schema changes are applied
@@ -114,8 +114,8 @@ export const login = async (req, res, next) => {
     if (user.role !== 'owner' && allowedRoles.size && !allowedRoles.has(user.role)) {
       return res.status(423).json({ message: 'Your role is not licensed for login on this installation.' });
     }
-    if (user.role === 'admin' && !user.campus_id) {
-      return res.status(403).json({ message: 'Admin account is not assigned to a campus' });
+    if ((user.role === 'admin' || user.role === 'branch_admin') && !user.campus_id) {
+      return res.status(403).json({ message: 'Branch administrator account is not assigned to a campus' });
     }
 
     const userPayload = {
@@ -137,8 +137,8 @@ export const login = async (req, res, next) => {
 // Get all users with pagination and filtering
 export const getAllUsers = async (req, res, next) => {
   try {
-    // Non-admin/owner users can only see their own user record
-    if (req.user?.role !== 'admin' && req.user?.role !== 'owner') {
+    // Non-admin/owner/branch_admin users can only see their own user record
+    if (req.user?.role !== 'admin' && req.user?.role !== 'owner' && req.user?.role !== 'branch_admin') {
       const self = await authService.findUserById(req.user.id);
       const userPayload = self
         ? {
@@ -158,8 +158,8 @@ export const getAllUsers = async (req, res, next) => {
     const where = [];
     const params = [];
 
-    // Admin/Owner: scope by campusId (auth middleware may override via x-campus-id for owner/superadmin)
-    if (req.user?.role === 'admin' && !req.user?.campusId) {
+    // Admin/Branch Admin/Owner: scope by campusId (auth middleware may override via x-campus-id for owner/superadmin)
+    if ((req.user?.role === 'admin' || req.user?.role === 'branch_admin') && !req.user?.campusId) {
       return res.json({ rows: [], total: 0, page: Number(page), pageSize: Number(pageSize) });
     }
     if (req.user?.campusId) {
@@ -188,9 +188,18 @@ export const getAllUsers = async (req, res, next) => {
 
     // Get users
     const { rows } = await query(
-      `SELECT id, username, email, role, name, created_at AS "createdAt"
-       FROM users ${whereSql}
-       ORDER BY created_at DESC
+      `SELECT u.id,
+              u.username,
+              u.email,
+              u.role,
+              u.name,
+              u.campus_id AS "campusId",
+              c.name AS "campusName",
+              u.created_at AS "createdAt"
+       FROM users u
+       LEFT JOIN campuses c ON c.id = u.campus_id
+       ${whereSql}
+       ORDER BY u.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, pageSize, offset]
     );
@@ -205,9 +214,9 @@ export const getAllUsers = async (req, res, next) => {
 export const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, email, role, password } = req.body;
+    const { name, email, role, password, campusId } = req.body;
 
-    if (req.user?.role === 'admin') {
+    if (req.user?.role === 'admin' || req.user?.role === 'branch_admin') {
       if (!req.user?.campusId) return res.status(403).json({ message: 'Forbidden' });
       const { rows } = await query('SELECT campus_id FROM users WHERE id = $1 LIMIT 1', [Number(id)]);
       const campus = rows[0]?.campus_id;
@@ -216,7 +225,7 @@ export const updateUser = async (req, res, next) => {
       }
     }
 
-    if (role === 'admin' && req.user?.role !== 'owner' && req.user?.role !== 'superadmin') {
+    if ((role === 'admin' || role === 'branch_admin' || role === 'owner') && req.user?.role !== 'owner' && req.user?.role !== 'superadmin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -228,6 +237,10 @@ export const updateUser = async (req, res, next) => {
     const updates = { name, email, role };
     if (password && password.length >= 6) {
       updates.passwordHash = await bcrypt.hash(password, 10);
+    }
+    // Include campusId when provided (needed for branch_admin role assignment)
+    if (campusId !== undefined && campusId !== null) {
+      updates.campusId = Number(campusId);
     }
 
     const updated = await authService.updateUser(id, updates);
@@ -244,7 +257,7 @@ export const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (req.user?.role === 'admin') {
+    if (req.user?.role === 'admin' || req.user?.role === 'branch_admin') {
       if (!req.user?.campusId) return res.status(403).json({ message: 'Forbidden' });
       const { rows } = await query('SELECT campus_id FROM users WHERE id = $1 LIMIT 1', [Number(id)]);
       const campus = rows[0]?.campus_id;
@@ -273,20 +286,39 @@ export const deleteUser = async (req, res, next) => {
 
 export const register = async (req, res, next) => {
   try {
+    // Check if licensing is already configured (via seed.js)
+    const licensingConfigured = await settingsSvc.getByKey('licensing.configured');
+    const isConfigured = String(licensingConfigured?.value || '').toLowerCase() === 'true';
+    
+    // If licensing is already configured via seed, allow registration
+    // Otherwise require authentication or ALLOW_PUBLIC_REGISTRATION env var
+    const allowPublic = isConfigured || String(process.env.ALLOW_PUBLIC_REGISTRATION || '').toLowerCase() === 'true';
+    
+    if (!req.user && !allowPublic) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     // Ensure campus schema changes are applied
     try { await ensureCampusSchema(); } catch (_) { }
 
     const { email, password, name, role, campusId } = req.body;
 
-    const finalCampusId = Number(campusId || req.user?.campusId) || null;
-    if (!finalCampusId) {
+    // Properly handle campusId: empty string should not become 0
+    let finalCampusId = null;
+    if (campusId && String(campusId).trim() !== '') {
+      finalCampusId = Number(campusId);
+    } else if (req.user?.campusId) {
+      finalCampusId = Number(req.user.campusId);
+    }
+    
+    if (!finalCampusId || finalCampusId <= 0) {
       return res.status(400).json({ message: 'Campus selection is mandatory' });
     }
 
     // Validate role is allowed
     const baseAllowedRoles = ['student', 'teacher', 'driver', 'parent'];
-    const canCreateAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
-    const allowedRoles = canCreateAdmin ? [...baseAllowedRoles, 'admin'] : baseAllowedRoles;
+    // If licensing is configured, treat as owner/superadmin for first-time setup
+    const canCreateAdmin = isConfigured || req.user?.role === 'owner' || req.user?.role === 'superadmin';
+    const allowedRoles = canCreateAdmin ? [...baseAllowedRoles, 'admin', 'branch_admin'] : baseAllowedRoles;
     if (role && !allowedRoles.includes(role)) {
       return res.status(400).json({
         message: `Invalid role. Allowed roles are: ${allowedRoles.join(', ')}`,
@@ -402,18 +434,18 @@ export const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
     // Non-admin/owner can only read themselves
-    if (req.user?.role !== 'admin' && req.user?.role !== 'owner') {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'branch_admin' && req.user?.role !== 'owner') {
       if (Number(id) !== Number(req.user.id)) return res.status(403).json({ message: 'Forbidden' });
     }
-    if (req.user?.role === 'admin' && !req.user?.campusId) {
+    if ((req.user?.role === 'admin' || req.user?.role === 'branch_admin') && !req.user?.campusId) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const user = await authService.findUserById(id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Admin/Owner: enforce campus scope
-    if ((req.user?.role === 'admin' || req.user?.role === 'owner' || req.user?.role === 'superadmin') && req.user?.campusId) {
+    // Admin/Branch Admin/Owner: enforce campus scope
+    if ((req.user?.role === 'admin' || req.user?.role === 'branch_admin' || req.user?.role === 'owner' || req.user?.role === 'superadmin') && req.user?.campusId) {
       if (Number(user.campus_id) !== Number(req.user.campusId)) {
         return res.status(404).json({ message: 'User not found' });
       }
@@ -446,8 +478,11 @@ export const backfillUsers = async (req, res, next) => {
 export const status = async (req, res, next) => {
   try {
     const force = String(process.env.FORCE_SETUP || '').toLowerCase() === 'true';
-    const lic = await settingsSvc.getByKey('licensing.configured');
-    let licensingConfigured = String(lic?.value || '').toLowerCase() === 'true';
+    let licensingConfigured = false;
+    try {
+      const lic = await settingsSvc.getByKey('licensing.configured');
+      licensingConfigured = String(lic?.value || '').toLowerCase() === 'true';
+    } catch (_) {}
     if (force) licensingConfigured = true;
     let allowedModules = [];
     try {
@@ -457,8 +492,11 @@ export const status = async (req, res, next) => {
     if (force && (!Array.isArray(allowedModules) || allowedModules.length === 0)) {
       allowedModules = ['Dashboard', 'Settings', 'Teachers', 'Students', 'Parents', 'Transport'];
     }
-    const { rows: adminRows } = await query('SELECT 1 FROM users WHERE role = $1 LIMIT 1', ['admin']);
-    const adminExists = adminRows.length > 0;
+    let adminExists = false;
+    try {
+      const { rows: adminRows } = await query('SELECT 1 FROM users WHERE role = $1 LIMIT 1', ['admin']);
+      adminExists = adminRows.length > 0;
+    } catch (_) {}
     return res.json({ licensingConfigured, allowedModules, adminExists });
   } catch (e) {
     next(e);

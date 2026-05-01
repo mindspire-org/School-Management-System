@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 // Roles that can be created by admin/owner (admin creation is restricted by controllers/routes)
-export const ALLOWED_USER_ROLES = ['student', 'teacher', 'driver', 'parent', 'admin'];
+export const ALLOWED_USER_ROLES = ['student', 'teacher', 'driver', 'parent', 'admin', 'branch_admin'];
 
 // Normalize Pakistan WhatsApp numbers to +92 format for consistent login identifiers
 const normalizePkPhone = (raw) => {
@@ -44,7 +44,7 @@ export const createUser = async ({ email, passwordHash, role = 'student', name, 
 };
 
 export const updateUser = async (id, updates) => {
-  const { name, email, role, passwordHash, active } = updates;
+  const { name, email, role, passwordHash, active, campusId } = updates;
   const fields = [];
   const values = [];
   let idx = 1;
@@ -56,13 +56,14 @@ export const updateUser = async (id, updates) => {
     fields.push(`role = $${idx++}`); values.push(role);
   }
   if (passwordHash !== undefined) { fields.push(`password_hash = $${idx++}`); values.push(passwordHash); }
+  if (campusId !== undefined) { fields.push(`campus_id = $${idx++}`); values.push(campusId); }
   // if (active !== undefined) { fields.push(`active = $${idx++}`); values.push(active); } // Active status column not in users table yet, skipping for now unless added
 
   if (fields.length === 0) return null;
 
   values.push(id);
   const { rows } = await query(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, email, role, name`,
+    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, email, role, name, campus_id`,
     values
   );
   return rows[0];

@@ -108,15 +108,13 @@ export default function UserReports() {
                 variant='mini'
                 mt='5px'
                 me='0px'
-                defaultValue='usd'>
-                <option value='usd'>USD</option>
-                <option value='eur'>EUR</option>
-                <option value='gba'>GBA</option>
+                defaultValue='pkr'>
+                <option value='pkr'>PKR</option>
               </Select>
             </Flex>
           }
           name='Your balance'
-          value='$1,000'
+          value='PKR 1,000'
         />
         <MiniStatistics
           startContent={

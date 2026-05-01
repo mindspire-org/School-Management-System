@@ -1,30 +1,46 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Button, Icon, useColorModeValue, FormControl, FormLabel, Switch, Select, Input, Checkbox, useToast, Divider, Badge, Flex } from '@chakra-ui/react';
 import { MdSave, MdRefresh, MdFileDownload, MdNotificationsActive, MdSettings, MdSchedule } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents, mockNotifications } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as notificationsApi from '../../../services/api/notifications';
 
 export default function Notifications(){
   const textSecondary = useColorModeValue('gray.600','gray.400');
+  const rowBg = useColorModeValue('gray.50','whiteAlpha.100');
   const { user } = useAuth();
   const toast = useToast();
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
+  const [student, setStudent] = useState(null);
+  const [items, setItems] = useState([]);
 
-  const unread = useMemo(()=> mockNotifications.filter(n=>!n.read).length, []);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+
+      try {
+        const payload = await notificationsApi.list({ page: 1, pageSize: 50 });
+        setItems(Array.isArray(payload?.items) ? payload.items : []);
+      } catch {
+        setItems([]);
+      }
+    };
+    load();
+  }, [user?.role]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
+
+  const unread = useMemo(() => (items || []).filter(n => !n?.isRead).length, [items]);
 
   const [prefs, setPrefs] = useState({
     email:true,
@@ -48,7 +64,7 @@ export default function Notifications(){
 
   const exportTxt = ()=>{
     const lines = [
-      `${student.name} (${student.rollNumber}) - Class ${classSection}`,
+      `${student?.name || user?.name || ''} (${student?.rollNumber || ''}) - Class ${classSection}`,
       `Channels: Email=${prefs.email}, SMS=${prefs.sms}, Push=${prefs.push}`,
       `Types: assignment=${prefs.assignment}, grade=${prefs.grade}, attendance=${prefs.attendance}, fee=${prefs.fee}, events=${prefs.events}`,
       `DND: ${prefs.dnd? `${prefs.dndStart}-${prefs.dndEnd}` : 'off'}`,
@@ -61,7 +77,11 @@ export default function Notifications(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Notifications</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -151,10 +171,37 @@ export default function Notifications(){
       <Card p='16px' mt='16px'>
         <Text fontWeight='bold' mb='8px'>Recent Notifications</Text>
         <VStack align='stretch' spacing={2}>
-          {mockNotifications.slice(0,6).map(n => (
-            <HStack key={n.id} justify='space-between' bg={useColorModeValue('gray.50','whiteAlpha.100')} p='10px' borderRadius='md'>
-              <HStack spacing={3}><Badge colorScheme={n.type==='fee'?'purple': n.type==='assignment'?'blue': n.type==='grade'?'green': n.type==='attendance'?'yellow':'gray'} textTransform='capitalize'>{n.type}</Badge><Text>{n.title}</Text></HStack>
-              <Text color={textSecondary} fontSize='sm'>{n.time}</Text>
+          {(items || []).slice(0,6).map(n => (
+            <HStack
+              key={n.id}
+              justify='space-between'
+              bg={rowBg}
+              p='10px'
+              borderRadius='md'
+              cursor={n?.isRead ? 'default' : 'pointer'}
+              onClick={async () => {
+                try {
+                  if (!n?.id || n?.isRead) return;
+                  await notificationsApi.markRead(n.id);
+                  setItems((prev) => (prev || []).map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+                } catch (e) {
+                  toast({ status: 'error', title: 'Failed to mark as read' });
+                }
+              }}
+            >
+              <HStack spacing={3}>
+                <Badge
+                  colorScheme={(n?.type || '') === 'fee' ? 'purple' : (n?.type || '') === 'assignment' ? 'blue' : (n?.type || '') === 'grade' ? 'green' : (n?.type || '') === 'attendance' ? 'yellow' : 'gray'}
+                  textTransform='capitalize'
+                  variant={n?.isRead ? 'subtle' : 'solid'}
+                >
+                  {n?.type || 'general'}
+                </Badge>
+                <Text>{n?.message || ''}</Text>
+              </HStack>
+              <Text color={textSecondary} fontSize='sm'>
+                {n?.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+              </Text>
             </HStack>
           ))}
         </VStack>

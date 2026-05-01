@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import * as settingsService from './settings.service.js';
 
 const getTeacherCampusId = async (teacherId) => {
   const { rows } = await query('SELECT campus_id FROM teachers WHERE id = $1', [teacherId]);
@@ -6,53 +7,54 @@ const getTeacherCampusId = async (teacherId) => {
 };
 
 const teacherSelect = `
-  id,
-  name,
-  email,
-  phone,
-  qualification,
-  gender,
-  dob,
-  blood_group AS "bloodGroup",
-  religion,
-  national_id AS "nationalId",
-  address_line1 AS "address1",
-  address_line2 AS "address2",
-  city,
-  state,
-  postal_code AS "postalCode",
-  emergency_name AS "emergencyName",
-  emergency_phone AS "emergencyPhone",
-  emergency_relation AS "emergencyRelation",
-  employment_type AS "employmentType",
-  joining_date AS "joiningDate",
-  employee_id AS "employeeId",
-  department,
-  designation,
-  experience_years AS "experienceYears",
-  specialization,
-  subject,
-  subjects,
-  classes,
-  employment_status AS "employmentStatus",
-  status,
-  probation_end_date AS "probationEndDate",
-  contract_end_date AS "contractEndDate",
-  work_hours_per_week AS "workHoursPerWeek",
-  base_salary AS "baseSalary",
-  allowances,
-  deductions,
-  salary,
-  currency,
-  pay_frequency AS "payFrequency",
-  payment_method AS "paymentMethod",
-  bank_name AS "bankName",
-  account_number AS "accountNumber",
-  iban,
-  avatar,
-  created_at AS "createdAt",
-  updated_at AS "updatedAt",
-  campus_id AS "campusId"
+  t.id,
+  t.name,
+  t.email,
+  t.phone,
+  t.qualification,
+  t.gender,
+  t.dob,
+  t.blood_group AS "bloodGroup",
+  t.religion,
+  t.national_id AS "nationalId",
+  t.address_line1 AS "address1",
+  t.address_line2 AS "address2",
+  t.city,
+  t.state,
+  t.postal_code AS "postalCode",
+  t.emergency_name AS "emergencyName",
+  t.emergency_phone AS "emergencyPhone",
+  t.emergency_relation AS "emergencyRelation",
+  t.employment_type AS "employmentType",
+  t.joining_date AS "joiningDate",
+  t.employee_id AS "employeeId",
+  t.department,
+  t.designation,
+  t.experience_years AS "experienceYears",
+  t.specialization,
+  t.subject,
+  t.subjects,
+  t.classes,
+  t.employment_status AS "employmentStatus",
+  t.status,
+  t.probation_end_date AS "probationEndDate",
+  t.contract_end_date AS "contractEndDate",
+  t.work_hours_per_week AS "workHoursPerWeek",
+  t.base_salary AS "baseSalary",
+  t.allowances,
+  t.deductions,
+  t.salary,
+  t.currency,
+  t.pay_frequency AS "payFrequency",
+  t.payment_method AS "paymentMethod",
+  t.bank_name AS "bankName",
+  t.account_number AS "accountNumber",
+  t.iban,
+  t.avatar,
+  t.created_at AS "createdAt",
+  t.updated_at AS "updatedAt",
+  t.campus_id AS "campusId",
+  c.name AS "campusName"
 `;
 
 const scheduleSelect = `
@@ -385,31 +387,54 @@ export const list = async ({ page = 1, pageSize = 50, q, campusId }) => {
   const where = [];
   if (q) {
     params.push(`%${q.toLowerCase()}%`);
-    where.push(`(LOWER(name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length} OR LOWER(employee_id) LIKE $${params.length})`);
+    where.push(`(LOWER(t.name) LIKE $${params.length} OR LOWER(t.email) LIKE $${params.length} OR LOWER(t.employee_id) LIKE $${params.length})`);
   }
   if (campusId) {
     params.push(campusId);
-    where.push(`campus_id = $${params.length}`);
+    where.push(`t.campus_id = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM teachers ${whereSql}`, params);
+  const { rows: countRows } = await query(`SELECT COUNT(*)::int AS count FROM teachers t ${whereSql}`, params);
   const total = countRows[0]?.count || 0;
 
   const { rows } = await query(
-    `SELECT ${teacherSelect} FROM teachers ${whereSql} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    `SELECT ${teacherSelect} FROM teachers t LEFT JOIN campuses c ON c.id = t.campus_id ${whereSql} ORDER BY t.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, offset]
   );
   return { rows: rows.map(mapTeacherRow), total, page, pageSize };
 };
 
 export const getById = async (id) => {
-  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers WHERE id = $1`, [id]);
+  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers t LEFT JOIN campuses c ON c.id = t.campus_id WHERE t.id = $1`, [id]);
   return rows[0] ? mapTeacherRow(rows[0]) : null;
 };
 
 export const getByUserId = async (userId) => {
-  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers WHERE user_id = $1`, [userId]);
+  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers t LEFT JOIN campuses c ON c.id = t.campus_id WHERE t.user_id = $1`, [userId]);
+  return rows[0] ? mapTeacherRow(rows[0]) : null;
+};
+
+export const updateById = async (id, data = {}) => {
+  const fields = [
+    'name','phone','gender','designation','department',
+    'address1','address2','city','state','postalCode','avatar'
+  ];
+  const sets = [];
+  const params = [];
+  fields.forEach((f) => {
+    if (data[f] !== undefined) {
+      params.push(data[f]);
+      sets.push(`${columnMap[f]} = $${params.length}`);
+    }
+  });
+  if (!sets.length) {
+    const existing = await getById(id);
+    return existing;
+  }
+  params.push(id);
+  await query(`UPDATE teachers SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params);
+  const { rows } = await query(`SELECT ${teacherSelect} FROM teachers WHERE id = $1`, [id]);
   return rows[0] ? mapTeacherRow(rows[0]) : null;
 };
 
@@ -485,11 +510,102 @@ export const create = async (payload = {}) => {
   const placeholders = columns.map((_, idx) => `$${idx + 1}`);
 
   try {
-    const { rows } = await query(
-      `INSERT INTO teachers (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING ${teacherSelect}`,
+      const { rows: teacherResult } = await query(
+      `INSERT INTO teachers (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING ${teacherSelect.replace('c.name AS "campusName"', "(SELECT name FROM campuses WHERE id = teachers.campus_id) AS \"campusName\"")}`,
       values
     );
-    return mapTeacherRow(rows[0]);
+    const teacher = mapTeacherRow(teacherResult[0]);
+
+    // Automatically create Subject Assignments and Schedule Slots
+    if (teacher.id) {
+      const teacherSubjects = Array.isArray(data.subjects) ? data.subjects : [];
+      const teacherClasses = Array.isArray(data.classes) ? data.classes : [];
+
+      for (const subjectName of teacherSubjects) {
+        try {
+          // 1. Find or create the subject — try with campus_id first, fall back without
+          let subjectId;
+          const { rows: existingSubjects } = await query('SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1', [subjectName]);
+          if (existingSubjects.length > 0) {
+            subjectId = existingSubjects[0].id;
+          } else {
+            // Try inserting with campus_id (available after campus migration), fall back to name-only
+            let newSub;
+            try {
+              const res = await query(
+                'INSERT INTO subjects (name, campus_id, is_shared) VALUES ($1, $2, true) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+                [subjectName, data.campusId]
+              );
+              newSub = res.rows;
+            } catch (_campusColErr) {
+              // campus_id column may not exist yet; insert without it
+              const res = await query(
+                'INSERT INTO subjects (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+                [subjectName]
+              );
+              newSub = res.rows;
+            }
+            subjectId = newSub[0]?.id;
+            if (!subjectId) {
+              // Last resort: re-query after conflict
+              const res = await query('SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1', [subjectName]);
+              subjectId = res.rows[0]?.id;
+            }
+          }
+
+          if (!subjectId) {
+            console.error(`Could not find or create subject "${subjectName}" for teacher ${teacher.id}`);
+            continue;
+          }
+
+          // 2. Create the assignment — try with campus_id, fall back without
+          const isPrimary = subjectName === data.subject;
+          try {
+            await query(
+              `INSERT INTO teacher_subject_assignments (teacher_id, subject_id, classes, is_primary, campus_id)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT ON CONSTRAINT teacher_subject_assignments_unique DO UPDATE SET
+                 classes = EXCLUDED.classes,
+                 is_primary = EXCLUDED.is_primary`,
+              [teacher.id, subjectId, JSON.stringify(teacherClasses), isPrimary, data.campusId]
+            );
+          } catch (_campusColErr2) {
+            // campus_id column may not exist yet; insert without it
+            await query(
+              `INSERT INTO teacher_subject_assignments (teacher_id, subject_id, classes, is_primary)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT ON CONSTRAINT teacher_subject_assignments_unique DO UPDATE SET
+                 classes = EXCLUDED.classes,
+                 is_primary = EXCLUDED.is_primary`,
+              [teacher.id, subjectId, JSON.stringify(teacherClasses), isPrimary]
+            );
+          }
+
+          // 3. Create schedule slots for each class if not existing
+          for (const classLabel of teacherClasses) {
+            const parts = classLabel.split('-');
+            const className = parts[0];
+            const section = parts[1] || '';
+
+            try {
+              await query(
+                `INSERT INTO teacher_schedules (teacher_id, day_of_week, start_time, end_time, class, section, subject)
+                 VALUES ($1, 1, '08:00', '09:00', $2, $3, $4)
+                 ON CONFLICT DO NOTHING`,
+                [teacher.id, className, section, subjectName]
+              );
+            } catch (scheduleErr) {
+              console.error(`Error creating schedule slot for teacher ${teacher.id}:`, scheduleErr.message);
+            }
+          }
+        } catch (autoErr) {
+          console.error(`Error in automatic allocation for teacher ${teacher.id}, subject "${subjectName}":`, autoErr.message || autoErr);
+          // Don't throw — teacher creation succeeded even if auto-allocation fails partially
+        }
+      }
+    }
+
+    return teacher;
   } catch (err) {
     // Map PG unique violations to user-friendly API errors
     if (err && err.code === '23505') {
@@ -685,16 +801,81 @@ export const getAttendanceByDate = async ({ date, teacherId, campusId }) => {
   return rows.map(mapAttendanceRow);
 };
 
+export const getAttendanceByDateRange = async ({ teacherId, startDate, endDate, campusId }) => {
+  const params = [startDate, endDate];
+  let filter = '';
+  
+  if (teacherId) {
+    params.push(teacherId);
+    filter += ` AND ta.teacher_id = $${params.length}`;
+  }
+  if (campusId) {
+    params.push(campusId);
+    filter += ` AND t.campus_id = $${params.length}`;
+  }
+  
+  const { rows } = await query(
+    `SELECT 
+       ta.attendance_date AS date,
+       ta.status,
+       ta.check_in_time AS "checkInTime",
+       ta.check_out_time AS "checkOutTime",
+       ta.remarks,
+       t.name AS "teacherName",
+       t.employee_id AS "employeeId",
+       t.department
+     FROM teacher_attendance ta
+     JOIN teachers t ON t.id = ta.teacher_id
+     WHERE ta.attendance_date >= $1 
+       AND ta.attendance_date <= $2
+       ${filter}
+     ORDER BY ta.attendance_date DESC`,
+    params
+  );
+  
+  return rows;
+};
+
 export const upsertAttendanceEntries = async ({ date, entries = [], recordedBy }) => {
   if (!entries.length) return await getAttendanceByDate({ date });
+
+  let schoolStartTime = null;
+  try {
+    const profileSetting = await settingsService.getByKey('school.profile');
+    if (profileSetting && profileSetting.value) {
+      const profile = JSON.parse(profileSetting.value);
+      schoolStartTime = profile.schoolStartTime || null;
+    }
+  } catch (e) {
+    console.error('Error fetching school start time for teacher attendance:', e);
+  }
+
   const columns = ['teacher_id', 'attendance_date', 'status', 'check_in_time', 'check_out_time', 'remarks', 'recorded_by'];
   const values = [];
   const tuples = entries.map((entry, idx) => {
+    let status = entry.status;
+    let checkInTime = entry.checkInTime ?? null;
+
+    // Auto-late logic
+    if (status === 'present' && schoolStartTime) {
+      const now = new Date();
+      const [startH, startM] = schoolStartTime.split(':').map(Number);
+      const currentH = now.getHours();
+      const currentM = now.getMinutes();
+      if (currentH > startH || (currentH === startH && currentM > startM)) {
+        status = 'late';
+        // Update check-in time if it was just being set to "present"
+        if (!checkInTime) {
+          checkInTime = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}`;
+        }
+      }
+    }
+
     values.push(
       entry.teacherId,
       date,
-      entry.status,
-      entry.checkInTime ?? null,
+      status,
+      checkInTime,
       entry.checkOutTime ?? null,
       entry.remarks ?? null,
       recordedBy ?? null
@@ -1213,6 +1394,120 @@ export const removeSubjectAssignment = async (id) => {
   const { rowCount } = await query('DELETE FROM teacher_subject_assignments WHERE id = $1', [id]);
   return rowCount > 0;
 };
+
+/**
+ * Backfill subject assignments from each teacher's JSONB `subjects`/`classes` arrays.
+ * Creates `teacher_subject_assignments` rows for any teachers who have subjects in the JSONB
+ * column but not in the assignments table. Useful for migrating data from before the
+ * auto-allocation feature.
+ */
+export const backfillSubjectAssignments = async ({ campusId } = {}) => {
+  const params = [];
+  const conditions = ['jsonb_array_length(subjects) > 0'];
+  if (campusId) {
+    params.push(Number(campusId));
+    conditions.push(`campus_id = $${params.length}`);
+  }
+  const whereSql = `WHERE ${conditions.join(' AND ')}`;
+
+  // Fetch all teachers that have at least one subject in their JSONB column
+  const { rows: teacherRows } = await query(
+    `SELECT id, name, subjects, classes, subject, campus_id
+       FROM teachers
+       ${whereSql}`,
+    params
+  );
+
+  let created = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const teacher of teacherRows) {
+    const teacherSubjects = Array.isArray(teacher.subjects) ? teacher.subjects : [];
+    const teacherClasses = Array.isArray(teacher.classes) ? teacher.classes : [];
+    const primarySubject = teacher.subject;
+    const tCampusId = teacher.campus_id;
+
+    for (const subjectName of teacherSubjects) {
+      if (!subjectName || typeof subjectName !== 'string') continue;
+      try {
+        // Find or create subject
+        let subjectId;
+        const { rows: existing } = await query(
+          'SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+          [subjectName]
+        );
+        if (existing.length > 0) {
+          subjectId = existing[0].id;
+        } else {
+          let newSub;
+          try {
+            const res = await query(
+              'INSERT INTO subjects (name, campus_id, is_shared) VALUES ($1, $2, true) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+              [subjectName, tCampusId]
+            );
+            newSub = res.rows;
+          } catch (_) {
+            const res = await query(
+              'INSERT INTO subjects (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id',
+              [subjectName]
+            );
+            newSub = res.rows;
+          }
+          subjectId = newSub[0]?.id;
+          if (!subjectId) {
+            const res = await query('SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1', [subjectName]);
+            subjectId = res.rows[0]?.id;
+          }
+        }
+
+        if (!subjectId) {
+          errors.push(`Teacher ${teacher.id}: could not resolve subject "${subjectName}"`);
+          continue;
+        }
+
+        // Check if assignment already exists
+        const { rows: existingAssignment } = await query(
+          `SELECT id FROM teacher_subject_assignments WHERE teacher_id = $1 AND subject_id = $2 LIMIT 1`,
+          [teacher.id, subjectId]
+        );
+
+        if (existingAssignment.length > 0) {
+          skipped++;
+          continue;
+        }
+
+        const isPrimary = subjectName === primarySubject;
+        // Insert assignment
+        try {
+          await query(
+            `INSERT INTO teacher_subject_assignments (teacher_id, subject_id, classes, is_primary, campus_id)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT ON CONSTRAINT teacher_subject_assignments_unique DO UPDATE SET
+               classes = EXCLUDED.classes,
+               is_primary = EXCLUDED.is_primary`,
+            [teacher.id, subjectId, JSON.stringify(teacherClasses), isPrimary, tCampusId]
+          );
+        } catch (_campusErr) {
+          await query(
+            `INSERT INTO teacher_subject_assignments (teacher_id, subject_id, classes, is_primary)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT ON CONSTRAINT teacher_subject_assignments_unique DO UPDATE SET
+               classes = EXCLUDED.classes,
+               is_primary = EXCLUDED.is_primary`,
+            [teacher.id, subjectId, JSON.stringify(teacherClasses), isPrimary]
+          );
+        }
+        created++;
+      } catch (err) {
+        errors.push(`Teacher ${teacher.id}, subject "${subjectName}": ${err.message}`);
+      }
+    }
+  }
+
+  return { teachers: teacherRows.length, created, skipped, errors };
+};
+
 
 export const getMyClassesSummary = async (teacherId) => {
   const campusId = await getTeacherCampusId(teacherId);

@@ -1,6 +1,8 @@
 import * as parents from '../services/parents.service.js';
 import { ensureParentsSchema } from '../db/autoMigrate.js';
 import * as settingsSvc from '../services/settings.service.js';
+import * as twilio from '../services/twilio.service.js';
+import * as parentMsgs from '../services/parentMessages.service.js';
 
 export const list = async (req, res, next) => {
   try {
@@ -48,16 +50,16 @@ export const inform = async (req, res, next) => {
   try {
     await ensureParentsSchema();
     const { id } = req.params;
-    const { childId, message } = req.body || {};
+    const { childId, message, toPhone, fromPhone, channel } = req.body || {};
     if (!message) return res.status(400).json({ message: 'Message is required' });
     const p = await parents.getById(Number(id));
     if (!p) return res.status(404).json({ message: 'Parent not found' });
     const hasChild = Array.isArray(p.children) && p.children.some((c) => String(c.id) === String(childId));
     if (childId && !hasChild) return res.status(400).json({ message: 'Child not linked to this parent' });
 
-    // Optional webhook integration
     let delivered = false;
     let via = 'noop';
+    let error = null;
     const normalizePk = (raw) => {
       if (!raw) return raw;
       const digits = String(raw).replace(/\D/g, '');
@@ -66,7 +68,33 @@ export const inform = async (req, res, next) => {
       if (digits.length === 10 && digits.startsWith('3')) return `+92${digits}`;
       return raw.startsWith('+') ? raw : `+${digits}`;
     };
-    const toNumber = normalizePk(p.whatsappPhone);
+    const toNumber = normalizePk(toPhone || p.whatsappPhone);
+    const fromNumber = normalizePk(fromPhone || null);
+    try {
+      const ch = (channel || 'whatsapp').toLowerCase();
+      if (!delivered && toNumber && ch === 'whatsapp' && (await twilio.canUseWhatsApp())) {
+        await twilio.sendWhatsAppText({ to: toNumber, from: fromNumber || undefined, body: message });
+        delivered = true;
+        via = 'twilio:whatsapp';
+      } else if (!delivered && toNumber && ch === 'sms' && (await twilio.canUseSms())) {
+        await twilio.sendSmsText({ to: toNumber, from: fromNumber || undefined, body: message });
+        delivered = true;
+        via = 'twilio:sms';
+      }
+    } catch (err) {
+      error = err?.message || String(err);
+      via = 'twilio:error';
+      // Fallback to SMS automatically when WhatsApp fails and SMS is available
+      try {
+        if (!delivered && toNumber && (await twilio.canUseSms())) {
+          await twilio.sendSmsText({ to: toNumber, from: fromNumber || undefined, body: message });
+          delivered = true;
+          via = 'twilio:sms';
+        }
+      } catch (err2) {
+        error = error || (err2?.message || String(err2));
+      }
+    }
     try {
       let webhook = process.env.WHATSAPP_WEBHOOK_URL;
       if (!webhook) {
@@ -79,14 +107,14 @@ export const inform = async (req, res, next) => {
         await fetch(webhook, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: toNumber, text: message, familyNumber: p.familyNumber, childId })
+          body: JSON.stringify({ to: toNumber, from: fromNumber || undefined, text: message, familyNumber: p.familyNumber, childId })
         });
         delivered = true;
         via = 'webhook';
       }
-    } catch (_) { }
-
-    // WhatsApp Cloud API (fallback if webhook not configured)
+    } catch (err) {
+      error = error || (err?.message || String(err));
+    }
     try {
       if (!delivered && toNumber && typeof fetch === 'function') {
         let cloudToken = process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
@@ -118,9 +146,26 @@ export const inform = async (req, res, next) => {
           }
         }
       }
-    } catch (_) { }
+    } catch (err) {
+      error = error || (err?.message || String(err));
+    }
 
-    res.json({ success: true, delivered, via, to: toNumber || null });
+    try {
+      const campusId = req.user?.campusId || null;
+      await parentMsgs.create({
+        parentId: Number(id),
+        childId: childId ? Number(childId) : null,
+        to: toNumber || null,
+        from: fromNumber || null,
+        channel: via.startsWith('twilio') ? (via.includes('sms') ? 'sms' : 'whatsapp') : via,
+        direction: 'outbound',
+        body: message,
+        status: delivered ? 'sent' : 'queued',
+        campusId
+      });
+    } catch (_) {}
+
+    res.json({ success: true, delivered, via, to: toNumber || null, from: fromNumber || null, error });
   } catch (e) { next(e); }
 };
 export const remove = async (req, res, next) => {
@@ -128,5 +173,14 @@ export const remove = async (req, res, next) => {
     const success = await parents.remove(Number(req.params.id));
     if (!success) return res.status(404).json({ message: 'Parent not found' });
     res.json({ success: true });
+  } catch (e) { next(e); }
+};
+
+export const listMessages = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, pageSize = 100 } = req.query || {};
+    const items = await parentMsgs.listByParent({ parentId: Number(id), page: Number(page), pageSize: Number(pageSize) });
+    res.json({ items });
   } catch (e) { next(e); }
 };

@@ -2,7 +2,7 @@ import * as students from '../services/students.service.js';
 import bcrypt from 'bcryptjs';
 import * as authSvc from '../services/auth.service.js';
 import cloudinary from '../config/cloudinary.js';
-import { ensureStudentExtendedColumns, ensureFinanceConstraints, ensureParentsSchema } from '../db/autoMigrate.js';
+import { ensureAuthSchema, ensureStudentExtendedColumns, ensureFinanceConstraints, ensureParentsSchema } from '../db/autoMigrate.js';
 import * as parentsSvc from '../services/parents.service.js';
 import { upsertParentUserForPhone } from '../services/auth.service.js';
 import * as teachersSvc from '../services/teachers.service.js';
@@ -80,50 +80,63 @@ export const create = async (req, res, next) => {
   try {
     await ensureStudentExtendedColumns();
     await ensureParentsSchema();
+    const id = Number(req.params.id);
     const payload = { ...req.body };
 
-    if (!payload.avatar) {
-      payload.avatar = payload.photo || payload.photoUrl || payload.imageUrl || payload.personal?.photo || null;
-    }
-
-    let credentials = null;
-    // Upload base64 avatar to Cloudinary if provided
+    // Handle avatar upload if base64
     if (payload.avatar && typeof payload.avatar === 'string' && payload.avatar.startsWith('data:')) {
       try {
         const upload = await cloudinary.uploader.upload(payload.avatar, { folder: 'students' });
         payload.avatar = upload.secure_url;
-      } catch (_) {
-        // If upload fails, keep the provided avatar as-is
+      } catch (_) {}
+    }
+
+    // Sync Parent details if provided
+    if (payload.parent || payload.parentName || payload.parentPhone) {
+      try {
+        const p = payload.parent || {};
+        const g = p.guardian || {};
+        const phone = (p?.hasGuardian && g?.phone) || p?.father?.phone || p?.mother?.phone || payload.parentPhone;
+        const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || payload.parentName || payload.name || 'Parent';
+
+        if (phone) {
+          // 1. Update parent record in parents table
+          const familyNumberInput = payload.familyNumber || p.familyNumber;
+          const ensured = await parentsSvc.ensureByFamilyNumber({
+            familyNumber: familyNumberInput,
+            primaryName: parentName,
+            fatherName: p?.father?.name || null,
+            motherName: p?.mother?.name || null,
+            whatsappPhone: phone,
+            email: p?.father?.email || p?.mother?.email || payload.email || null,
+            address: p?.address || null,
+          });
+          if (ensured?.familyNumber) payload.familyNumber = ensured.familyNumber;
+
+          // 2. Sync to users table for Parent Portal
+          const pwd = (p?.hasGuardian && g?.portalPassword) || p?.portalPassword;
+          const conf = (p?.hasGuardian && g?.portalPasswordConfirm) || p?.portalPasswordConfirm;
+          
+          if (pwd && String(pwd).length >= 4) {
+            if (!conf || String(conf) === String(pwd)) {
+              await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName });
+            }
+          } else {
+            const emailLike = authSvc.normalizePkPhone(phone);
+            const existing = await authSvc.findUserByEmail(emailLike);
+            if (existing) {
+              const { query: dbQuery } = await import('../config/db.js');
+              await dbQuery('UPDATE users SET name = COALESCE($2, name), role = $3 WHERE id = $1', [existing.id, parentName, 'parent']);
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.error('Parent sync failed in create:', syncErr);
       }
     }
-    // Ensure a parents record exists and attach family number
-    try {
-      const p = payload.parent || {};
-      const g = p.guardian || {};
-      const familyNumberInput = payload.familyNumber || p.familyNumber;
-      const ensured = await parentsSvc.ensureByFamilyNumber({
-        familyNumber: familyNumberInput,
-        primaryName: (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || payload.parentName || payload.name || null,
-        fatherName: p?.father?.name || null,
-        motherName: p?.mother?.name || null,
-        whatsappPhone: (p?.hasGuardian && g?.phone) || p?.father?.phone || p?.mother?.phone || null,
-        email: p?.father?.email || p?.mother?.email || payload.email || null,
-        address: p?.address || null,
-      });
-      if (ensured?.familyNumber) payload.familyNumber = ensured.familyNumber;
-      // If a Parent/Guardian Portal password was provided, create/update a parent user now
-      const pwd = (p?.hasGuardian && g?.portalPassword) || p?.portalPassword;
-      const conf = (p?.hasGuardian && g?.portalPasswordConfirm) || p?.portalPasswordConfirm;
-      const phone = (p?.hasGuardian && g?.phone) || p?.father?.phone || p?.mother?.phone;
-      const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || payload.parentName || payload.name || 'Parent';
-      if (pwd && String(pwd).length >= 4 && phone) {
-        if (!conf || String(conf) === String(pwd)) {
-          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) { }
-        }
-      }
-    } catch (_) { }
 
     // Auto-provision user account if not already linked
+    let credentials = null;
     if (!payload.userId) {
       let user = null;
       if (payload.email) {
@@ -159,6 +172,8 @@ export const create = async (req, res, next) => {
 export const update = async (req, res, next) => {
   try {
     await ensureStudentExtendedColumns();
+    await ensureParentsSchema();
+    const id = Number(req.params.id);
     const data = { ...req.body };
 
     if (!data.avatar) {
@@ -174,22 +189,48 @@ export const update = async (req, res, next) => {
         // If upload fails, keep the provided avatar as-is
       }
     }
-    // If Parent/Guardian portal password is supplied on update, upsert the parent user
-    try {
-      const p = data.parent || {};
-      const g = p.guardian || {};
-      const pwd = (p?.hasGuardian && g?.portalPassword) || p?.portalPassword;
-      const conf = (p?.hasGuardian && g?.portalPasswordConfirm) || p?.portalPasswordConfirm;
-      const phone = (p?.hasGuardian && g?.phone) || p?.father?.phone || p?.mother?.phone;
-      const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || data.parentName || data.name || 'Parent';
-      if (pwd && String(pwd).length >= 4 && phone) {
-        if (!conf || String(conf) === String(pwd)) {
-          try { await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName }); } catch (_) { }
-        }
-      }
-    } catch (_) { }
 
-    const updated = await students.update(Number(req.params.id), data);
+    // Sync Parent details if provided
+    if (data.parent || data.parentName || data.parentPhone) {
+      try {
+        const p = data.parent || {};
+        const g = p.guardian || {};
+        const phone = (p?.hasGuardian && g?.phone) || p?.father?.phone || p?.mother?.phone || data.parentPhone;
+        const parentName = (p?.hasGuardian && g?.name) || p?.father?.name || p?.mother?.name || data.parentName || 'Parent';
+
+        if (phone) {
+          // 1. Update parent record in parents table
+          await parentsSvc.ensureByFamilyNumber({
+            familyNumber: data.familyNumber || p.familyNumber,
+            primaryName: parentName,
+            whatsappPhone: phone,
+            email: p?.father?.email || p?.mother?.email || null,
+            address: p?.address || null,
+          });
+
+          // 2. Sync to users table for Parent Portal
+          const pwd = (p?.hasGuardian && g?.portalPassword) || p?.portalPassword;
+          const conf = (p?.hasGuardian && g?.portalPasswordConfirm) || p?.portalPasswordConfirm;
+          
+          const emailLike = authSvc.normalizePkPhone(phone);
+          const existing = await authSvc.findUserByEmail(emailLike);
+
+          if (pwd && String(pwd).length >= 4) {
+            if (!conf || String(conf) === String(pwd)) {
+              await upsertParentUserForPhone({ phone, password: String(pwd), name: parentName });
+            }
+          } else if (existing) {
+            // Update name/role even if password isn't changed
+            const { query: dbQuery } = await import('../config/db.js');
+            await dbQuery('UPDATE users SET name = COALESCE($2, name), role = $3 WHERE id = $1', [existing.id, parentName, 'parent']);
+          }
+        }
+      } catch (syncErr) {
+        console.error('Parent sync failed in update:', syncErr);
+      }
+    }
+
+    const updated = await students.update(id, data);
     if (!updated) return res.status(404).json({ message: 'Student not found' });
     return res.json(updated);
   } catch (e) { next(e); }
@@ -397,9 +438,12 @@ export const changeMyPassword = async (req, res, next) => {
       return res.status(400).json({ message: 'New password must be at least 6 characters' });
     }
 
-    const full = req.user?.email
-      ? await authSvc.findUserByEmail(req.user.email)
-      : null;
+    // Look up the full user record (with password_hash) by user ID to support username-only accounts
+    const { rows } = await import('../config/db.js').then(m => m.query(
+      'SELECT id, password_hash FROM users WHERE id = $1',
+      [req.user.id]
+    ));
+    const full = rows[0];
     if (!full) return res.status(404).json({ message: 'User not found' });
     const ok = await bcrypt.compare(String(currentPassword), full.password_hash || '');
     if (!ok) return res.status(401).json({ message: 'Invalid current password' });
@@ -412,6 +456,7 @@ export const changeMyPassword = async (req, res, next) => {
     next(e);
   }
 };
+
 
 export const getDashboardStats = async (req, res, next) => {
   try {

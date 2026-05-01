@@ -2,6 +2,7 @@ import * as teachers from '../services/teachers.service.js';
 import { query } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import * as authSvc from '../services/auth.service.js';
+import { ensureAuthSchema } from '../db/autoMigrate.js';
 
 const coerceString = (value) => {
   if (value === undefined) return undefined;
@@ -113,9 +114,16 @@ const normalizeTeacherPayload = (raw = {}, { partial = false } = {}) => {
   assignNumber('baseSalary');
   assignNumber('allowances');
   assignNumber('deductions');
+  assignNumber('campusId');
 
   assignArray('subjects');
   assignArray('classes');
+
+  // Handle campusId if not already assigned
+  if (raw.campusId !== undefined && data.campusId === undefined) {
+    const cid = Number(raw.campusId);
+    if (!isNaN(cid) && cid > 0) data.campusId = cid;
+  }
 
   const avatar = coerceString(raw.avatar) ?? coerceString(raw.photo) ?? coerceString(raw.photoUrl) ?? coerceString(raw.profilePhoto) ?? coerceString(raw.profilePhotoUrl);
   if (avatar !== undefined) data.avatar = avatar;
@@ -154,13 +162,15 @@ export const list = async (req, res, next) => {
     }
     const { page = 1, pageSize = 50, q } = req.query;
     const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
-    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    // Handle 'all' string case - treat as undefined to allow all campuses view for global admins
+    const rawCampusId = req.query.campusId;
+    const requestedCampusId = rawCampusId && String(rawCampusId).toLowerCase() !== 'all' ? Number(rawCampusId) : undefined;
     const campusId = isGlobalAdmin
       ? (requestedCampusId ?? req.user?.campusId)
       : req.user?.campusId;
 
-    // Force campus scoping for owner/superadmin: never return all campuses by default
-    if (isGlobalAdmin && !campusId) {
+    // For global admins: if explicitly requesting all (undefined), allow it; otherwise enforce campus scoping
+    if (!isGlobalAdmin && !campusId) {
       return res.json({ rows: [], total: 0, page: Number(page), pageSize: Number(pageSize) });
     }
     const result = await teachers.list({
@@ -170,6 +180,50 @@ export const list = async (req, res, next) => {
       campusId
     });
     return res.json(result);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const markMyAttendance = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'teacher') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const self = await teachers.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Teacher profile not found' });
+
+    const date = req.body?.date;
+    if (!date) return res.status(400).json({ message: 'date is required' });
+
+    const rawStatus = String(req.body?.status || '').toLowerCase();
+    const normalized = rawStatus === 'leave'
+      ? { status: 'absent', remarks: 'Leave' }
+      : { status: rawStatus, remarks: req.body?.remarks };
+
+    if (!['present', 'absent', 'late'].includes(normalized.status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+
+    const records = await teachers.upsertAttendanceEntries({
+      date,
+      recordedBy: null,
+      entries: [
+        {
+          teacherId: self.id,
+          status: normalized.status,
+          checkInTime: null,
+          checkOutTime: null,
+          remarks: normalized.remarks ?? null,
+        },
+      ],
+    });
+
+    const record = Array.isArray(records)
+      ? records.find((r) => String(r?.teacherId) === String(self.id))
+      : null;
+    return res.json({ success: true, record: record || null });
   } catch (e) {
     next(e);
   }
@@ -204,6 +258,7 @@ export const getSchedule = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
+    try { await ensureAuthSchema(); } catch (_) { }
     const payload = normalizeTeacherPayload(req.body, { partial: false });
     let credentials = null;
     // Auto-provision user account if not already linked
@@ -222,7 +277,7 @@ export const create = async (req, res, next) => {
           passwordHash,
           role: 'teacher',
           name: payload.name || username,
-          campusId: req.user?.campusId || payload.campusId
+          campusId: payload.campusId || req.user?.campusId
         });
         credentials = { username, password };
       }
@@ -311,6 +366,39 @@ export const updateScheduleSlot = async (req, res, next) => {
   }
 };
 
+export const getMe = async (req, res, next) => {
+  try {
+    const self = await teachers.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Teacher profile not found' });
+    return res.json(self);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const updateMe = async (req, res, next) => {
+  try {
+    const self = await teachers.getByUserId(req.user.id);
+    if (!self) return res.status(404).json({ message: 'Teacher profile not found' });
+    const allowed = {
+      name: req.body?.name,
+      phone: req.body?.phone,
+      gender: req.body?.gender,
+      designation: req.body?.designation,
+      department: req.body?.department,
+      address1: req.body?.address1,
+      address2: req.body?.address2,
+      city: req.body?.city,
+      state: req.body?.state,
+      postalCode: req.body?.postalCode,
+      avatar: req.body?.avatar,
+    };
+    const updated = await teachers.updateById(self.id, allowed);
+    if (!updated) return res.status(404).json({ message: 'Teacher not found' });
+    return res.json(updated);
+  } catch (e) { next(e); }
+};
+
 export const deleteScheduleSlot = async (req, res, next) => {
   try {
     const ok = await teachers.deleteScheduleSlot(Number(req.params.scheduleId));
@@ -331,7 +419,9 @@ export const listAttendance = async (req, res, next) => {
     }
 
     const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
-    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    // Handle 'all' string case
+    const rawCampusId = req.query.campusId;
+    const requestedCampusId = rawCampusId && String(rawCampusId).toLowerCase() !== 'all' ? Number(rawCampusId) : undefined;
     const campusId = isGlobalAdmin
       ? (requestedCampusId ?? req.user?.campusId)
       : req.user?.campusId;
@@ -369,6 +459,57 @@ export const saveAttendance = async (req, res, next) => {
   }
 };
 
+export const getMonthlyAttendance = async (req, res, next) => {
+  try {
+    const teacherId = Number(req.params.id);
+    const { startDate, endDate, month } = req.query;
+    
+    // Determine date range
+    let start = startDate;
+    let end = endDate;
+    
+    if (month && !start && !end) {
+      // If month provided (YYYY-MM), calculate start and end dates
+      const [year, monthNum] = month.split('-');
+      start = `${year}-${monthNum}-01`;
+      end = new Date(Number(year), Number(monthNum), 0).toISOString().split('T')[0];
+    }
+    
+    if (!start || !end) {
+      // Default to current month if no dates provided
+      const now = new Date();
+      const year = now.getFullYear();
+      const monthNum = String(now.getMonth() + 1).padStart(2, '0');
+      start = `${year}-${monthNum}-01`;
+      end = new Date(year, now.getMonth() + 1, 0).toISOString().split('T')[0];
+    }
+    
+    const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
+    // Handle 'all' string case
+    const rawCampusId = req.query.campusId;
+    const requestedCampusId = rawCampusId && String(rawCampusId).toLowerCase() !== 'all' ? Number(rawCampusId) : undefined;
+    const campusId = isGlobalAdmin
+      ? (requestedCampusId ?? req.user?.campusId)
+      : req.user?.campusId;
+    
+    const records = await teachers.getAttendanceByDateRange({
+      teacherId,
+      startDate: start,
+      endDate: end,
+      campusId
+    });
+    
+    return res.json({ 
+      teacherId, 
+      startDate: start, 
+      endDate: end, 
+      records 
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const listPayrolls = async (req, res, next) => {
   try {
     let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
@@ -378,13 +519,15 @@ export const listPayrolls = async (req, res, next) => {
     }
 
     const isGlobalAdmin = req.user?.role === 'owner' || req.user?.role === 'superadmin';
-    const requestedCampusId = req.query.campusId ? Number(req.query.campusId) : undefined;
+    // Handle 'all' string case
+    const rawCampusId = req.query.campusId;
+    const requestedCampusId = rawCampusId && String(rawCampusId).toLowerCase() !== 'all' ? Number(rawCampusId) : undefined;
     const campusId = isGlobalAdmin
       ? (requestedCampusId ?? req.user?.campusId)
       : req.user?.campusId;
 
-    // Force campus scoping for owner/superadmin: never return all campuses by default
-    if (isGlobalAdmin && !campusId) {
+    // For global admins: if explicitly requesting all (undefined), allow it; otherwise enforce campus scoping
+    if (!isGlobalAdmin && !campusId) {
       return res.json([]);
     }
     const payrolls = await teachers.listPayrolls({
@@ -565,8 +708,13 @@ export const removeSubject = async (req, res, next) => {
 
 export const listSubjectAssignments = async (req, res, next) => {
   try {
+    let teacherId = req.query.teacherId ? Number(req.query.teacherId) : undefined;
+    if (req.user?.role === 'teacher') {
+      const self = await teachers.getByUserId(req.user.id);
+      teacherId = self?.id;
+    }
     const assignments = await teachers.listSubjectAssignments({
-      teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
+      teacherId,
       subjectId: req.query.subjectId ? Number(req.query.subjectId) : undefined,
       campusId: req.user?.campusId,
     });
@@ -663,6 +811,47 @@ export const listStudentsBySubject = async (req, res, next) => {
       subject: req.query.subject,
     });
     return res.json({ rows: data });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const backfillSubjectAssignments = async (req, res, next) => {
+  try {
+    const result = await teachers.backfillSubjectAssignments({ campusId: req.user?.campusId });
+    return res.json({ success: true, ...result });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const changeMyPassword = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'teacher') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    // Find the authenticated user's record to verify current password
+    const userRecord = req.user?.email
+      ? await authSvc.findUserByEmail(req.user.email)
+      : (req.user?.id ? await authSvc.findUserById(req.user.id) : null);
+    if (!userRecord) return res.status(404).json({ message: 'User not found' });
+
+    const ok = await bcrypt.compare(String(currentPassword), userRecord.password_hash || '');
+    if (!ok) return res.status(401).json({ message: 'Invalid current password' });
+
+    const passwordHash = await bcrypt.hash(String(newPassword), 10);
+    await authSvc.updateUser(req.user.id, { passwordHash });
+
+    return res.json({ success: true });
   } catch (e) {
     next(e);
   }

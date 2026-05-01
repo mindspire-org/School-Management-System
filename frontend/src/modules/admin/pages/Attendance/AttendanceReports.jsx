@@ -40,7 +40,9 @@ import { MdAssessment, MdCalendarMonth, MdCheckCircle, MdCancel, MdAvTimer, MdFi
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 import * as reportsApi from '../../../../services/api/reports';
+import * as studentsApi from '../../../../services/api/students';
 import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function AttendanceReports() {
@@ -57,6 +59,11 @@ export default function AttendanceReports() {
   const [loading, setLoading] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [cls, setCls] = useState('');
+  const [section, setSection] = useState('');
+  const [roll, setRoll] = useState('');
+  const [classOptions, setClassOptions] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
 
   const totals = useMemo(() => {
     const totalRecords = rows.reduce((acc, r) => acc + (r.present + r.absent + r.late), 0);
@@ -72,18 +79,18 @@ export default function AttendanceReports() {
     let from = '', to = '';
     if (value === 'this-month') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      from = start.toISOString().slice(0,10);
-      to = new Date().toISOString().slice(0,10);
+      from = start.toISOString().slice(0, 10);
+      to = new Date().toISOString().slice(0, 10);
     } else if (value === 'last-month') {
-      const start = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const end = new Date(now.getFullYear(), now.getMonth(), 0);
-      from = start.toISOString().slice(0,10);
-      to = end.toISOString().slice(0,10);
+      from = start.toISOString().slice(0, 10);
+      to = end.toISOString().slice(0, 10);
     } else if (value === 'last-90') {
       const start = new Date(now);
-      start.setDate(now.getDate()-90);
-      from = start.toISOString().slice(0,10);
-      to = new Date().toISOString().slice(0,10);
+      start.setDate(now.getDate() - 90);
+      from = start.toISOString().slice(0, 10);
+      to = new Date().toISOString().slice(0, 10);
     }
     return { from, to };
   };
@@ -96,6 +103,9 @@ export default function AttendanceReports() {
       const params = {
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
+        class: cls || undefined,
+        section: section || undefined,
+        roll: roll ? String(roll).trim() : undefined,
       };
       const [summary, byClass] = await Promise.all([
         reportsApi.attendanceSummary(params),
@@ -111,7 +121,7 @@ export default function AttendanceReports() {
       }));
       setRows(mapped);
     } catch (e) {
-      const details = Array.isArray(e?.data?.errors) ? e.data.errors.map(x=>`${x.param}: ${x.msg}`).join(', ') : '';
+      const details = Array.isArray(e?.data?.errors) ? e.data.errors.map(x => `${x.param}: ${x.msg}`).join(', ') : '';
       const msg = (e?.data?.message || e?.message || 'Failed to load reports') + (details ? ` — ${details}` : '');
       const id = 'attendance-reports-error';
       if (!toast.isActive(id)) toast({ id, title: 'Failed to load reports', description: msg, status: 'error' });
@@ -132,13 +142,26 @@ export default function AttendanceReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAuthenticated, fromDate, toDate]);
 
+  // Load class/section options once
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const payload = await studentsApi.list({ pageSize: 200 });
+        const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
+        setClassOptions(Array.from(new Set((rows || []).map((s) => s.class).filter(Boolean))));
+        setSectionOptions(Array.from(new Set((rows || []).map((s) => s.section).filter(Boolean))));
+      } catch (_) { }
+    };
+    if (!authLoading && isAuthenticated) loadOptions();
+  }, [authLoading, isAuthenticated]);
+
   const exportCSV = () => {
-    const header = ['Class','Present','Absent','Late','Overall %'];
+    const header = ['Class', 'Present', 'Absent', 'Late', 'Overall %'];
     const csvRows = rows.map(r => {
       const overall = (r.present + r.absent + r.late) ? Math.round((r.present * 100) / (r.present + r.absent + r.late)) : 0;
       return [r.class || '-', r.present, r.absent, r.late, overall];
     });
-    const csv = [header, ...csvRows].map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
+    const csv = [header, ...csvRows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'attendance_reports.csv'; a.click(); URL.revokeObjectURL(url);
@@ -147,10 +170,10 @@ export default function AttendanceReports() {
   const exportPDF = () => {
     const w = window.open('', '_blank'); if (!w) return;
     const styles = `<style>body{font-family:Arial;padding:16px;} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f5f5f5;text-align:left}</style>`;
-    const rowsHtml = rows.map(r=>{
+    const rowsHtml = rows.map(r => {
       const total = r.present + r.absent + r.late;
-      const overall = total ? Math.round((r.present*100)/total) : 0;
-      return `<tr><td>${r.class||'-'}</td><td>${r.present}</td><td>${r.absent}</td><td>${r.late}</td><td>${overall}%</td></tr>`;
+      const overall = total ? Math.round((r.present * 100) / total) : 0;
+      return `<tr><td>${r.class || '-'}</td><td>${r.present}</td><td>${r.absent}</td><td>${r.late}</td><td>${overall}%</td></tr>`;
     }).join('');
     w.document.write(`<html><head><title>Attendance Reports</title>${styles}</head><body><h2>Attendance Reports</h2><table><thead><tr><th>Class</th><th>Present</th><th>Absent</th><th>Late</th><th>Overall %</th></tr></thead><tbody>${rowsHtml}</tbody></table><script>window.onload=function(){window.print();setTimeout(()=>window.close(),300);}</script></body></html>`);
     w.document.close();
@@ -172,26 +195,29 @@ export default function AttendanceReports() {
 
       {/* KPIs */}
       <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics
-          name="Overall %"
+        <StatCard
+          title="Overall %"
           value={`${totals.overall}%`}
-          startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00b09b 0%,#96c93d 100%)' icon={<Icon as={MdAssessment} w='28px' h='28px' color='white' />} />}
-          endContent={<Badge colorScheme='green'>{totals.overall >= 90 ? 'Excellent' : 'Good'}</Badge>}
+          icon={MdAssessment}
+          colorScheme="green"
         />
-        <MiniStatistics
-          name="Present Days"
+        <StatCard
+          title="Present Days"
           value={String(totals.present)}
-          startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#667eea 0%,#764ba2 100%)' icon={<Icon as={MdCheckCircle} w='28px' h='28px' color='white' />} />}
+          icon={MdCheckCircle}
+          colorScheme="blue"
         />
-        <MiniStatistics
-          name="Absent Days"
+        <StatCard
+          title="Absent Days"
           value={String(totals.absent)}
-          startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdCancel} w='28px' h='28px' color='white' />} />}
+          icon={MdCancel}
+          colorScheme="red"
         />
-        <MiniStatistics
-          name="Late Days"
+        <StatCard
+          title="Late Days"
           value={String(totals.late)}
-          startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdAvTimer} w='28px' h='28px' color='white' />} />}
+          icon={MdAvTimer}
+          colorScheme="orange"
         />
       </SimpleGrid>
 
@@ -203,8 +229,29 @@ export default function AttendanceReports() {
             <option value='last-month'>Last Month</option>
             <option value='last-90'>Last 90 Days</option>
           </Select>
-          <Input type='date' maxW='200px' />
-          <Input type='date' maxW='200px' />
+          <Input type='date' maxW='200px' value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <Input type='date' maxW='200px' value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <Select placeholder='Class' maxW='180px' value={cls} onChange={(e) => setCls(e.target.value)}>
+            {classOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
+          </Select>
+          <Select placeholder='Section' maxW='160px' value={section} onChange={(e) => setSection(e.target.value)}>
+            {sectionOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+          </Select>
+          <Input placeholder='Roll number' maxW='200px' value={roll} onChange={(e) => setRoll(e.target.value)} />
+          <Button onClick={loadReports} isLoading={loading}>Apply</Button>
+        </Flex>
+      </Card>
+
+      {/* Overall progress bar under KPIs */}
+      <Card p={4} mb={5}>
+        <Flex align='center' gap={4}>
+          <Text fontWeight='600'>Overall Progress</Text>
+          <Flex align='center' gap={3} flex='1'>
+            <Text w='56px' textAlign='right'>{totals.overall}%</Text>
+            <Box w='100%'>
+              <Progress value={totals.overall} size='sm' colorScheme={totals.overall >= 90 ? 'green' : totals.overall >= 75 ? 'yellow' : 'red'} borderRadius='md' />
+            </Box>
+          </Flex>
         </Flex>
       </Card>
 
@@ -242,12 +289,12 @@ export default function AttendanceReports() {
                     </Td>
                     <Td>
                       <Flex align='center' gap={1}>
-                        <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={()=>{ setSelected({ ...row, overall }); disc.onOpen(); }} />
+                        <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={() => { setSelected({ ...row, overall }); disc.onOpen(); }} />
                         <Menu>
                           <MenuButton as={IconButton} aria-label='More' icon={<MdMoreVert />} size='sm' variant='ghost' />
                           <MenuList>
-                            <MenuItem onClick={()=>{ setSelected({ ...row, overall }); disc.onOpen(); }}>View Details</MenuItem>
-                            <MenuItem onClick={()=>{ setSelected(row); setForm({ class: row.class, total: row.total, present: row.present, absent: row.absent, late: row.late }); editDisc.onOpen(); }}>Edit</MenuItem>
+                            <MenuItem onClick={() => { setSelected({ ...row, overall }); disc.onOpen(); }}>View Details</MenuItem>
+                            <MenuItem onClick={() => { setSelected(row); setForm({ class: row.class, total: row.total, present: row.present, absent: row.absent, late: row.late }); editDisc.onOpen(); }}>Edit</MenuItem>
                           </MenuList>
                         </Menu>
                       </Flex>
@@ -290,21 +337,21 @@ export default function AttendanceReports() {
           <ModalBody>
             <Box>
               <Flex justify='space-between' mb={3}><Text fontWeight='600'>Class</Text><Text>{form.class}</Text></Flex>
-              <NumberInput value={form.present} min={0} max={form.total} onChange={(v)=> setForm(f=>({ ...f, present: Number(v)||0 }))} mb={3}>
+              <NumberInput value={form.present} min={0} max={form.total} onChange={(v) => setForm(f => ({ ...f, present: Number(v) || 0 }))} mb={3}>
                 <NumberInputField placeholder='Present' />
               </NumberInput>
-              <NumberInput value={form.absent} min={0} max={form.total} onChange={(v)=> setForm(f=>({ ...f, absent: Number(v)||0 }))} mb={3}>
+              <NumberInput value={form.absent} min={0} max={form.total} onChange={(v) => setForm(f => ({ ...f, absent: Number(v) || 0 }))} mb={3}>
                 <NumberInputField placeholder='Absent' />
               </NumberInput>
-              <NumberInput value={form.late} min={0} max={form.total} onChange={(v)=> setForm(f=>({ ...f, late: Number(v)||0 }))}>
+              <NumberInput value={form.late} min={0} max={form.total} onChange={(v) => setForm(f => ({ ...f, late: Number(v) || 0 }))}>
                 <NumberInputField placeholder='Late' />
               </NumberInput>
             </Box>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{
-              setRows(prev => prev.map(r => r.class===form.class ? { ...r, present: form.present, absent: form.absent, late: form.late } : r));
+            <Button colorScheme='blue' onClick={() => {
+              setRows(prev => prev.map(r => r.class === form.class ? { ...r, present: form.present, absent: form.absent, late: form.late } : r));
               editDisc.onClose();
             }}>Save</Button>
           </ModalFooter>

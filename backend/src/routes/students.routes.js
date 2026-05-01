@@ -6,6 +6,9 @@ import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
+const phoneDigitsPattern = /^\d{10,15}$/;
+const cnicDigitsPattern = /^\d{13,15}$/;
+
 // All student endpoints require auth; admin can create/update/delete
 router.get(
   '/',
@@ -50,18 +53,59 @@ router.post(
   authenticate,
   authorize('admin', 'owner'),
   [
-    body('name').isString().notEmpty(),
-    body('email').optional().isEmail(),
-    body('rollNumber').optional().isString(),
-    body('class').optional().isString(),
-    body('section').optional().isString(),
-    body('rfidTag').optional().isString(),
+    body('name').isString().trim().notEmpty(),
+    body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
+    body('rollNumber').optional({ checkFalsy: true }).isString().trim(),
+    body('class').optional({ checkFalsy: true }).isString().trim(),
+    body('section').optional({ checkFalsy: true }).isString().trim(),
+    body('rfidTag').optional({ checkFalsy: true }).isString().trim(),
     body('attendance').optional().isFloat({ min: 0, max: 100 }),
     body('feeStatus').optional().isIn(['paid', 'pending', 'overdue']),
-    body('busNumber').optional().isString(),
+    body('busNumber').optional({ checkFalsy: true }).isString().trim(),
     body('busAssigned').optional().isBoolean(),
-    body('parentName').optional().isString(),
-    body('parentPhone').optional().isString(),
+    body('parentName').optional({ checkFalsy: true }).isString().trim(),
+    body('parentPhone')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(phoneDigitsPattern)
+      .withMessage('parentPhone must be 10-15 digits'),
+    body('parent.guardian.phone')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(phoneDigitsPattern)
+      .withMessage('parent.guardian.phone must be 10-15 digits'),
+    body('parent.father.phone')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(phoneDigitsPattern)
+      .withMessage('parent.father.phone must be 10-15 digits'),
+    body('parent.mother.phone')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(phoneDigitsPattern)
+      .withMessage('parent.mother.phone must be 10-15 digits'),
+    body('parent.guardian.cnic')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(cnicDigitsPattern)
+      .withMessage('parent.guardian.cnic must be 13-15 digits'),
+    body('parent.father.cnic')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(cnicDigitsPattern)
+      .withMessage('parent.father.cnic must be 13-15 digits'),
+    body('parent.mother.cnic')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(cnicDigitsPattern)
+      .withMessage('parent.mother.cnic must be 13-15 digits'),
     body('status').optional().isIn(['active', 'inactive']).default('active'),
     body('admissionDate').optional().isISO8601().toDate(),
   ],
@@ -231,10 +275,15 @@ router.put(
   authenticate,
   authorize('student'),
   [
-    body('name').optional().isString(),
-    body('email').optional().isString(),
-    body('parentName').optional().isString(),
-    body('parentPhone').optional().isString(),
+    body('name').optional({ checkFalsy: true }).isString().trim(),
+    body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
+    body('parentName').optional({ checkFalsy: true }).isString().trim(),
+    body('parentPhone')
+      .optional({ checkFalsy: true })
+      .isString()
+      .trim()
+      .matches(phoneDigitsPattern)
+      .withMessage('parentPhone must be 10-15 digits'),
   ],
   validate,
   studentController.updateSelfProfile

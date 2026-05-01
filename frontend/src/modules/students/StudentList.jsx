@@ -59,7 +59,6 @@ import {
 } from '../../redux/features/students/studentSlice';
 import { SearchIcon } from '@chakra-ui/icons';
 import {
-  MdAdd,
   MdEdit,
   MdDelete,
   MdDownload,
@@ -288,16 +287,7 @@ function StudentList() {
           </Heading>
           <Text color="gray.500">Manage your students and their information</Text>
         </Box>
-        <Flex justify="flex-end">
-          <Button
-            leftIcon={<MdAdd />}
-            colorScheme="brand"
-            as={Link}
-            to="/admin/students/add"
-          >
-            Add New Student
-          </Button>
-        </Flex>
+        <Flex justify="flex-end" />
       </Grid>
 
       {/* Stats Cards */}

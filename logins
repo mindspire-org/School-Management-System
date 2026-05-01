@@ -1,0 +1,9 @@
+Default Login Credentials
+From @E:\Academia pro\SchoolSystem\backend\src\db\seed.js:61-65:
+
+Role	Email	Username	Password
+Owner	qutaibah@mindspire.org	owner	Qutaibah@123
+Admin	admin@mindspire.com	admin	password123
+Teacher	teacher@mindspire.com	teacher	password123
+Student	student@mindspire.com	student	password123
+Driver	driver@mindspire.com	driver	password123

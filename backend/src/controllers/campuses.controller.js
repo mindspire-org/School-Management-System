@@ -8,6 +8,15 @@ export const list = async (req, res, next) => {
             const campus = await campusSvc.getById(campusId);
             return res.json({ rows: campus ? [campus] : [], total: campus ? 1 : 0, page: 1, pageSize: 50 });
         }
+        
+        // Allow Teachers, Students, Drivers, Parents to see their own campus in the list
+        if (['teacher', 'student', 'driver', 'parent'].includes(req.user?.role)) {
+            const campusId = req.user?.campusId || req.user?.campus_id;
+            if (!campusId) return res.json({ rows: [], total: 0, page: 1, pageSize: 50 });
+            const campus = await campusSvc.getById(campusId);
+            return res.json({ rows: campus ? [campus] : [], total: campus ? 1 : 0, page: 1, pageSize: 50 });
+        }
+
         const { page, pageSize, q } = req.query;
         const result = await campusSvc.list({
             page: Number(page) || 1,
@@ -20,12 +29,24 @@ export const list = async (req, res, next) => {
 
 export const getById = async (req, res, next) => {
     try {
-        if (req.user?.role === 'admin') {
+        const userRole = req.user?.role;
+        const requestedId = Number(req.params.id);
+
+        if (userRole === 'admin') {
             const campusId = req.user?.campusId;
-            if (!campusId || Number(req.params.id) !== Number(campusId)) {
+            if (!campusId || requestedId !== Number(campusId)) {
                 return res.status(404).json({ message: 'Campus not found' });
             }
         }
+        
+        // Allow Teachers, Students, Drivers, Parents to only see their own campus
+        if (['teacher', 'student', 'driver', 'parent'].includes(userRole)) {
+            const userCampusId = req.user?.campusId || req.user?.campus_id;
+            if (!userCampusId || requestedId !== Number(userCampusId)) {
+                return res.status(403).json({ message: 'Forbidden: Access restricted to assigned campus' });
+            }
+        }
+
         const campus = await campusSvc.getById(req.params.id);
         if (!campus) return res.status(404).json({ message: 'Campus not found' });
         return res.json(campus);

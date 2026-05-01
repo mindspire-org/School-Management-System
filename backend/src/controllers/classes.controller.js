@@ -1,6 +1,17 @@
 import * as classService from '../services/classes.service.js';
 import * as studentsSvc from '../services/students.service.js';
 
+const resolveCampusId = (req) => {
+  const headerCampusId =
+    req.headers?.['x-campus-id'] ??
+    req.headers?.['x-campusid'] ??
+    req.headers?.['campus-id'] ??
+    req.headers?.['campusid'];
+  const id = headerCampusId ?? req.user?.campusId;
+  const num = Number(id);
+  return Number.isFinite(num) && num > 0 ? num : null;
+};
+
 const coerceString = (value) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -13,6 +24,17 @@ const coerceNumber = (value) => {
   if (value === null || value === '') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+};
+
+const coerceBoolean = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const str = String(value).trim().toLowerCase();
+  if (str === 'true' || str === '1' || str === 'yes') return true;
+  if (str === 'false' || str === '0' || str === 'no') return false;
+  return undefined;
 };
 
 const normalizeClassPayload = (raw = {}, { partial = false } = {}) => {
@@ -28,6 +50,11 @@ const normalizeClassPayload = (raw = {}, { partial = false } = {}) => {
     if (value !== undefined) data[field] = value;
   };
 
+  const assignBoolean = (field, source = field) => {
+    const value = coerceBoolean(raw[source]);
+    if (value !== undefined) data[field] = value;
+  };
+
   assignString('className');
   assignString('section');
   assignString('academicYear');
@@ -36,6 +63,8 @@ const normalizeClassPayload = (raw = {}, { partial = false } = {}) => {
   assignString('shift');
   assignString('status');
   assignString('notes');
+
+  assignBoolean('isShared', 'isShared');
 
   assignNumber('classTeacherId');
   assignNumber('capacity');
@@ -92,7 +121,7 @@ export const list = async (req, res, next) => {
       academicYear,
       status,
       teacherId: filterTeacherId ? Number(filterTeacherId) : undefined,
-      campusId: req.user?.campusId,
+      campusId: resolveCampusId(req),
     });
     return res.json(result);
   } catch (e) {
@@ -112,7 +141,7 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
   try {
-    const payload = normalizeClassPayload({ ...req.body, campusId: req.user?.campusId }, { partial: false });
+    const payload = normalizeClassPayload({ ...req.body, campusId: resolveCampusId(req) }, { partial: false });
     const created = await classService.create(payload);
     return res.status(201).json(created);
   } catch (e) {

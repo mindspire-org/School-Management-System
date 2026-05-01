@@ -33,7 +33,7 @@ export default (sequelize) => {
         id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
         employeeId: { type: DataTypes.INTEGER, allowNull: false },
         employeeName: { type: DataTypes.STRING, allowNull: false },
-        leaveType: { type: DataTypes.ENUM('Sick', 'Casual', 'Annual', 'Unpaid'), allowNull: false },
+        leaveType: { type: DataTypes.STRING, allowNull: false },
         startDate: { type: DataTypes.DATE, allowNull: false },
         endDate: { type: DataTypes.DATE, allowNull: false },
         reason: { type: DataTypes.TEXT },

@@ -7,11 +7,19 @@ import * as controller from '../controllers/rbac.controller.js';
 const router = Router();
 
 router.get('/roles', authenticate, authorize('admin','owner'), controller.listRoles);
+router.delete(
+  '/roles/:role',
+  authenticate,
+  authorize('owner'),
+  [param('role').isIn(['admin','branch_admin','teacher','student','driver','parent'])],
+  validate,
+  controller.deleteRole
+);
 router.put(
   '/roles/:role/active',
   authenticate,
   authorize('admin','owner'),
-  [param('role').isIn(['admin','teacher','student','driver']), body('active').isBoolean()],
+  [param('role').isIn(['admin','branch_admin','teacher','student','driver','parent']), body('active').isBoolean()],
   validate,
   controller.setRoleActive
 );
@@ -21,7 +29,7 @@ router.put(
   '/permissions/:role',
   authenticate,
   authorize('admin','owner'),
-  [param('role').isIn(['admin','teacher','student','driver']), body('perms').isArray()],
+  [param('role').isIn(['admin','branch_admin','teacher','student','driver','parent']), body('perms').isArray()],
   validate,
   controller.setPermissionsForRole
 );
@@ -32,7 +40,7 @@ router.put(
   '/modules/:role',
   authenticate,
   authorize('admin','owner'),
-  [param('role').isIn(['admin','teacher','student','driver']), body('allowModules').optional().isArray(), body('allowSubroutes').optional().isArray()],
+  [param('role').isIn(['admin','branch_admin','teacher','student','driver','parent']), body('allowModules').optional().isArray(), body('allowSubroutes').optional().isArray()],
   validate,
   controller.setModulesForRole
 );

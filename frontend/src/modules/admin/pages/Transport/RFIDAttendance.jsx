@@ -36,6 +36,7 @@ import { MdCheckCircle, MdLogout, MdCreditCard, MdSearch, MdFilterList, MdFileDo
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 
 const mockLogs = [
   { id: 'T-001', time: '07:40 AM', student: 'Ahsan Ali', studentId: 'STU-1001', bus: 'BUS-101', stop: 'Main Gate', type: 'Boarding', card: 'RFID-001A' },
@@ -84,10 +85,10 @@ export default function RFIDAttendance() {
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics name="Boardings" value={String(stats.board)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdCheckCircle} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Alightings" value={String(stats.alight)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdLogout} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Unique Students" value={String(stats.unique)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdCreditCard} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Active Buses" value={String(stats.buses)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdCreditCard} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Boardings" value={String(stats.board)} icon={MdCheckCircle} colorScheme="green" />
+        <StatCard title="Alightings" value={String(stats.alight)} icon={MdLogout} colorScheme="red" />
+        <StatCard title="Unique Students" value={String(stats.unique)} icon={MdCreditCard} colorScheme="blue" />
+        <StatCard title="Active Buses" value={String(stats.buses)} icon={MdCreditCard} colorScheme="orange" />
       </SimpleGrid>
 
       <Card p={4} mb={5}>
@@ -132,8 +133,8 @@ export default function RFIDAttendance() {
                   <Td><Badge colorScheme={l.type === 'Boarding' ? 'green' : 'purple'}>{l.type}</Badge></Td>
                   <Td><Text fontFamily='mono'>{l.card}</Text></Td>
                   <Td>
-                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={()=>{ setSelected(l); viewDisc.onOpen(); }} />
-                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={()=>{ setSelected(l); setForm({ ...l, type: l.type }); editDisc.onOpen(); }} />
+                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={() => { setSelected(l); viewDisc.onOpen(); }} />
+                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={() => { setSelected(l); setForm({ ...l, type: l.type }); editDisc.onOpen(); }} />
                   </Td>
                 </Tr>
               ))}
@@ -155,7 +156,7 @@ export default function RFIDAttendance() {
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>ID</Text><Text>{selected.studentId}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Bus</Text><Text>{selected.bus}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Stop</Text><Text>{selected.stop}</Text></Flex>
-                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Type</Text><Badge colorScheme={selected.type==='Boarding'?'green':'purple'}>{selected.type}</Badge></Flex>
+                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Type</Text><Badge colorScheme={selected.type === 'Boarding' ? 'green' : 'purple'}>{selected.type}</Badge></Flex>
                 <Flex justify='space-between'><Text fontWeight='600'>Card</Text><Text>{selected.card}</Text></Flex>
               </Box>
             )}
@@ -174,25 +175,25 @@ export default function RFIDAttendance() {
           <ModalBody>
             <FormControl mb={3}>
               <FormLabel>Type</FormLabel>
-              <Select value={form.type.toLowerCase()} onChange={(e)=> setForm(f=>({ ...f, type: e.target.value==='boarding'?'Boarding':'Alighting' }))}>
+              <Select value={form.type.toLowerCase()} onChange={(e) => setForm(f => ({ ...f, type: e.target.value === 'boarding' ? 'Boarding' : 'Alighting' }))}>
                 <option value='boarding'>Boarding</option>
                 <option value='alighting'>Alighting</option>
               </Select>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Stop</FormLabel>
-              <Input value={form.stop} onChange={(e)=> setForm(f=>({ ...f, stop: e.target.value }))} />
+              <Input value={form.stop} onChange={(e) => setForm(f => ({ ...f, stop: e.target.value }))} />
             </FormControl>
             <FormControl>
               <FormLabel>Bus</FormLabel>
-              <Input value={form.bus} onChange={(e)=> setForm(f=>({ ...f, bus: e.target.value }))} />
+              <Input value={form.bus} onChange={(e) => setForm(f => ({ ...f, bus: e.target.value }))} />
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{
-              if(!selected) return;
-              setRows(prev => prev.map(r => r.id===selected.id ? { ...r, type: form.type, stop: form.stop, bus: form.bus } : r));
+            <Button colorScheme='blue' onClick={() => {
+              if (!selected) return;
+              setRows(prev => prev.map(r => r.id === selected.id ? { ...r, type: form.type, stop: form.stop, bus: form.bus } : r));
               editDisc.onClose();
             }}>Save</Button>
           </ModalFooter>

@@ -35,10 +35,23 @@ router.post(
     controller.createExpense
 );
 
+// Status change (approve/reject/pay) — owner/superadmin only
+router.patch(
+    '/:id/status',
+    authenticate,
+    authorize('owner'),
+    [
+        param('id').isInt(),
+        body('status').isIn(['Pending', 'Approved', 'Paid', 'Rejected']),
+    ],
+    validate,
+    controller.updateExpenseStatus
+);
+
 router.put(
     '/:id',
     authenticate,
-    authorize('admin', 'owner'),
+    authorize('owner'),
     [
         param('id').isInt(),
         body('amount').optional().isFloat({ gt: 0 }),
@@ -50,7 +63,7 @@ router.put(
 router.delete(
     '/:id',
     authenticate,
-    authorize('admin', 'owner'),
+    authorize('owner'),
     [param('id').isInt()],
     validate,
     controller.deleteExpense

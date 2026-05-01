@@ -27,7 +27,7 @@ import {
   AlertIcon
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
-import { MdAdd, MdPerson } from 'react-icons/md';
+import { MdPerson } from 'react-icons/md';
 import { Link } from 'react-router-dom';
 
 // This is a simplified version of StudentList that doesn't rely on Redux
@@ -80,14 +80,7 @@ function BasicStudentList() {
           </Heading>
           <Text color="gray.500">Sample student data (non-Redux)</Text>
         </Box>
-        <Button
-          leftIcon={<MdAdd />}
-          colorScheme="brand"
-          as={Link}
-          to="/admin/students/add"
-        >
-          Add New Student
-        </Button>
+        
       </Flex>
 
       {/* Stats Cards */}
@@ -179,9 +172,6 @@ function BasicStudentList() {
       <HStack spacing={4} mb={8}>
         <Button as={Link} to="/admin" colorScheme="blue">
           Go to Dashboard
-        </Button>
-        <Button as={Link} to="/admin/students/add" colorScheme="green">
-          Try Add Student Page
         </Button>
       </HStack>
     </Box>

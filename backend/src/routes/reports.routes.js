@@ -418,7 +418,7 @@ router.get('/attendance/daily', async (req, res) => {
          FROM teacher_attendance ta
          JOIN teachers t ON t.id = ta.teacher_id
          WHERE ta.attendance_date = $1
-           AND ta.campus_id = $2
+           AND t.campus_id = $2
          ORDER BY t.name ASC`,
         [date, campusId]
       );
@@ -467,7 +467,6 @@ router.get('/attendance/monthly', async (req, res) => {
          FROM teachers t
          LEFT JOIN teacher_attendance ta
            ON ta.teacher_id = t.id
-          AND ta.campus_id = $1
           AND ta.attendance_date >= $2
           AND ta.attendance_date <= $3
          WHERE t.campus_id = $1

@@ -5,7 +5,9 @@ import pngToIco from 'png-to-ico';
 
 async function main() {
   const FRONTEND_DIR = process.cwd();
-  const PUBLIC_DIR = path.join(FRONTEND_DIR, 'public');
+  const preferredPublicDir = path.join(FRONTEND_DIR, 'frontend', 'public');
+  const legacyPublicDir = path.join(FRONTEND_DIR, 'public');
+  const PUBLIC_DIR = fs.existsSync(preferredPublicDir) ? preferredPublicDir : legacyPublicDir;
   const outIco = path.join(PUBLIC_DIR, 'favicon.ico');
 
   const candidates = [

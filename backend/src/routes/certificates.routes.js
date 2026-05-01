@@ -3,12 +3,20 @@ import { CertificateTemplate, IssuedCertificate } from '../models/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { query } from '../config/db.js';
 import cloudinary from '../config/cloudinary.js';
+import { Op } from 'sequelize';
 
 const router = Router();
 
 router.use(authenticate);
 
-const adminRoles = new Set(['admin', 'owner', 'superadmin']);
+const adminRoles = new Set(['owner', 'superadmin']);
+
+const isGlobalAdmin = (role, campusId) => {
+  const r = String(role || '').toLowerCase();
+  // Campus admins (role=admin with campusId) are NOT global admins
+  if (r === 'admin' && campusId) return false;
+  return r === 'admin' || r === 'owner' || r === 'superadmin';
+};
 
 const resolveCampusId = (req) => {
   const headerCampusId =
@@ -21,7 +29,7 @@ const resolveCampusId = (req) => {
   const role = req.user?.role;
   const authCampusId = req.user?.campusId;
 
-  if (authCampusId && !adminRoles.has(role)) return Number(authCampusId);
+  if (authCampusId && !isGlobalAdmin(role, authCampusId)) return Number(authCampusId);
   const resolved = requested ?? authCampusId;
   if (resolved === '' || resolved === undefined || resolved === null) return null;
   const n = Number(resolved);
@@ -79,9 +87,24 @@ const mapIssuedOut = (row) => {
 router.get('/templates', async (req, res) => {
   try {
     const campusId = resolveCampusId(req);
-    const where = campusId ? { campusId } : {};
-    if (req.query?.type) where.type = String(req.query.type);
-    const items = await CertificateTemplate.findAll({ where });
+    let items;
+    if (campusId) {
+      items = await CertificateTemplate.findAll({
+        where: {
+          [Op.or]: [
+            { campusId: campusId },
+            { campusId: 0 }
+          ]
+        }
+      });
+    } else {
+      items = await CertificateTemplate.findAll();
+    }
+    
+    if (req.query?.type) {
+      const type = String(req.query.type);
+      items = items.filter(item => item.type === type);
+    }
     res.json(items);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -101,20 +124,24 @@ router.get('/templates/:id', async (req, res) => {
 });
 
 router.post('/templates', async (req, res) => {
-  try {
-    const campusId = resolveCampusId(req);
-    if (!campusId) return res.status(400).json({ error: 'campusId is required' });
-    const payload = stripCreatePayload(req.body);
-    payload.logoUrl = await maybeUploadLogoUrl(payload.logoUrl);
-    payload.backgroundImageUrl = await maybeUploadAssetUrl(payload.backgroundImageUrl);
-    payload.watermarkImageUrl = await maybeUploadAssetUrl(payload.watermarkImageUrl);
-    payload.signature1ImageUrl = await maybeUploadAssetUrl(payload.signature1ImageUrl);
-    payload.signature2ImageUrl = await maybeUploadAssetUrl(payload.signature2ImageUrl);
-    const created = await CertificateTemplate.create({ ...payload, campusId });
-    res.status(201).json(created);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    try {
+        const campusId = resolveCampusId(req);
+        const isShared = req.body.isShared === true || req.body.isShared === 'true' || req.body.isShared === 1;
+        const finalCampusId = isShared ? 0 : campusId;
+
+        if (finalCampusId === null && !isShared) return res.status(400).json({ error: 'campusId is required' });
+        
+        const payload = stripCreatePayload(req.body);
+        payload.logoUrl = await maybeUploadLogoUrl(payload.logoUrl);
+        payload.backgroundImageUrl = await maybeUploadAssetUrl(payload.backgroundImageUrl);
+        payload.watermarkImageUrl = await maybeUploadAssetUrl(payload.watermarkImageUrl);
+        payload.signature1ImageUrl = await maybeUploadAssetUrl(payload.signature1ImageUrl);
+        payload.signature2ImageUrl = await maybeUploadAssetUrl(payload.signature2ImageUrl);
+        const created = await CertificateTemplate.create({ ...payload, campusId: finalCampusId });
+        res.status(201).json(created);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 router.put('/templates/:id', async (req, res) => {

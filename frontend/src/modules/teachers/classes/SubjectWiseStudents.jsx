@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useColorModeValue, Flex, HStack, Select, Input, SimpleGrid, Badge, Avatar, VStack, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, Button, Divider, Tooltip } from '@chakra-ui/react';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
@@ -7,21 +7,7 @@ import { MdSubject, MdPeople, MdLabel } from 'react-icons/md';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
 
-const sampleData = [
-  { subject: 'Algebra', students: [
-    { id: 'STU101', name: 'Mahnoor Khan', className: '7', section: 'A' },
-    { id: 'STU102', name: 'Ali Raza', className: '7', section: 'B' },
-    { id: 'STU103', name: 'Hassan Javed', className: '8', section: 'A' },
-  ]},
-  { subject: 'Physics', students: [
-    { id: 'STU104', name: 'Ayesha Tariq', className: '8', section: 'B' },
-    { id: 'STU105', name: 'Usman Akbar', className: '7', section: 'A' },
-  ]},
-  { subject: 'English', students: [
-    { id: 'STU106', name: 'Hamza Khan', className: '9', section: 'A' },
-    { id: 'STU107', name: 'Sara Ahmed', className: '9', section: 'B' },
-  ]},
-];
+import * as teachersApi from '../../../services/api/teachers';
 
 export default function SubjectWiseStudents() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -35,10 +21,27 @@ export default function SubjectWiseStudents() {
   const [selected, setSelected] = useState(null);
   const [open, setOpen] = useState(false);
 
-  const subjects = sampleData.map(s => s.subject);
+  const [groups, setGroups] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await teachersApi.listStudentsBySubject({});
+        const rows = Array.isArray(res?.rows) ? res.rows : [];
+        if (mounted) setGroups(rows);
+      } catch (e) {
+        console.error('Failed to load students by subject', e);
+        if (mounted) setGroups([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const subjects = useMemo(() => groups.map(s => s.subject), [groups]);
 
   const filtered = useMemo(() => {
-    const list = subject ? sampleData.filter(s => s.subject === subject) : sampleData;
+    const list = subject ? groups.filter(s => s.subject === subject) : groups;
     return list.map(group => ({
       ...group,
       students: group.students.filter(st =>
@@ -46,7 +49,7 @@ export default function SubjectWiseStudents() {
         (q === '' || `${st.name}${st.id}${st.className}${st.section}`.toLowerCase().includes(q.toLowerCase()))
       )
     }));
-  }, [q, grade, subject]);
+  }, [q, grade, subject, groups]);
 
   const stats = useMemo(() => {
     const subjectCount = filtered.filter(g => g.students.length > 0).length;
@@ -123,9 +126,9 @@ export default function SubjectWiseStudents() {
           </Select>
           <Select value={grade} onChange={(e) => setGrade(e.target.value)} w={{ base: '100%', md: '200px' }} size='sm'>
             <option value=''>All Grades</option>
-            <option value='7'>Grade 7</option>
-            <option value='8'>Grade 8</option>
-            <option value='9'>Grade 9</option>
+            {Array.from(new Set(groups.flatMap(g => (g.students || []).map(s => String(s.className))).filter(Boolean))).sort((a,b)=>Number(a)-Number(b)).map(g => (
+              <option key={g} value={g}>Grade {g}</option>
+            ))}
           </Select>
           <Input placeholder='Search student/roll' value={q} onChange={(e)=>setQ(e.target.value)} w={{ base: '100%', md: '260px' }} size='sm' />
         </Flex>

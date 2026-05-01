@@ -55,6 +55,7 @@ import {
 import Card from 'components/card/Card.js';
 import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 import {
   MdAdd,
   MdAssignment,
@@ -69,18 +70,33 @@ import {
   MdVisibility,
 } from 'react-icons/md';
 import * as teacherApi from '../../../../services/api/teachers';
+import * as classesApi from '../../../../services/api/classes';
+import { masterDataApi } from '../../../../services/api';
 
-const classOptions = [
-  { id: '10A', name: '10th Grade Section A' },
-  { id: '10B', name: '10th Grade Section B' },
-  { id: '10C', name: '10th Grade Section C' },
-  { id: '11A', name: '11th Grade Section A' },
-  { id: '11B', name: '11th Grade Section B' },
-  { id: '11C', name: '11th Grade Section C' },
-  { id: '12A', name: '12th Grade Section A' },
-  { id: '12B', name: '12th Grade Section B' },
-  { id: '12C', name: '12th Grade Section C' },
-];
+const DepartmentSelect = ({ value, onChange }) => {
+  const [departments, setDepartments] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await masterDataApi.getDepartments();
+        if (alive) setDepartments(Array.isArray(res) ? res : []);
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
+  }, []);
+  if (departments.length > 0) {
+    return (
+      <Select value={value} onChange={(e) => onChange(e.target.value)} placeholder="Select department">
+        {departments.map((d) => {
+          const label = (d?.name || '').trim();
+          return label ? <option key={d.id ?? label} value={label}>{label}</option> : null;
+        })}
+      </Select>
+    );
+  }
+  return <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g. Science & Mathematics" />;
+};
 
 const initialSubjectForm = {
   name: '',
@@ -111,6 +127,37 @@ const getSubjectColor = (name = '') => {
   return 'blue';
 };
 
+const toClassId = (cls) => {
+  if (cls === undefined || cls === null) return '';
+  if (typeof cls === 'string' || typeof cls === 'number') return String(cls);
+  if (typeof cls === 'object') {
+    if (cls.id) return String(cls.id);
+    if (cls.classId) return String(cls.classId);
+    if (cls.code) return String(cls.code);
+    const section = cls.section ?? cls.sectionName;
+    const className = cls.className ?? cls.class ?? cls.grade ?? cls.name;
+    const digits = className ? String(className).match(/\d+/)?.[0] : '';
+    if (digits && section) return `${digits}${section}`;
+    if (className && section) return `${className}${section}`;
+    if (className) return String(className);
+  }
+  return '';
+};
+
+const formatClassLabel = (cls) => {
+  if (cls === undefined || cls === null) return '—';
+  if (typeof cls === 'string' || typeof cls === 'number') return String(cls);
+  if (typeof cls === 'object') {
+    const section = cls.section ?? cls.sectionName;
+    const className = cls.className ?? cls.class ?? cls.grade ?? cls.name;
+    const year = cls.academicYear ?? cls.year;
+    const base = [className, section].filter(Boolean).join('-') || toClassId(cls) || '—';
+    const y = year === undefined || year === null ? '' : String(year);
+    return y ? `${String(base)} (${y})` : String(base);
+  }
+  return String(cls);
+};
+
 const formatDate = (value) => {
   if (!value) return '—';
   try {
@@ -131,12 +178,15 @@ const TeacherSubjects = () => {
   const [teachers, setTeachers] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [classSections, setClassSections] = useState([]);
+  const [classLoading, setClassLoading] = useState(false);
   const [teacherLoading, setTeacherLoading] = useState(false);
   const [subjectLoading, setSubjectLoading] = useState(false);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [savingSubject, setSavingSubject] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState(false);
+  const [syncingBackfill, setSyncingBackfill] = useState(false);
   const [subjectForm, setSubjectForm] = useState(initialSubjectForm);
   const [assignmentForm, setAssignmentForm] = useState(initialAssignmentForm);
   const [assignmentType, setAssignmentType] = useState('add');
@@ -152,6 +202,35 @@ const TeacherSubjects = () => {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
+
+  const toClassValue = useCallback((row) => {
+    if (!row) return '';
+    const className = row.className ?? row.class_name ?? row.class ?? row.name;
+    const section = row.section ?? row.sectionName;
+    if (!className && !section) return '';
+    if (className && section) return `${className}-${section}`;
+    return String(className || section);
+  }, []);
+
+  const toClassLabel = useCallback((row) => {
+    if (!row) return '—';
+    const className = row.className ?? row.class_name ?? row.class ?? row.name;
+    const section = row.section ?? row.sectionName;
+    const academicYear = row.academicYear ?? row.academic_year;
+    const base = [className, section].filter(Boolean).join(' ');
+    const year = academicYear ? ` (${academicYear})` : '';
+    return `${base || toClassValue(row) || '—'}${year}`;
+  }, [toClassValue]);
+
+  const classOptions = useMemo(() => {
+    const rows = Array.isArray(classSections) ? classSections : [];
+    return rows
+      .map((row) => ({
+        value: toClassValue(row),
+        label: toClassLabel(row),
+      }))
+      .filter((opt) => opt.value);
+  }, [classSections, toClassLabel, toClassValue]);
 
   const fetchTeachers = useCallback(async () => {
     setTeacherLoading(true);
@@ -171,6 +250,27 @@ const TeacherSubjects = () => {
       });
     } finally {
       setTeacherLoading(false);
+    }
+  }, [toast]);
+
+  const fetchClasses = useCallback(async () => {
+    setClassLoading(true);
+    try {
+      const response = await classesApi.list({ page: 1, pageSize: 200 });
+      const rows = Array.isArray(response?.rows) ? response.rows : Array.isArray(response) ? response : [];
+      setClassSections(rows);
+    } catch (error) {
+      console.error(error);
+      setClassSections([]);
+      toast({
+        title: 'Failed to load classes',
+        description: error?.message || 'Please try again later.',
+        status: 'error',
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setClassLoading(false);
     }
   }, [toast]);
 
@@ -224,6 +324,10 @@ const TeacherSubjects = () => {
   }, [fetchSubjects, fetchAssignments]);
 
   useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
+
+  useEffect(() => {
     if (!subjectDetailsDisclosure.isOpen || !activeSubject) return;
     const filtered = assignments.filter((assignment) => assignment.subjectId === activeSubject.id);
     setActiveSubjectAssignments(filtered);
@@ -255,7 +359,10 @@ const TeacherSubjects = () => {
       const secondarySubjects = [];
       let primarySubject = null;
       rows.forEach((row) => {
-        (row.classes || []).forEach((cls) => classesSet.add(cls));
+        (row.classes || []).forEach((cls) => {
+          const label = formatClassLabel(cls);
+          if (label && label !== '—') classesSet.add(label);
+        });
         if (row.isPrimary) primarySubject = row.subjectName;
         if (!row.isPrimary) secondarySubjects.push(row.subjectName);
       });
@@ -330,7 +437,7 @@ const TeacherSubjects = () => {
     setAssignmentType('edit');
     setAssignmentForm({
       subjectId: assignment.subjectId ? String(assignment.subjectId) : '',
-      classes: Array.isArray(assignment.classes) ? assignment.classes : [],
+      classes: Array.isArray(assignment.classes) ? assignment.classes.map((c) => toClassId(c)).filter(Boolean) : [],
       isPrimary: Boolean(assignment.isPrimary),
       academicYear: assignment.academicYear || '',
       assignmentId: assignment.id,
@@ -517,6 +624,30 @@ const TeacherSubjects = () => {
     return teacherAssignmentsMap.get(selectedTeacher.id) || [];
   }, [selectedTeacher, teacherAssignmentsMap]);
 
+  const handleBackfillSync = async () => {
+    setSyncingBackfill(true);
+    try {
+      const result = await teacherApi.backfillSubjectAssignments();
+      toast({
+        title: 'Sync Complete',
+        description: `Created ${result.created ?? 0} new allocation(s). ${result.skipped ?? 0} already existed.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      await Promise.all([fetchAssignments(), fetchSubjects()]);
+    } catch (error) {
+      toast({
+        title: 'Sync failed',
+        description: error?.message || 'Could not sync allocations.',
+        status: 'error',
+        duration: 4000,
+      });
+    } finally {
+      setSyncingBackfill(false);
+    }
+  };
+
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex mb={5} justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={4}>
@@ -524,38 +655,44 @@ const TeacherSubjects = () => {
           <Heading as="h3" size="lg" mb={1}>Subject Assignment</Heading>
           <Text color={textColorSecondary}>Manage subjects, teachers, and class allocations</Text>
         </Box>
-        <Button leftIcon={<Icon as={MdAdd} />} colorScheme="blue" onClick={subjectDisclosure.onOpen}>
-          Add New Subject
-        </Button>
+        <HStack spacing={2}>
+          <Button
+            leftIcon={<Icon as={MdCheck} />}
+            colorScheme="teal"
+            variant="outline"
+            onClick={handleBackfillSync}
+            isLoading={syncingBackfill}
+            loadingText="Syncing..."
+          >
+            Sync Missing Allocations
+          </Button>
+          <Button leftIcon={<Icon as={MdAdd} />} colorScheme="blue" onClick={subjectDisclosure.onOpen}>
+            Add New Subject
+          </Button>
+        </HStack>
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5} mb={5}>
-        <MiniStatistics
-          compact
-          startContent={<IconBox w="48px" h="48px" bg="linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)" icon={<Icon as={MdBook} w="24px" h="24px" color="white" />} />}
-          name="Total Subjects"
+        <StatCard
+          title='Total Subjects'
           value={subjectLoading ? '…' : String(subjectStats.totalSubjects)}
-          growth={`Across ${subjectStats.departmentCount} departments`}
-          trendData={[Math.max(subjectStats.totalSubjects - 2, 0), Math.max(subjectStats.totalSubjects - 1, 0), subjectStats.totalSubjects]}
-          trendColor="#4facfe"
+          subValue={`Across ${subjectStats.departmentCount} depts`}
+          icon={MdBook}
+          colorScheme='blue'
         />
-        <MiniStatistics
-          compact
-          startContent={<IconBox w="48px" h="48px" bg="linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)" icon={<Icon as={MdAssignment} w="24px" h="24px" color="white" />} />}
-          name="Subject Allocations"
+        <StatCard
+          title='Subject Allocations'
           value={assignmentLoading ? '…' : String(subjectStats.totalAssignments)}
-          growth={`${subjectStats.averagePerTeacher} per teacher`}
-          trendData={[Math.max(subjectStats.totalAssignments - 3, 0), Math.max(subjectStats.totalAssignments - 1, 0), subjectStats.totalAssignments]}
-          trendColor="#43e97b"
+          subValue={`${subjectStats.averagePerTeacher} per teacher`}
+          icon={MdAssignment}
+          colorScheme='green'
         />
-        <MiniStatistics
-          compact
-          startContent={<IconBox w="48px" h="48px" bg="linear-gradient(135deg,#a18cd1 0%,#fbc2eb 100%)" icon={<Icon as={MdPersonAdd} w="24px" h="24px" color="white" />} />}
-          name="Teachers Covered"
+        <StatCard
+          title='Teachers Covered'
           value={teacherLoading ? '…' : String(subjectStats.teacherCount)}
-          growth="Active in timetable"
-          trendData={[Math.max(subjectStats.teacherCount - 1, 0), subjectStats.teacherCount, subjectStats.teacherCount]}
-          trendColor="#a18cd1"
+          subValue='Active in timetable'
+          icon={MdPersonAdd}
+          colorScheme='purple'
         />
       </SimpleGrid>
 
@@ -654,9 +791,9 @@ const TeacherSubjects = () => {
                     <Td>
                       <HStack spacing={1} flexWrap="wrap">
                         {allocation.classes.length ? (
-                          allocation.classes.map((cls) => (
-                            <Tag key={cls} size="sm" borderRadius="full" colorScheme="cyan">
-                              <TagLabel>{cls}</TagLabel>
+                          allocation.classes.map((cls, idx) => (
+                            <Tag key={`${formatClassLabel(cls)}-${idx}`} size="sm" borderRadius="full" colorScheme="cyan">
+                              <TagLabel>{formatClassLabel(cls)}</TagLabel>
                             </Tag>
                           ))
                         ) : (
@@ -781,7 +918,7 @@ const TeacherSubjects = () => {
               </FormControl>
               <FormControl>
                 <FormLabel>Department</FormLabel>
-                <Input value={subjectForm.department} onChange={(event) => setSubjectForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="e.g. Science & Mathematics" />
+                <DepartmentSelect value={subjectForm.department} onChange={(val) => setSubjectForm((prev) => ({ ...prev, department: val }))} />
               </FormControl>
               <FormControl>
                 <FormLabel>Description</FormLabel>
@@ -898,9 +1035,15 @@ const TeacherSubjects = () => {
                         onChange={(values) => setAssignmentForm((prev) => ({ ...prev, classes: values }))}
                       >
                         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
-                          {classOptions.map((cls) => (
-                            <Checkbox key={cls.id} value={cls.id}>
-                              {cls.id} ({cls.name})
+                          {classLoading && (
+                            <Flex align="center" gap={2}>
+                              <Spinner size="sm" />
+                              <Text color={textColorSecondary} fontSize="sm">Loading classes...</Text>
+                            </Flex>
+                          )}
+                          {!classLoading && classOptions.map((opt) => (
+                            <Checkbox key={opt.value} value={opt.value}>
+                              {opt.label}
                             </Checkbox>
                           ))}
                         </SimpleGrid>
@@ -982,9 +1125,9 @@ const TeacherSubjects = () => {
                               </Badge>
                               <Text fontSize="xs" color={textColorSecondary}>{assignment.academicYear || '—'}</Text>
                               <HStack spacing={1}>
-                                {assignment.classes?.map((cls) => (
-                                  <Tag key={cls} size="sm" borderRadius="full" colorScheme="cyan">
-                                    <TagLabel>{cls}</TagLabel>
+                                {assignment.classes?.map((cls, idx) => (
+                                  <Tag key={`${toClassId(cls) || formatClassLabel(cls)}-${idx}`} size="sm" borderRadius="full" colorScheme="cyan">
+                                    <TagLabel>{formatClassLabel(cls)}</TagLabel>
                                   </Tag>
                                 ))}
                                 {!assignment.classes?.length && <Text color={textColorSecondary} fontSize="xs">No classes</Text>}

@@ -113,8 +113,14 @@ export const getUnifiedInvoiceById = async (req, res, next) => {
 // Create unified invoice
 export const createUnifiedInvoice = async (req, res, next) => {
   try {
+    // Support All Campuses: use campusId from body if provided, otherwise from user context
+    let campusId = req.user?.campusId;
+    if (req.body.campusId) {
+      campusId = Number(req.body.campusId);
+    }
+    
     // Check if users exist first
-    const { hasUsers } = await service.checkUsersExist({ campusId: req.user?.campusId });
+    const { hasUsers } = await service.checkUsersExist({ campusId });
     if (!hasUsers) {
       return res.status(400).json({
         message: 'Please add a Student, Teacher, or Driver before creating financial records.',
@@ -122,7 +128,7 @@ export const createUnifiedInvoice = async (req, res, next) => {
       });
     }
 
-    const invoice = await service.createUnifiedInvoice({ ...req.body, campusId: req.user?.campusId }, req.user?.id);
+    const invoice = await service.createUnifiedInvoice({ ...req.body, campusId }, req.user?.id);
     res.status(201).json(invoice);
   } catch (e) { next(e); }
 };
@@ -280,8 +286,8 @@ export const getPayrollSummary = async (req, res, next) => {
   try {
     const { role, periodMonth, status, page, pageSize, campusId } = req.query;
 
-    // Allow campus override for admins/owners
-    const effectiveCampusId = (req.user?.role === 'admin' || req.user?.role === 'owner') && campusId !== undefined
+    // Allow campus override for admins/owners/superadmins
+    const effectiveCampusId = (req.user?.role === 'admin' || req.user?.role === 'owner' || req.user?.role === 'superadmin') && campusId !== undefined
       ? (campusId === 'all' ? null : campusId)
       : req.user?.campusId;
 

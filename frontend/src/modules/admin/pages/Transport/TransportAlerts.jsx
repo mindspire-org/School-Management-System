@@ -4,6 +4,7 @@ import { MdNotificationsActive, MdReport, MdWarning, MdFileDownload, MdPictureAs
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 
 const mockAlerts = [
   { id: 'TA-001', type: 'Overspeed', severity: 'High', bus: 'BUS-103', message: 'Speed exceeded 80 km/h near Canal View', status: 'Active', time: '10:22 AM' },
@@ -49,9 +50,9 @@ export default function TransportAlerts() {
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5} mb={5}>
-        <MiniStatistics name="Active Alerts" value={String(stats.active)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f7971e 0%,#ffd200 100%)' icon={<Icon as={MdNotificationsActive} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Critical (High)" value={String(stats.critical)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdWarning} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Resolved" value={String(stats.resolved)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdReport} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Active Alerts" value={String(stats.active)} icon={MdNotificationsActive} colorScheme="orange" />
+        <StatCard title="Critical (High)" value={String(stats.critical)} icon={MdWarning} colorScheme="red" />
+        <StatCard title="Resolved" value={String(stats.resolved)} icon={MdReport} colorScheme="green" />
       </SimpleGrid>
 
       <Card p={4} mb={5}>
@@ -96,8 +97,8 @@ export default function TransportAlerts() {
                   <Td><Text color={textColorSecondary}>{a.time}</Text></Td>
                   <Td><Text>{a.message}</Text></Td>
                   <Td>
-                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={()=>{ setSelected(a); viewDisc.onOpen(); }} />
-                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={()=>{ setSelected(a); setForm({ ...a }); editDisc.onOpen(); }} />
+                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={() => { setSelected(a); viewDisc.onOpen(); }} />
+                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={() => { setSelected(a); setForm({ ...a }); editDisc.onOpen(); }} />
                   </Td>
                 </Tr>
               ))}
@@ -116,8 +117,8 @@ export default function TransportAlerts() {
               <Box>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>ID</Text><Text>{selected.id}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Type</Text><Text>{selected.type}</Text></Flex>
-                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Severity</Text><Badge colorScheme={selected.severity==='High'?'red':selected.severity==='Medium'?'yellow':'blue'}>{selected.severity}</Badge></Flex>
-                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Status</Text><Badge colorScheme={selected.status==='Active'?'yellow':'green'}>{selected.status}</Badge></Flex>
+                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Severity</Text><Badge colorScheme={selected.severity === 'High' ? 'red' : selected.severity === 'Medium' ? 'yellow' : 'blue'}>{selected.severity}</Badge></Flex>
+                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Status</Text><Badge colorScheme={selected.status === 'Active' ? 'yellow' : 'green'}>{selected.status}</Badge></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Bus</Text><Text>{selected.bus}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Time</Text><Text>{selected.time}</Text></Flex>
                 <Text><strong>Message:</strong> {selected.message}</Text>
@@ -138,11 +139,11 @@ export default function TransportAlerts() {
           <ModalBody>
             <FormControl mb={3}>
               <FormLabel>Type</FormLabel>
-              <Input value={form.type} onChange={(e)=> setForm(f=>({ ...f, type: e.target.value }))} />
+              <Input value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Severity</FormLabel>
-              <Select value={form.severity.toLowerCase()} onChange={(e)=> setForm(f=>({ ...f, severity: e.target.value==='high'?'High':e.target.value==='medium'?'Medium':'Low' }))}>
+              <Select value={form.severity.toLowerCase()} onChange={(e) => setForm(f => ({ ...f, severity: e.target.value === 'high' ? 'High' : e.target.value === 'medium' ? 'Medium' : 'Low' }))}>
                 <option value='high'>High</option>
                 <option value='medium'>Medium</option>
                 <option value='low'>Low</option>
@@ -150,23 +151,23 @@ export default function TransportAlerts() {
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Status</FormLabel>
-              <Select value={form.status.toLowerCase()} onChange={(e)=> setForm(f=>({ ...f, status: e.target.value==='active'?'Active':'Resolved' }))}>
+              <Select value={form.status.toLowerCase()} onChange={(e) => setForm(f => ({ ...f, status: e.target.value === 'active' ? 'Active' : 'Resolved' }))}>
                 <option value='active'>Active</option>
                 <option value='resolved'>Resolved</option>
               </Select>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Bus</FormLabel>
-              <Input value={form.bus} onChange={(e)=> setForm(f=>({ ...f, bus: e.target.value }))} />
+              <Input value={form.bus} onChange={(e) => setForm(f => ({ ...f, bus: e.target.value }))} />
             </FormControl>
             <FormControl>
               <FormLabel>Message</FormLabel>
-              <Input value={form.message} onChange={(e)=> setForm(f=>({ ...f, message: e.target.value }))} />
+              <Input value={form.message} onChange={(e) => setForm(f => ({ ...f, message: e.target.value }))} />
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{ setRows(prev => prev.map(r => r.id===form.id ? { ...form } : r)); editDisc.onClose(); }}>Save</Button>
+            <Button colorScheme='blue' onClick={() => { setRows(prev => prev.map(r => r.id === form.id ? { ...form } : r)); editDisc.onClose(); }}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

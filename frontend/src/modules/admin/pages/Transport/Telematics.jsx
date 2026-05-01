@@ -4,6 +4,7 @@ import { MdSpeed, MdBatteryFull, MdWarning, MdFileDownload, MdPictureAsPdf, MdRe
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 
 const telemetry = [
   { bus: 'BUS-101', avgSpeed: 38, fuel: 9.2, temp: 78, events: 1 },
@@ -22,7 +23,7 @@ export default function Telematics() {
   const stats = useMemo(() => {
     const active = rows.filter((t) => t.avgSpeed > 0).length;
     const avgSpeed = Math.round(rows.reduce((s, t) => s + t.avgSpeed, 0) / (rows.length || 1));
-    const fuel = (rows.filter(t => t.fuel>0).reduce((s,t)=> s + t.fuel, 0) / Math.max(1, rows.filter(t => t.fuel>0).length)).toFixed(1);
+    const fuel = (rows.filter(t => t.fuel > 0).reduce((s, t) => s + t.fuel, 0) / Math.max(1, rows.filter(t => t.fuel > 0).length)).toFixed(1);
     const alerts = rows.reduce((s, t) => s + t.events, 0);
     return { active, avgSpeed, fuel, alerts };
   }, [rows]);
@@ -41,10 +42,10 @@ export default function Telematics() {
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics name="Active Buses" value={String(stats.active)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdSpeed} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Avg Speed" value={`${stats.avgSpeed} km/h`} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdSpeed} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Fuel Economy" value={`${stats.fuel} km/l`} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdBatteryFull} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Alert Events" value={String(stats.alerts)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdWarning} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Active Buses" value={String(stats.active)} icon={MdSpeed} colorScheme="blue" />
+        <StatCard title="Avg Speed" value={`${stats.avgSpeed} km/h`} icon={MdSpeed} colorScheme="green" />
+        <StatCard title="Fuel Economy" value={`${stats.fuel} km/l`} icon={MdBatteryFull} colorScheme="orange" />
+        <StatCard title="Alert Events" value={String(stats.alerts)} icon={MdWarning} colorScheme="red" />
       </SimpleGrid>
 
       <Card>
@@ -69,8 +70,8 @@ export default function Telematics() {
                   <Td isNumeric>{t.temp}°C</Td>
                   <Td isNumeric>{t.events}</Td>
                   <Td>
-                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={()=>{ setSelected(t); viewDisc.onOpen(); }} />
-                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={()=>{ setSelected(t); setForm({ ...t }); editDisc.onOpen(); }} />
+                    <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={() => { setSelected(t); viewDisc.onOpen(); }} />
+                    <IconButton aria-label='Edit' icon={<MdEdit />} size='sm' variant='ghost' onClick={() => { setSelected(t); setForm({ ...t }); editDisc.onOpen(); }} />
                   </Td>
                 </Tr>
               ))}
@@ -109,24 +110,24 @@ export default function Telematics() {
           <ModalBody>
             <FormControl mb={3}>
               <FormLabel>Avg Speed</FormLabel>
-              <NumberInput value={form.avgSpeed} min={0} onChange={(v)=> setForm(f=>({ ...f, avgSpeed: Number(v)||0 }))}><NumberInputField /></NumberInput>
+              <NumberInput value={form.avgSpeed} min={0} onChange={(v) => setForm(f => ({ ...f, avgSpeed: Number(v) || 0 }))}><NumberInputField /></NumberInput>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Fuel (km/l)</FormLabel>
-              <NumberInput value={form.fuel} min={0} precision={1} step={0.1} onChange={(v)=> setForm(f=>({ ...f, fuel: Number(v)||0 }))}><NumberInputField /></NumberInput>
+              <NumberInput value={form.fuel} min={0} precision={1} step={0.1} onChange={(v) => setForm(f => ({ ...f, fuel: Number(v) || 0 }))}><NumberInputField /></NumberInput>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Engine Temp (°C)</FormLabel>
-              <NumberInput value={form.temp} min={0} onChange={(v)=> setForm(f=>({ ...f, temp: Number(v)||0 }))}><NumberInputField /></NumberInput>
+              <NumberInput value={form.temp} min={0} onChange={(v) => setForm(f => ({ ...f, temp: Number(v) || 0 }))}><NumberInputField /></NumberInput>
             </FormControl>
             <FormControl>
               <FormLabel>Events</FormLabel>
-              <NumberInput value={form.events} min={0} onChange={(v)=> setForm(f=>({ ...f, events: Number(v)||0 }))}><NumberInputField /></NumberInput>
+              <NumberInput value={form.events} min={0} onChange={(v) => setForm(f => ({ ...f, events: Number(v) || 0 }))}><NumberInputField /></NumberInput>
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{ setRows(prev => prev.map(r => r.bus===form.bus ? { ...form } : r)); editDisc.onClose(); }}>Save</Button>
+            <Button colorScheme='blue' onClick={() => { setRows(prev => prev.map(r => r.bus === form.bus ? { ...form } : r)); editDisc.onClose(); }}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

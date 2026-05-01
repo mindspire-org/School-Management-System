@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, SimpleGrid, VStack, HStack, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
+import { Box, Text, SimpleGrid, VStack, HStack, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex, useToast } from '@chakra-ui/react';
 import { MdVisibility, MdCheckCircle, MdSchedule, MdAssessment, MdLibraryBooks } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import BarChart from '../../../components/charts/BarChart';
@@ -7,72 +7,60 @@ import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import { useAuth } from '../../../contexts/AuthContext';
-import { assignmentsApi, studentsApi } from '../../../services/api';
+import * as studentsApi from '../../../services/api/students';
+import * as assignmentsApi from '../../../services/api/assignments';
 
 export default function TeacherFeedback() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { user } = useAuth();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
   const [selected, setSelected] = useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [student, setStudent] = useState(null);
   const [rows, setRows] = useState([]);
 
   useEffect(() => {
-    let alive = true;
-    const run = async () => {
-      setLoading(true);
-      setError(null);
+    const load = async () => {
       try {
-        const selfRes = await studentsApi.list();
-        const self = selfRes?.rows?.[0] || null;
-        if (!alive) return;
-        setStudent(self);
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
 
-        const data = await assignmentsApi.list();
-        const list = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
-        if (!alive) return;
-        setRows(list);
+      try {
+        const payload = await assignmentsApi.list({ page: 1, pageSize: 200 });
+        setRows(Array.isArray(payload?.rows) ? payload.rows : []);
       } catch (e) {
-        if (!alive) return;
-        setError(e?.message || 'Failed to load feedback');
         setRows([]);
-      } finally {
-        if (!alive) return;
-        setLoading(false);
+        toast({ title: 'Failed to load feedback', description: e?.message || 'Request failed', status: 'error', duration: 3500, isClosable: true });
       }
     };
-    run();
-    return () => {
-      alive = false;
-    };
-  }, []);
+    load();
+  }, [user?.role, toast]);
 
-  const classSection = useMemo(() => {
-    if (!student) return '';
-    return `${student.class || ''}${student.section || ''}`;
-  }, [student]);
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
   const items = useMemo(() => {
     return (rows || [])
+      .filter((a) => !!a.submissionId)
       .map((a) => {
-        const statusRaw = (a?.submissionStatus || '').toLowerCase();
-        const status = statusRaw === 'graded' ? 'graded' : (statusRaw === 'submitted' ? 'submitted' : 'pending');
-        const score = a?.score === null || a?.score === undefined ? null : Number(a.score);
+        const graded = a.score !== null && a.score !== undefined;
+        const status = graded ? 'graded' : 'submitted';
         return {
-          id: a?.id,
-          title: a?.title || '-',
-          subject: a?.subject || '-',
-          teacher: a?.createdByName || '-',
+          id: a.id,
+          title: a.title,
+          subject: a.subject || a.class || '-',
+          teacher: a.createdByName || '—',
           status,
-          score: Number.isFinite(score) ? score : null,
-          rubric: a?.rubric || '-',
-          teacherComment: a?.teacherComment || (status === 'graded' ? '-' : 'Submitted. Awaiting review.'),
+          score: graded ? Number(a.score) : null,
+          rubric: a.rubric || '—',
+          teacherComment: a.teacherComment || (graded ? '—' : 'Submitted. Awaiting review.'),
         };
-      })
-      .filter((a) => a.status === 'graded' || a.status === 'submitted');
+      });
   }, [rows]);
 
   const graded = items.filter(i => i.status === 'graded');
@@ -92,19 +80,11 @@ export default function TeacherFeedback() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Teacher Feedback</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student?.name || user?.name || 'Student'}{student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}{classSection ? ` • Class ${classSection}` : ''}</Text>
-
-      {loading ? (
-        <Card p='16px' mb='16px'>
-          <Text color={textSecondary}>Loading feedback...</Text>
-        </Card>
-      ) : null}
-
-      {error ? (
-        <Card p='16px' mb='16px'>
-          <Text color='red.500'>{error}</Text>
-        </Card>
-      ) : null}
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

@@ -29,6 +29,7 @@ import {
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import HeatmapActivity from '../../../../components/charts/v2/HeatmapActivity';
 import { MdWhatshot, MdCalendarToday, MdThumbUp, MdFileDownload, MdPictureAsPdf, MdRefresh } from 'react-icons/md';
 import * as reportsApi from '../../../../services/api/reports';
 import * as studentsApi from '../../../../services/api/students';
@@ -73,6 +74,13 @@ export default function AttendanceHeatmaps() {
     let max = -1, di = 0;
     heatMap.forEach((row, i) => row.forEach((v) => { if (v > max) { max = v; di = i; } }));
     return { day: days[di], rate: max > -1 ? max : 0 };
+  }, [heatMap]);
+
+  const heatmapSeries = useMemo(() => {
+    return days.map((d, i) => ({
+      name: d,
+      data: periods.map((p, j) => ({ x: p, y: Number(heatMap?.[i]?.[j] || 0) })),
+    }));
   }, [heatMap]);
 
   useEffect(() => {
@@ -189,37 +197,31 @@ export default function AttendanceHeatmaps() {
 
       {/* Heatmap */}
       <Card p={4}>
-        <Box overflowX='auto' w='100%'>
-          <Box display='grid' gridTemplateColumns={`repeat(${periods.length + 1}, minmax(80px, 1fr))`} gap={2}>
-            <Box />
-            {periods.map((p) => (
-              <Box key={p} textAlign='center' fontWeight='600' whiteSpace='nowrap'>{p}</Box>
-            ))}
-            {days.map((d, i) => (
-              <React.Fragment key={d}>
-                <Box fontWeight='600' whiteSpace='nowrap'>{d}</Box>
-                {heatMap[i].map((v, j) => (
-                  <Tooltip key={`t-${i}-${j}`} label={`${d} ${periods[j]}: ${v || '-'}% of ${denom || 0}`}>
-                    <Box
-                      key={`${i}-${j}`}
-                      h={{ base: '36px', md: '40px' }}
-                      borderRadius='md'
-                      bg={getColor(v)}
-                      display='flex'
-                      alignItems='center'
-                      justifyContent='center'
-                      color='white'
-                      fontWeight='700'
-                      cursor='default'
-                    >
-                      {v ? `${v}%` : '-'}
-                    </Box>
-                  </Tooltip>
-                ))}
-              </React.Fragment>
-            ))}
-          </Box>
-        </Box>
+        <HeatmapActivity
+          ariaLabel="Attendance heatmap"
+          height={360}
+          series={heatmapSeries}
+          options={{
+            legend: { position: 'bottom' },
+            tooltip: {
+              y: { formatter: (v) => `${Math.round(Number(v) || 0)}% of ${denom || 0}` },
+            },
+            plotOptions: {
+              heatmap: {
+                radius: 4,
+                shadeIntensity: 0.35,
+                colorScale: {
+                  ranges: [
+                    { from: 0, to: 0, color: disabledColor, name: 'No data' },
+                    { from: 1, to: 89, color: '#E53E3E', name: '< 90%' },
+                    { from: 90, to: 94, color: '#D69E2E', name: '90-94%' },
+                    { from: 95, to: 100, color: '#38A169', name: '>=95%' },
+                  ],
+                },
+              },
+            },
+          }}
+        />
         <Flex mt={4} gap={4} align='center'>
           <Text fontSize='sm' color={textColorSecondary}>Legend:</Text>
           <Badge colorScheme='green'>{'>=95%'}</Badge>

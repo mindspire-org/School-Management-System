@@ -8,7 +8,7 @@ const resolveCampusId = (req) => {
         req.headers?.['campusid'];
     const id = headerCampusId ?? req.user?.campusId;
     const num = Number(id);
-    return Number.isFinite(num) && num > 0 ? num : null;
+    return Number.isFinite(num) && num >= 0 ? num : null;
 };
 
 // --- Subjects ---

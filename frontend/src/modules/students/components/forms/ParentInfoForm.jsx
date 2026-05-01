@@ -12,6 +12,7 @@ import {
   Divider,
   InputGroup,
   InputLeftAddon,
+  InputRightElement,
   Checkbox,
   Button,
   Tabs, 
@@ -36,6 +37,13 @@ function ParentInfoForm() {
   const mother = parentInfo.mother || {};
   const guardian = parentInfo.guardian || {};
   const emergency = parentInfo.emergency || {};
+  const [showParentPwd, setShowParentPwd] = React.useState(false);
+  const [showParentPwd2, setShowParentPwd2] = React.useState(false);
+  const [showGuardianPwd, setShowGuardianPwd] = React.useState(false);
+  const [showGuardianPwd2, setShowGuardianPwd2] = React.useState(false);
+
+  const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
+  const clampDigits = (s, maxLen) => digitsOnly(s).slice(0, maxLen);
   
   // Handle father information changes
   const handleFatherChange = (field, value) => {
@@ -166,8 +174,10 @@ function ParentInfoForm() {
                 <FormLabel>Father's CNIC</FormLabel>
                 <Input
                   value={father.cnic || ''}
-                  onChange={(e) => handleFatherChange('cnic', e.target.value)}
+                  onChange={(e) => handleFatherChange('cnic', clampDigits(e.target.value, 13))}
                   placeholder="00000-0000000-0"
+                  inputMode="numeric"
+                  maxLength={13}
                 />
               </FormControl>
             </SimpleGrid>
@@ -179,8 +189,10 @@ function ParentInfoForm() {
                   <InputLeftAddon>+92</InputLeftAddon>
                   <Input
                     value={father.phone || ''}
-                    onChange={(e) => handleFatherChange('phone', e.target.value)}
+                    onChange={(e) => handleFatherChange('phone', clampDigits(e.target.value, 11))}
                     placeholder="300 1234567"
+                    inputMode="numeric"
+                    maxLength={11}
                   />
                 </InputGroup>
               </FormControl>
@@ -193,6 +205,45 @@ function ParentInfoForm() {
                   onChange={(e) => handleFatherChange('email', e.target.value)}
                   placeholder="father@example.com"
                 />
+              </FormControl>
+            </SimpleGrid>
+
+            {/* Parent Portal Password fields (for Parent login with phone + password) */}
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={6}>
+              <FormControl id="parentPortalPassword">
+                <FormLabel>Parent Portal Password</FormLabel>
+                <InputGroup>
+                  <Input
+                    type={showParentPwd ? 'text' : 'password'}
+                    value={parentInfo.portalPassword || ''}
+                    onChange={(e) => handleParentInfoChange('portalPassword', e.target.value)}
+                    placeholder="Set a password for Parent login"
+                  />
+                  <InputRightElement width='3rem'>
+                    <Button size='sm' variant='ghost' onClick={() => setShowParentPwd((v) => !v)}>
+                      {showParentPwd ? 'Hide' : 'Show'}
+                    </Button>
+                  </InputRightElement>
+                </InputGroup>
+                <FormHelperText>
+                  Parents will login using WhatsApp phone + this password.
+                </FormHelperText>
+              </FormControl>
+              <FormControl id="parentPortalPasswordConfirm">
+                <FormLabel>Confirm Password</FormLabel>
+                <InputGroup>
+                  <Input
+                    type={showParentPwd2 ? 'text' : 'password'}
+                    value={parentInfo.portalPasswordConfirm || ''}
+                    onChange={(e) => handleParentInfoChange('portalPasswordConfirm', e.target.value)}
+                    placeholder="Re-enter password"
+                  />
+                  <InputRightElement width='3rem'>
+                    <Button size='sm' variant='ghost' onClick={() => setShowParentPwd2((v) => !v)}>
+                      {showParentPwd2 ? 'Hide' : 'Show'}
+                    </Button>
+                  </InputRightElement>
+                </InputGroup>
               </FormControl>
             </SimpleGrid>
 
@@ -246,8 +297,10 @@ function ParentInfoForm() {
                 <FormLabel>Mother's CNIC</FormLabel>
                 <Input
                   value={mother.cnic || ''}
-                  onChange={(e) => handleMotherChange('cnic', e.target.value)}
+                  onChange={(e) => handleMotherChange('cnic', clampDigits(e.target.value, 13))}
                   placeholder="00000-0000000-0"
+                  inputMode="numeric"
+                  maxLength={13}
                 />
               </FormControl>
             </SimpleGrid>
@@ -259,8 +312,10 @@ function ParentInfoForm() {
                   <InputLeftAddon>+92</InputLeftAddon>
                   <Input
                     value={mother.phone || ''}
-                    onChange={(e) => handleMotherChange('phone', e.target.value)}
+                    onChange={(e) => handleMotherChange('phone', clampDigits(e.target.value, 11))}
                     placeholder="300 1234567"
+                    inputMode="numeric"
+                    maxLength={11}
                   />
                 </InputGroup>
               </FormControl>
@@ -353,8 +408,10 @@ function ParentInfoForm() {
                       <InputLeftAddon>+92</InputLeftAddon>
                       <Input
                         value={guardian.phone || ''}
-                        onChange={(e) => handleGuardianChange('phone', e.target.value)}
+                        onChange={(e) => handleGuardianChange('phone', clampDigits(e.target.value, 11))}
                         placeholder="300 1234567"
+                        inputMode="numeric"
+                        maxLength={11}
                       />
                     </InputGroup>
                   </FormControl>
@@ -363,8 +420,10 @@ function ParentInfoForm() {
                     <FormLabel>Guardian's CNIC</FormLabel>
                     <Input
                       value={guardian.cnic || ''}
-                      onChange={(e) => handleGuardianChange('cnic', e.target.value)}
+                      onChange={(e) => handleGuardianChange('cnic', clampDigits(e.target.value, 13))}
                       placeholder="00000-0000000-0"
+                      inputMode="numeric"
+                      maxLength={13}
                     />
                   </FormControl>
                 </SimpleGrid>
@@ -378,6 +437,42 @@ function ParentInfoForm() {
                   />
                 </FormControl>
                 
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={6}>
+                  <FormControl id="guardianPortalPassword" isRequired={false}>
+                    <FormLabel>Parent Portal Password</FormLabel>
+                    <InputGroup>
+                      <Input
+                        type={showGuardianPwd ? 'text' : 'password'}
+                        value={guardian.portalPassword || ''}
+                        onChange={(e) => handleGuardianChange('portalPassword', e.target.value)}
+                        placeholder="Set a password for Parent login"
+                      />
+                      <InputRightElement width='3rem'>
+                        <Button size='sm' variant='ghost' onClick={() => setShowGuardianPwd((v) => !v)}>
+                          {showGuardianPwd ? 'Hide' : 'Show'}
+                        </Button>
+                      </InputRightElement>
+                    </InputGroup>
+                    <FormHelperText>Preferred: guardian's WhatsApp phone + this password for portal login.</FormHelperText>
+                  </FormControl>
+                  <FormControl id="guardianPortalPasswordConfirm" isRequired={false}>
+                    <FormLabel>Confirm Password</FormLabel>
+                    <InputGroup>
+                      <Input
+                        type={showGuardianPwd2 ? 'text' : 'password'}
+                        value={guardian.portalPasswordConfirm || ''}
+                        onChange={(e) => handleGuardianChange('portalPasswordConfirm', e.target.value)}
+                        placeholder="Re-enter password"
+                      />
+                      <InputRightElement width='3rem'>
+                        <Button size='sm' variant='ghost' onClick={() => setShowGuardianPwd2((v) => !v)}>
+                          {showGuardianPwd2 ? 'Hide' : 'Show'}
+                        </Button>
+                      </InputRightElement>
+                    </InputGroup>
+                  </FormControl>
+                </SimpleGrid>
+
                 <Button 
                   leftIcon={<Icon as={MdContentCopy} />} 
                   colorScheme="brand" 
@@ -444,8 +539,10 @@ function ParentInfoForm() {
                   <InputLeftAddon>+92</InputLeftAddon>
                   <Input
                     value={emergency.phone || ''}
-                    onChange={(e) => handleEmergencyChange('phone', e.target.value)}
+                    onChange={(e) => handleEmergencyChange('phone', clampDigits(e.target.value, 11))}
                     placeholder="300 1234567"
+                    inputMode="numeric"
+                    maxLength={11}
                   />
                 </InputGroup>
               </FormControl>
@@ -456,8 +553,10 @@ function ParentInfoForm() {
                   <InputLeftAddon>+92</InputLeftAddon>
                   <Input
                     value={emergency.alternatePhone || ''}
-                    onChange={(e) => handleEmergencyChange('alternatePhone', e.target.value)}
+                    onChange={(e) => handleEmergencyChange('alternatePhone', clampDigits(e.target.value, 11))}
                     placeholder="300 1234567"
+                    inputMode="numeric"
+                    maxLength={11}
                   />
                 </InputGroup>
               </FormControl>
@@ -474,6 +573,17 @@ function ParentInfoForm() {
       </Text>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
+        <FormControl id="familyNumber">
+          <FormLabel>Family Number (optional)</FormLabel>
+          <Input
+            value={parentInfo.familyNumber || ''}
+            onChange={(e) => handleParentInfoChange('familyNumber', e.target.value)}
+            placeholder="Enter to link siblings; leave empty to auto-generate"
+          />
+          <FormHelperText>
+            This value groups siblings. If left empty, the system will generate a unique number.
+          </FormHelperText>
+        </FormControl>
         <FormControl id="siblings">
           <FormLabel>Number of Siblings</FormLabel>
           <Input

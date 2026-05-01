@@ -30,6 +30,7 @@ const AttendanceDetailModal = ({ isOpen, onClose, student, attendanceData, selec
   const [stats, setStats] = useState({
     present: 0,
     absent: 0,
+    late: 0,
     leave: 0,
     total: 0,
     percentage: 0,
@@ -44,19 +45,34 @@ const AttendanceDetailModal = ({ isOpen, onClose, student, attendanceData, selec
     if (student && attendanceData) {
       calculateStats();
     }
-  }, [student, attendanceData]);
+  }, [student, attendanceData, selectedDate]);
   
   // Calculate attendance statistics
   const calculateStats = () => {
-    // In a real app, this would use actual data
-    // For demo, we'll set some example values
-    setStats({
-      present: 22,
-      absent: 5,
-      leave: 3,
-      total: 30,
-      percentage: 73.3,
+    const base = selectedDate ? new Date(selectedDate) : new Date();
+    const monthStart = new Date(base.getFullYear(), base.getMonth(), 1);
+    const monthEnd = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    const totalDays = monthEnd.getDate();
+
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+    let leave = 0;
+
+    Object.entries(attendanceData || {}).forEach(([dateStr, data]) => {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return;
+      if (d < monthStart || d > monthEnd) return;
+      const st = String(data?.status || '').toLowerCase();
+      if (st === 'present') present += 1;
+      else if (st === 'absent') absent += 1;
+      else if (st === 'late') late += 1;
+      else if (st === 'leave') leave += 1;
     });
+
+    const attended = present + late;
+    const percentage = totalDays ? Math.round((attended / totalDays) * 1000) / 10 : 0;
+    setStats({ present, absent, late, leave, total: totalDays, percentage });
   };
   
   if (!student) return null;
@@ -116,7 +132,7 @@ const AttendanceDetailModal = ({ isOpen, onClose, student, attendanceData, selec
               <Divider my={6} />
               
               {/* Attendance Summary */}
-              <Grid templateColumns="repeat(3, 1fr)" gap={4}>
+              <Grid templateColumns="repeat(4, 1fr)" gap={4}>
                 <Box bg="green.50" p={3} borderRadius="md" textAlign="center">
                   <Text fontWeight="bold" color="green.500">Present</Text>
                   <Text fontSize="xl" fontWeight="bold">{stats.present}</Text>
@@ -124,6 +140,10 @@ const AttendanceDetailModal = ({ isOpen, onClose, student, attendanceData, selec
                 <Box bg="red.50" p={3} borderRadius="md" textAlign="center">
                   <Text fontWeight="bold" color="red.500">Absent</Text>
                   <Text fontSize="xl" fontWeight="bold">{stats.absent}</Text>
+                </Box>
+                <Box bg="orange.50" p={3} borderRadius="md" textAlign="center">
+                  <Text fontWeight="bold" color="orange.500">Late</Text>
+                  <Text fontSize="xl" fontWeight="bold">{stats.late}</Text>
                 </Box>
                 <Box bg="yellow.50" p={3} borderRadius="md" textAlign="center">
                   <Text fontWeight="bold" color="yellow.500">Leave</Text>

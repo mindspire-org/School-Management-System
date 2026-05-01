@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Flex, SimpleGrid, Text, Button, HStack, VStack, Icon, Badge, useColorModeValue } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/card/Card';
@@ -7,48 +7,72 @@ import IconBox from '../../components/icons/IconBox';
 import { MdClass, MdPeople, MdCheckCircle, MdAssignment, MdWarningAmber, MdAdd, MdEvent, MdUploadFile, MdMessage, MdLogin } from 'react-icons/md';
 import LineChart from '../../components/charts/LineChart';
 import BarChart from '../../components/charts/BarChart';
+import { useAuth } from '../../contexts/AuthContext';
+import * as teachersApi from '../../services/api/teachers';
 
 export default function TeacherDashboard() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const navigate = useNavigate();
+  const { user } = useAuth();
   const hoverShadow = useColorModeValue('lg', 'dark-lg');
 
-  // Mock quick stats
-  const stats = {
-    todaysClasses: 3,
-    students: 96,
-    attendancePending: 2,
-    homeworkDue: 5,
-    alerts: 1,
-  };
+  const [stats, setStats] = useState({
+    todaysClasses: 0,
+    students: 0,
+    attendancePending: 0,
+    homeworkDue: 0,
+    alerts: 0,
+    upcomingClass: null,
+    attendanceTrend: {
+      categories: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      series: [{ name: 'Attendance %', data: [0, 0, 0, 0, 0, 0, 0] }]
+    },
+    homeworkStats: {
+      categories: [],
+      series: [
+        { name: 'Submitted', data: [] },
+        { name: 'Pending', data: [] }
+      ]
+    }
+  });
 
-  const homeworkBarSeries = [
-    { name: 'Submitted', data: [22, 18, 25, 28, 20] },
-    { name: 'Pending', data: [8, 12, 5, 2, 10] },
-  ];
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        // If teacher, list() returns self
+        const { rows } = await teachersApi.list({});
+        if (rows && rows.length > 0) {
+          const me = rows[0];
+          const data = await teachersApi.getDashboardStats(me.id);
+          setStats(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats', err);
+      }
+    };
 
+    if (user?.role === 'teacher') {
+      fetchStats();
+    }
+  }, [user]);
+
+  const homeworkBarSeries = stats.homeworkStats.series;
   const homeworkBarOptions = {
     chart: { stacked: true, toolbar: { show: false } },
     plotOptions: { bar: { columnWidth: '45%', borderRadius: 4 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: ['7A', '7B', '8A', '8B', '9A'] },
+    xaxis: { categories: stats.homeworkStats.categories },
     grid: { strokeDashArray: 4 },
     colors: ['#38A169', '#E53E3E'],
     legend: { show: true },
   };
 
-  const attendanceTrendSeries = [
-    {
-      name: 'Attendance %',
-      data: [92, 95, 90, 96, 94, 88, 93],
-    },
-  ];
-
+  const attendanceTrendSeries = stats.attendanceTrend.series;
   const attendanceTrendOptions = {
     chart: { toolbar: { show: false }, sparkline: { enabled: false } },
     stroke: { curve: 'smooth', width: 3 },
     dataLabels: { enabled: false },
-    xaxis: { categories: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
+    xaxis: { categories: stats.attendanceTrend.categories },
     yaxis: { labels: { formatter: (v) => `${v}%` }, min: 0, max: 100 },
     grid: { strokeDashArray: 4 },
     colors: ['#3182CE'],
@@ -68,7 +92,7 @@ export default function TeacherDashboard() {
           <Text fontSize='2xl' fontWeight='bold' mb='4px'>Teacher Dashboard</Text>
           <Text fontSize='md' color={textSecondary}>Your teaching overview and quick actions</Text>
         </Box>
-        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={()=>navigate('/auth/sign-in')}>Sign In</Button>
+        <Button size='sm' colorScheme='blue' leftIcon={<MdLogin />} onClick={() => navigate('/auth/sign-in')}>Sign In</Button>
       </Flex>
 
       {/* Overview KPIs - single row with horizontal scroll */}
@@ -80,7 +104,7 @@ export default function TeacherDashboard() {
               startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#4481EB 0%,#04BEFE 100%)' icon={<Icon as={MdClass} w='22px' h='22px' color='white' />} />}
               name="Today's Classes"
               value={String(stats.todaysClasses)}
-              trendData={[1,2,2,3,3]}
+              trendData={[1, 2, 2, 3, 3]}
               trendColor='#4481EB'
             />
           </Box>
@@ -90,7 +114,7 @@ export default function TeacherDashboard() {
               startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#7F7FD5 0%,#86A8E7 100%)' icon={<Icon as={MdPeople} w='22px' h='22px' color='white' />} />}
               name='Students'
               value={String(stats.students)}
-              trendData={[70,80,90,95,96]}
+              trendData={[70, 80, 90, 95, 96]}
               trendColor='#7F7FD5'
             />
           </Box>
@@ -100,7 +124,7 @@ export default function TeacherDashboard() {
               startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#01B574 0%,#51CB97 100%)' icon={<Icon as={MdCheckCircle} w='22px' h='22px' color='white' />} />}
               name='Attendance Pending'
               value={String(stats.attendancePending)}
-              trendData={[3,2,2,1,2]}
+              trendData={[3, 2, 2, 1, 2]}
               trendColor='#01B574'
             />
           </Box>
@@ -110,7 +134,7 @@ export default function TeacherDashboard() {
               startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#FFB36D 0%,#FD7853 100%)' icon={<Icon as={MdAssignment} w='22px' h='22px' color='white' />} />}
               name='Homework Due'
               value={String(stats.homeworkDue)}
-              trendData={[2,3,4,5,5]}
+              trendData={[2, 3, 4, 5, 5]}
               trendColor='#FD7853'
             />
           </Box>
@@ -120,7 +144,7 @@ export default function TeacherDashboard() {
               startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdWarningAmber} w='22px' h='22px' color='white' />} />}
               name='Alerts'
               value={String(stats.alerts)}
-              trendData={[0,1,0,1,1]}
+              trendData={[0, 1, 0, 1, 1]}
               trendColor='#f5576c'
             />
           </Box>
@@ -131,16 +155,22 @@ export default function TeacherDashboard() {
         {/* Upcoming Class */}
         <Card p='20px'>
           <Text fontSize='lg' fontWeight='bold' mb='16px'>Upcoming Class</Text>
-          <Flex justify='space-between' align='center' mb='10px'>
-            <VStack align='start' spacing={1}>
-              <Text fontWeight='600'>Class 7B - Mathematics</Text>
-              <Text fontSize='sm' color={textSecondary}>Topic: Fractions and Decimals</Text>
-            </VStack>
-            <HStack>
-              <Badge colorScheme='blue'>10:30 AM</Badge>
-              <Badge>Room 204</Badge>
-            </HStack>
-          </Flex>
+          {stats.upcomingClass ? (
+            <Flex justify='space-between' align='center' mb='10px'>
+              <VStack align='start' spacing={1}>
+                <Text fontWeight='600'>Class {stats.upcomingClass.className} - {stats.upcomingClass.subject}</Text>
+                <Text fontSize='sm' color={textSecondary}>Room: {stats.upcomingClass.room || 'N/A'}</Text>
+              </VStack>
+              <HStack>
+                <Badge colorScheme='blue'>{stats.upcomingClass.startTime}</Badge>
+                <Badge>{stats.upcomingClass.endTime}</Badge>
+              </HStack>
+            </Flex>
+          ) : (
+            <Flex justify='center' align='center' h='60px'>
+              <Text color={textSecondary}>No upcoming classes today</Text>
+            </Flex>
+          )}
           <SimpleGrid minChildWidth='150px' spacing='6px' mt='12px'>
             <Button leftIcon={<Icon as={MdCheckCircle} boxSize={{ base: 3.5, md: 4 }} />} colorScheme='green' size='sm' variant='outline' w='100%'
               px={{ base: 2, md: 2.5 }} py={{ base: 1, md: 1.5 }} justifyContent='flex-start' whiteSpace='normal' lineHeight='short' wordBreak='break-word' iconSpacing={2} fontSize={{ base: 'xs', md: 'sm' }}>

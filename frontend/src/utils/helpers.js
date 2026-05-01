@@ -103,9 +103,9 @@ export const truncateText = (text, maxLength = 50) => {
  */
 export const formatCurrency = (amount) => {
   if (typeof amount !== 'number') return '';
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-PK', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'PKR',
     minimumFractionDigits: 0,
   }).format(amount);
 };

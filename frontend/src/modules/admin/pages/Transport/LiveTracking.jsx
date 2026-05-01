@@ -21,6 +21,7 @@ import { MdGpsFixed, MdDirectionsBus, MdSpeed, MdMap, MdRefresh, MdSearch, MdLoc
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 
 const mockBuses = [
   { id: 'BUS-101', route: 'R1', driver: 'Imran Khan', lat: 31.5204, lng: 74.3587, speed: 42, status: 'On Route', lastUpdate: '2m ago' },
@@ -61,10 +62,10 @@ export default function LiveTracking() {
 
       {/* KPIs */}
       <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics name="Total Buses" value={String(stats.total)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdDirectionsBus} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="On Route" value={String(stats.onRoute)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdGpsFixed} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="At Depot" value={String(stats.atDepot)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdMap} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Avg Speed" value={`${stats.avgSpeed} km/h`} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdSpeed} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Total Buses" value={String(stats.total)} icon={MdDirectionsBus} colorScheme="blue" />
+        <StatCard title="On Route" value={String(stats.onRoute)} icon={MdGpsFixed} colorScheme="green" />
+        <StatCard title="At Depot" value={String(stats.atDepot)} icon={MdMap} colorScheme="red" />
+        <StatCard title="Avg Speed" value={`${stats.avgSpeed} km/h`} icon={MdSpeed} colorScheme="orange" />
       </SimpleGrid>
 
       {/* Toolbar */}

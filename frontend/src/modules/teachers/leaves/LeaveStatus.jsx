@@ -110,7 +110,14 @@ export default function LeaveStatus() {
               <option>All</option><option>Approved</option><option>Pending</option><option>Rejected</option><option>Cancelled</option>
             </Select>
             <Select value={type} onChange={e=>setType(e.target.value)} size='sm' maxW='160px'>
-              <option>All</option><option>Sick</option><option>Casual</option><option>Annual</option>
+              <option>All</option>
+              <option>Sick Leave</option>
+              <option>Marriage Leave</option>
+              <option>Urgent Leave</option>
+              <option>Short Leave</option>
+              <option>Emergency Leave</option>
+              <option>Casual Leave</option>
+              <option>Annual Leave</option>
             </Select>
             <Input type='date' value={from} onChange={e=>setFrom(e.target.value)} size='sm' maxW='160px' />
             <Input type='date' value={to} onChange={e=>setTo(e.target.value)} size='sm' maxW='160px' />

@@ -18,7 +18,17 @@ export const getBusById = async (req, res, next) => {
 
 export const createBus = async (req, res, next) => {
   try {
-    const row = await service.createBus({ ...req.body, campusId: req.user?.campusId });
+    // Support All Campuses: use campusId from body if provided, otherwise from user context
+    let campusId = req.user?.campusId;
+    if (req.body.campusId) {
+      campusId = Number(req.body.campusId);
+    }
+    // Allow null campusId for global admins (owner, superadmin, admin)
+    const isGlobalAdmin = ['owner', 'superadmin', 'admin'].includes(req.user?.role);
+    if (!campusId && !isGlobalAdmin && !req.body.campusId) {
+      return res.status(400).json({ message: 'Campus ID is required' });
+    }
+    const row = await service.createBus({ ...req.body, campusId });
     res.status(201).json(row);
   } catch (e) { next(e); }
 };

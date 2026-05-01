@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, Flex, HStack, SimpleGrid, Select, Input, Button, useColorModeValue, Badge, Table, Thead, Tbody, Tr, Th, Td, Tooltip, Icon, IconButton } from '@chakra-ui/react';
 import { MdRefresh, MdFileDownload, MdVisibility, MdEdit } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
-import { mockExamResults, mockStudents } from '../../../utils/mockData';
+import * as studentsApi from '../../../services/api/students';
+import * as resultsApi from '../../../services/api/results';
 
 export default function StudentPerformance() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -14,31 +15,97 @@ export default function StudentPerformance() {
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
 
-  const classes = useMemo(() => Array.from(new Set(mockStudents.map(s => s.class))).sort(), []);
-  const sections = useMemo(() => Array.from(new Set(mockStudents.map(s => s.section))).sort(), []);
+  const [students, setStudents] = useState([]);
+  const [results, setResults] = useState([]);
 
-  const rows = useMemo(() => mockStudents.map(s => ({
-    id: s.id,
-    name: s.name,
-    roll: s.rollNumber,
-    cls: s.class,
-    section: s.section,
-    percentage: s.attendance,
-  })), []);
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const data = await studentsApi.list({ page: 1, pageSize: 200 });
+        setStudents(Array.isArray(data?.rows) ? data.rows : []);
+      } catch (e) {
+        setStudents([]);
+      }
+    };
+    fetchStudents();
+  }, []);
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        const data = await resultsApi.list({ page: 1, pageSize: 200, className: cls || undefined, section: section || undefined });
+        setResults(Array.isArray(data?.items) ? data.items : []);
+      } catch (e) {
+        setResults([]);
+      }
+    };
+    fetchResults();
+  }, [cls, section]);
+
+  const classes = useMemo(() => Array.from(new Set(students.map(s => s.class))).filter(Boolean).sort(), [students]);
+  const sections = useMemo(() => Array.from(new Set(students.map(s => s.section))).filter(Boolean).sort(), [students]);
+
+  const rows = useMemo(() => {
+    const agg = new Map();
+    results.forEach((r) => {
+      const sid = r.studentId;
+      if (!sid) return;
+      const marks = Number(r.marks);
+      if (!Number.isFinite(marks)) return;
+      const cur = agg.get(sid) || { total: 0, count: 0 };
+      cur.total += marks;
+      cur.count += 1;
+      agg.set(sid, cur);
+    });
+
+    return students.map(s => {
+      const a = agg.get(s.id);
+      const avg = a && a.count ? Math.round(a.total / a.count) : 0;
+      return {
+        id: s.id,
+        name: s.name,
+        roll: s.rollNumber,
+        cls: s.class,
+        section: s.section,
+        percentage: avg,
+      };
+    });
+  }, [students, results]);
 
   const filtered = useMemo(() => rows.filter(r =>
     (!cls || r.cls === cls) && (!section || r.section === section) && (!q || r.name.toLowerCase().includes(q.toLowerCase()) || r.roll.toLowerCase().includes(q.toLowerCase()))
   ), [rows, cls, section, q]);
 
+  const subjectAverages = useMemo(() => {
+    const bySubj = new Map();
+    results.forEach((r) => {
+      const subj = r.subject;
+      const marks = Number(r.marks);
+      if (!subj || !Number.isFinite(marks)) return;
+      const cur = bySubj.get(subj) || { total: 0, count: 0 };
+      cur.total += marks;
+      cur.count += 1;
+      bySubj.set(subj, cur);
+    });
+    const subjects = Array.from(bySubj.keys()).sort();
+    return {
+      subjects,
+      values: subjects.map((s) => {
+        const v = bySubj.get(s);
+        return v && v.count ? Math.round(v.total / v.count) : 0;
+      }),
+    };
+  }, [results]);
+
   const chartData = useMemo(() => ([
-    { name: 'Avg %', data: mockExamResults[0].subjects.map(s => s.score) }
-  ]), []);
+    { name: 'Avg %', data: subjectAverages.values }
+  ]), [subjectAverages]);
   const chartOptions = useMemo(() => ({
     chart: { toolbar: { show: false } },
-    xaxis: { categories: mockExamResults[0].subjects.map(s => s.name) },
+    xaxis: { categories: subjectAverages.subjects },
     dataLabels: { enabled: false },
     colors: ['#805AD5'],
-  }), []);
+  }), [subjectAverages]);
 
   const gradeBuckets = useMemo(() => {
     const buckets = { '≥90%': 0, '80-89%': 0, '<80%': 0 };

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -37,7 +36,6 @@ import {
 import Card from '../../../../components/card/Card';
 // Icons
 import {
-  MdAdd,
   MdSearch,
   MdFilterList,
   MdEdit,
@@ -51,11 +49,15 @@ import {
 import { getStatusColor } from '../../../../utils/helpers';
 // API
 import * as studentsApi from '../../../../services/api/students';
+import useClassOptions from '../../../../hooks/useClassOptions';
+import { useAuth } from '../../../../contexts/AuthContext';
 // Embedded views
 import StudentProfile from './StudentProfile';
 import EditStudent from './EditStudent';
 
 export default function StudentsList() {
+  const { campusId, user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'owner';
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -64,15 +66,15 @@ export default function StudentsList() {
   const [error, setError] = useState('');
   const [viewId, setViewId] = useState(null);
   const [editId, setEditId] = useState(null);
-  const navigate = useNavigate();
   const toast = useToast();
+  const { classOptions } = useClassOptions();
 
   // Fetch students from backend
   const refreshList = async () => {
     try {
       setLoading(true);
       setError('');
-      const params = {};
+      const params = { campusId };
       if (searchQuery) params.q = searchQuery;
       if (filterClass !== 'all') params.class = filterClass;
       const payload = await studentsApi.list(params);
@@ -91,21 +93,18 @@ export default function StudentsList() {
 
   // Filter students
   const filteredStudents = students.filter(student => {
-    const matchesSearch = 
+    const matchesSearch =
       student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.rfidTag.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesClass = filterClass === 'all' || student.class === filterClass;
     const matchesStatus = filterStatus === 'all' || student.feeStatus === filterStatus;
-    
+
     return matchesSearch && matchesClass && matchesStatus;
   });
 
   // Handle actions
-  const handleAddStudent = () => {
-    navigate('/admin/students/add');
-  };
 
   const handleEditStudent = (studentId) => {
     setEditId(studentId);
@@ -147,13 +146,6 @@ export default function StudentsList() {
             Manage all students and RFID tags
           </Text>
         </Box>
-        <Button
-          leftIcon={<MdAdd />}
-          colorScheme='blue'
-          onClick={handleAddStudent}
-        >
-          Add New Student
-        </Button>
       </Flex>
 
       {/* Filters */}
@@ -169,7 +161,7 @@ export default function StudentsList() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </InputGroup>
-          
+
           <Select
             w={{ base: '100%', md: '150px' }}
             value={filterClass}
@@ -177,12 +169,11 @@ export default function StudentsList() {
             icon={<MdFilterList />}
           >
             <option value='all'>All Classes</option>
-            <option value='9'>Class 9</option>
-            <option value='10'>Class 10</option>
-            <option value='11'>Class 11</option>
-            <option value='12'>Class 12</option>
+            {classOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </Select>
-          
+
           <Select
             w={{ base: '100%', md: '150px' }}
             value={filterStatus}
@@ -206,6 +197,7 @@ export default function StudentsList() {
                 <Th>STUDENT</Th>
                 <Th>ROLL NO.</Th>
                 <Th>CLASS</Th>
+                <Th>CAMPUS</Th>
                 <Th>RFID TAG</Th>
                 <Th>BUS #</Th>
                 <Th>ATTENDANCE</Th>
@@ -221,7 +213,7 @@ export default function StudentsList() {
                       <Avatar
                         size='sm'
                         name={student.name}
-                        src={student.avatar}
+                        src={student.avatar || student.photo || student.photoUrl || student.imageUrl || ''}
                       />
                       <Box>
                         <Text fontWeight='500'>{student.name}</Text>
@@ -242,6 +234,11 @@ export default function StudentsList() {
                     </Badge>
                   </Td>
                   <Td>
+                    <Text fontSize='sm' fontWeight='500'>
+                      {student.campusName || student.campusId || '—'}
+                    </Text>
+                  </Td>
+                  <Td>
                     <Text fontSize='sm' fontFamily='mono'>
                       {student.rfidTag}
                     </Text>
@@ -259,15 +256,15 @@ export default function StudentsList() {
                           student.attendance >= 90
                             ? 'green'
                             : student.attendance >= 75
-                            ? 'orange'
-                            : 'red'
+                              ? 'orange'
+                              : 'red'
                         }
                       >
                         {student.attendance >= 90
                           ? 'Good'
                           : student.attendance >= 75
-                          ? 'Average'
-                          : 'Low'}
+                            ? 'Average'
+                            : 'Low'}
                       </Badge>
                     </HStack>
                   </Td>
@@ -295,6 +292,7 @@ export default function StudentsList() {
                           <MenuItem
                             icon={<MdEdit />}
                             onClick={() => handleEditStudent(student.id)}
+                            isDisabled={!isSuperAdmin}
                           >
                             Edit Student
                           </MenuItem>
@@ -308,6 +306,7 @@ export default function StudentsList() {
                             icon={<MdDelete />}
                             color='red.500'
                             onClick={() => handleDeleteStudent(student)}
+                            isDisabled={!isSuperAdmin}
                           >
                             Delete Student
                           </MenuItem>

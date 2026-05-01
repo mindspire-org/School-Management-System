@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -19,10 +19,11 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import DefaultAuth from '../../layouts/auth/Default';
-import illustration from '../../assets/img/auth/auth.png';
+// Use custom illustration from public instead of Horizon UI asset
+const illustration = '/imgbin_04038f2dad4024b37accec200ae57e31.png';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
-import { register as registerApi } from '../../services/api/auth';
+import { register as registerApi, status as authStatus } from '../../services/api/auth';
 
 function SignUp() {
   const textColor = useColorModeValue('navy.700', 'white');
@@ -35,9 +36,24 @@ function SignUp() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('admin');
   const [loading, setLoading] = useState(false);
+  const [adminExists, setAdminExists] = useState(false);
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const s = await authStatus();
+        if (mounted) {
+          setAdminExists(Boolean(s?.adminExists));
+          if (Boolean(s?.adminExists) && role === 'admin') setRole('teacher');
+        }
+      } catch (_) {}
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const handleClick = () => setShow(!show);
 
@@ -45,6 +61,10 @@ function SignUp() {
     e.preventDefault();
     setError('');
     try {
+      if (adminExists && role === 'admin') {
+        setError('An Admin account already exists. Admin signup is disabled.');
+        return;
+      }
       setLoading(true);
       await registerApi({ email, password, name, role });
       navigate('/auth/sign-in');
@@ -202,11 +222,14 @@ function SignUp() {
                 onChange={(e) => setRole(e.target.value)}
                 disabled={loading}
               >
-                <option value="admin">Admin</option>
+                <option value="admin" disabled={adminExists}>Admin</option>
                 <option value="teacher">Teacher</option>
                 <option value="student">Student</option>
                 <option value="driver">Driver</option>
               </Select>
+              {adminExists && (
+                <Text color="red.500" fontSize="sm" mb="12px">Admin signup is disabled because an Admin already exists.</Text>
+              )}
 
               <Button
                 fontSize="sm"

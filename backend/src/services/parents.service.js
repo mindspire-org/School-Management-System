@@ -27,12 +27,13 @@ export const backfillFromStudents = async () => {
              s.parent_phone,
              s.email AS student_email,
              s.name AS student_name,
-             s.parent
+             s.parent,
+             s.campus_id
       FROM students s
       WHERE s.family_number IS NOT NULL AND s.family_number <> ''
       ORDER BY s.family_number, s.id DESC
     )
-    INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address)
+    INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address, campus_id)
     SELECT f.family_number,
            COALESCE(
              (f.parent -> 'father' ->> 'name'),
@@ -52,14 +53,14 @@ export const backfillFromStudents = async () => {
              (f.parent -> 'mother' ->> 'email'),
              f.student_email
            ) AS email,
-           (f.parent ->> 'address') AS address
+           (f.parent ->> 'address') AS address,
+           f.campus_id
     FROM fam f
     WHERE NOT EXISTS (
       SELECT 1 FROM parents p WHERE p.family_number = f.family_number
     );
   `;
   const res = await query(sql);
-  // rowCount may not reflect both UPDATE and INSERT; return success true
   return { ok: true };
 };
 
@@ -98,10 +99,26 @@ export const getById = async (id) => {
   const parent = rows[0];
   if (!parent) return null;
   const kidsRes = await query(
-    'SELECT id, name, class, section, roll_number AS "rollNumber" FROM students WHERE family_number = $1 ORDER BY id DESC',
+    `SELECT id,
+            name,
+            class,
+            section,
+            roll_number AS "rollNumber",
+            COALESCE(
+              (parent -> 'father' ->> 'phone'),
+              (parent -> 'mother' ->> 'phone'),
+              parent_phone
+            ) AS "parentPhone"
+       FROM students
+      WHERE family_number = $1
+      ORDER BY id DESC`,
     [parent.familyNumber]
   );
   parent.children = kidsRes.rows;
+  try {
+    const fromKids = parent.children?.find((c) => c.parentPhone)?.parentPhone;
+    if (fromKids) parent.whatsappPhone = fromKids;
+  } catch (_) {}
   return parent;
 };
 
@@ -115,8 +132,36 @@ export const ensureByFamilyNumber = async (data) => {
     );
     return rows[0];
   }
+  
   const { rows } = await query('SELECT id, family_number AS "familyNumber" FROM parents WHERE family_number = $1', [fam]);
-  if (rows[0]) return rows[0];
+  if (rows[0]) {
+    // Update existing parent record with new data
+    const fields = [];
+    const values = [];
+    const map = {
+      primaryName: 'primary_name',
+      fatherName: 'father_name',
+      motherName: 'mother_name',
+      whatsappPhone: 'whatsapp_phone',
+      email: 'email',
+      address: 'address',
+      campusId: 'campus_id'
+    };
+
+    Object.entries(data).forEach(([k, v]) => {
+      if (map[k] && v !== undefined) {
+        values.push(v);
+        fields.push(`${map[k]} = $${values.length}`);
+      }
+    });
+
+    if (fields.length > 0) {
+      values.push(rows[0].id);
+      await query(`UPDATE parents SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
+    }
+    return rows[0];
+  }
+
   const ins = await query(
     'INSERT INTO parents (family_number, primary_name, father_name, mother_name, whatsapp_phone, email, address, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, family_number AS "familyNumber"',
     [fam, data.primaryName || null, data.fatherName || null, data.motherName || null, data.whatsappPhone || null, data.email || null, data.address || null, data.campusId || null]

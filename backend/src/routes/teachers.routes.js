@@ -10,6 +10,8 @@ const attendanceStatuses = ['present', 'absent', 'late'];
 const payrollStatuses = ['pending', 'processing', 'paid', 'failed', 'cancelled'];
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d(?:[:][0-5]\d)?$/;
 const monthPattern = /^\d{4}-\d{2}$/;
+const phone11DigitsPattern = /^\d{10,15}$/;
+const cnic13DigitsPattern = /^\d{13}$/;
 
 router.get(
   '/',
@@ -21,6 +23,44 @@ router.get(
   ],
   validate,
   teacherController.list
+);
+
+router.get(
+  '/me',
+  authenticate,
+  teacherController.getMe
+);
+
+// Update own profile (limited fields)
+router.put(
+  '/me',
+  authenticate,
+  [
+    body('name').optional().isString().trim(),
+    body('phone').optional().isString().trim(),
+    body('gender').optional().isString().trim(),
+    body('designation').optional().isString().trim(),
+    body('department').optional().isString().trim(),
+    body('address1').optional().isString().trim(),
+    body('address2').optional().isString().trim(),
+    body('city').optional().isString().trim(),
+    body('state').optional().isString().trim(),
+    body('postalCode').optional().isString().trim(),
+    body('avatar').optional().isString().trim(),
+  ],
+  validate,
+  teacherController.updateMe
+);
+
+router.post(
+  '/me/change-password',
+  authenticate,
+  [
+    body('currentPassword').isString().notEmpty(),
+    body('newPassword').isString().isLength({ min: 6 }),
+  ],
+  validate,
+  teacherController.changeMyPassword
 );
 
 const optionalString = (field) => body(field).optional({ checkFalsy: true }).isString().trim();
@@ -41,14 +81,24 @@ const sharedOptionalValidators = [
   optionalString('iban'),
   optionalString('bloodGroup'),
   optionalString('religion'),
-  optionalString('nationalId'),
+  body('nationalId')
+    .optional({ checkFalsy: true })
+    .isString()
+    .trim()
+    .matches(cnic13DigitsPattern)
+    .withMessage('nationalId must be exactly 13 digits'),
   optionalString('address1'),
   optionalString('address2'),
   optionalString('city'),
   optionalString('state'),
   optionalString('postalCode'),
   optionalString('emergencyName'),
-  optionalString('emergencyPhone'),
+  body('emergencyPhone')
+    .optional({ checkFalsy: true })
+    .isString()
+    .trim()
+    .matches(phone11DigitsPattern)
+    .withMessage('emergencyPhone must be exactly 11 digits'),
   optionalString('emergencyRelation'),
   optionalString('avatar'),
 ];
@@ -56,7 +106,12 @@ const sharedOptionalValidators = [
 const createTeacherValidators = [
   body('name').isString().trim().notEmpty(),
   body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
-  body('phone').isString().trim().notEmpty(),
+  body('phone')
+    .isString()
+    .trim()
+    .notEmpty()
+    .matches(phone11DigitsPattern)
+    .withMessage('phone must be 10-15 digits'),
   body('qualification').isString().trim().notEmpty(),
   body('employmentType').isIn(['fullTime', 'partTime']),
   body('employmentStatus').optional({ checkFalsy: true }).isIn(['active', 'inactive', 'on_leave', 'resigned']),
@@ -77,7 +132,13 @@ const createTeacherValidators = [
 const updateTeacherValidators = [
   body('name').optional({ nullable: true }).isString().trim().notEmpty(),
   body('email').optional({ nullable: true }).isEmail().normalizeEmail(),
-  body('phone').optional({ nullable: true }).isString().trim().notEmpty(),
+  body('phone')
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .notEmpty()
+    .matches(phone11DigitsPattern)
+    .withMessage('phone must be 10-15 digits'),
   body('qualification').optional({ checkFalsy: true }).isString().trim().notEmpty(),
   body('employmentType').optional({ checkFalsy: true }).isIn(['fullTime', 'partTime']),
   body('joiningDate').optional({ checkFalsy: true }).isISO8601(),
@@ -112,6 +173,18 @@ router.get(
 );
 
 router.post(
+  '/attendance/me',
+  authenticate,
+  [
+    body('date').isISO8601(),
+    body('status').isString().trim().notEmpty(),
+    body('remarks').optional({ checkFalsy: true }).isString().trim(),
+  ],
+  validate,
+  teacherController.markMyAttendance
+);
+
+router.post(
   '/attendance',
   authenticate,
   authorize('admin', 'owner', 'superadmin'),
@@ -126,6 +199,19 @@ router.post(
   ],
   validate,
   teacherController.saveAttendance
+);
+
+router.get(
+  '/:id/attendance/monthly',
+  authenticate,
+  [
+    param('id').isInt({ min: 1 }),
+    query('startDate').optional().isISO8601(),
+    query('endDate').optional().isISO8601(),
+    query('month').optional().matches(monthPattern),
+  ],
+  validate,
+  teacherController.getMonthlyAttendance
 );
 
 router.get(
@@ -313,6 +399,16 @@ router.delete(
   [param('id').isInt()],
   validate,
   teacherController.removeSubject
+);
+
+// Backfill: create teacher_subject_assignments from teachers.subjects JSONB for existing teachers
+router.post(
+  '/subjects/backfill',
+  authenticate,
+  authorize('admin', 'owner', 'superadmin'),
+  [],
+  validate,
+  teacherController.backfillSubjectAssignments
 );
 
 router.get(

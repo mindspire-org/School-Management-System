@@ -1,21 +1,75 @@
-import React, { useState } from 'react';
-import { Box, Flex, Heading, Text, SimpleGrid, Icon, Button, ButtonGroup, useColorModeValue, Select, Input, Switch, FormControl, FormLabel, Grid, GridItem, Textarea } from '@chakra-ui/react';
+import React, { useState, useEffect } from 'react';
+import { Box, Flex, Heading, Text, SimpleGrid, Icon, Button, ButtonGroup, useColorModeValue, Select, Input, FormControl, FormLabel, Grid, GridItem, useToast } from '@chakra-ui/react';
 import { MdSettings, MdFileDownload, MdSave, MdRefresh } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
-import MiniStatistics from '../../../../components/card/MiniStatistics';
-import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
+import * as settingsApi from '../../../../services/api/settings';
+import { http } from '../../../../services/api';
 
 export default function SystemSettings() {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
-  const [schoolName, setSchoolName] = useState('City Public School');
+  const [schoolName, setSchoolName] = useState('');
   const [timezone, setTimezone] = useState('Asia/Karachi');
   const [language, setLanguage] = useState('en');
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [smsNotif, setSmsNotif] = useState(true);
-  const [twoFA, setTwoFA] = useState(false);
-  const [pwdMinLen, setPwdMinLen] = useState(8);
-  const [backupSchedule, setBackupSchedule] = useState('daily');
-  const [about, setAbout] = useState('');
+  const [schoolStartTime, setSchoolStartTime] = useState('08:00');
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  
+
+  const loadSettings = async () => {
+    setLoading(true);
+    try {
+      const profile = await settingsApi.getSchoolProfile();
+      if (profile) {
+        setSchoolName(profile.schoolName || '');
+        setTimezone(profile.timezone || 'Asia/Karachi');
+        setLanguage(profile.language || 'en');
+        setSchoolStartTime(profile.schoolStartTime || '08:00');
+      }
+      
+    } catch (error) {
+      toast({
+        title: 'Error loading settings',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await settingsApi.saveSchoolProfile({
+        schoolName,
+        timezone,
+        language,
+        schoolStartTime,
+      });
+      
+      toast({
+        title: 'Settings saved',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error saving settings',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
@@ -25,17 +79,14 @@ export default function SystemSettings() {
           <Text color={textColorSecondary}>General, notifications, and security configurations</Text>
         </Box>
         <ButtonGroup>
-          <Button leftIcon={<MdRefresh />} variant='outline' onClick={() => window.location.reload()}>Refresh</Button>
-          <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export Config</Button>
-          <Button leftIcon={<MdSave />} colorScheme='blue'>Save Changes</Button>
+          <Button leftIcon={<MdRefresh />} variant='outline' onClick={loadSettings} isLoading={loading}>Refresh</Button>
+          <Button leftIcon={<MdSave />} colorScheme='blue' onClick={handleSave} isLoading={loading}>Save Changes</Button>
         </ButtonGroup>
       </Flex>
 
-      <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics name="Version" value="v1.0.0" startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdSettings} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Uptime" value="99.98%" startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdSettings} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Backups" value={backupSchedule.toUpperCase()} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdSettings} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Alerts" value={emailNotif || smsNotif ? 'Enabled' : 'Off'} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdSettings} w='28px' h='28px' color='white' />} />} />
+      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5} mb={5}>
+        <StatCard title="Version" value="v1.0.0" icon={MdSettings} colorScheme="blue" />
+        <StatCard title="Uptime" value="100%" icon={MdSettings} colorScheme="green" />
       </SimpleGrid>
 
       <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={5}>
@@ -54,77 +105,21 @@ export default function SystemSettings() {
                 <option value='UTC'>UTC</option>
               </Select>
             </FormControl>
-            <FormControl>
+            <FormControl mb={4}>
               <FormLabel>Language</FormLabel>
               <Select value={language} onChange={(e) => setLanguage(e.target.value)}>
                 <option value='en'>English</option>
                 <option value='ur'>Urdu</option>
               </Select>
             </FormControl>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card p={5}>
-            <Heading size='md' mb={4}>Notifications</Heading>
-            <FormControl display='flex' alignItems='center' mb={4}>
-              <FormLabel mb='0' flex='1'>Email Notifications</FormLabel>
-              <Switch isChecked={emailNotif} onChange={(e) => setEmailNotif(e.target.checked)} />
-            </FormControl>
-            <FormControl display='flex' alignItems='center' mb={4}>
-              <FormLabel mb='0' flex='1'>SMS Notifications</FormLabel>
-              <Switch isChecked={smsNotif} onChange={(e) => setSmsNotif(e.target.checked)} />
-            </FormControl>
             <FormControl>
-              <FormLabel>Backup Schedule</FormLabel>
-              <Select value={backupSchedule} onChange={(e) => setBackupSchedule(e.target.value)}>
-                <option value='daily'>Daily</option>
-                <option value='weekly'>Weekly</option>
-                <option value='monthly'>Monthly</option>
-              </Select>
+              <FormLabel>School Start Time</FormLabel>
+              <Input type="time" value={schoolStartTime} onChange={(e) => setSchoolStartTime(e.target.value)} />
+              <Text fontSize="xs" color="gray.500" mt={1}>Attendance after this time will be marked as "Late".</Text>
             </FormControl>
           </Card>
         </GridItem>
-
-        <GridItem>
-          <Card p={5}>
-            <Heading size='md' mb={4}>Security</Heading>
-            <FormControl display='flex' alignItems='center' mb={4}>
-              <FormLabel mb='0' flex='1'>Two-Factor Authentication</FormLabel>
-              <Switch isChecked={twoFA} onChange={(e) => setTwoFA(e.target.checked)} />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>Password Min Length</FormLabel>
-              <Select value={pwdMinLen} onChange={(e) => setPwdMinLen(Number(e.target.value))}>
-                <option value={8}>8</option>
-                <option value={10}>10</option>
-                <option value={12}>12</option>
-              </Select>
-            </FormControl>
-            <FormControl>
-              <FormLabel>About / Footer Text</FormLabel>
-              <Textarea value={about} onChange={(e) => setAbout(e.target.value)} placeholder='Short description shown in footer or login screen' />
-            </FormControl>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card p={5}>
-            <Heading size='md' mb={4}>Branding</Heading>
-            <FormControl mb={4}>
-              <FormLabel>Primary Color</FormLabel>
-              <Input type='color' defaultValue='#2b6cb0' />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>Secondary Color</FormLabel>
-              <Input type='color' defaultValue='#38a169' />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Logo URL</FormLabel>
-              <Input placeholder='https://...' />
-            </FormControl>
-          </Card>
-        </GridItem>
+        
       </Grid>
     </Box>
   );

@@ -15,7 +15,7 @@ import {
   SimpleGrid,
   Icon,
 } from '@chakra-ui/react';
-import { MdPeople, MdAdd, MdSchool } from 'react-icons/md';
+import { MdPeople, MdSchool } from 'react-icons/md';
 import Card from 'components/card/Card.js';
 
 const WorkingTeacherList = () => {
@@ -68,13 +68,6 @@ const WorkingTeacherList = () => {
             Manage and view all teaching staff information
           </Text>
         </Box>
-        <Button
-          leftIcon={<Icon as={MdAdd} />}
-          colorScheme="blue"
-          size="md"
-        >
-          Add New Teacher
-        </Button>
       </Flex>
 
       {/* Stats Cards */}

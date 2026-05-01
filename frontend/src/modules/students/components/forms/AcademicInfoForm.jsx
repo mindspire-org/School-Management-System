@@ -22,54 +22,135 @@ import {
   updateFormData,
   selectStudentFormData,
 } from '../../../../redux/features/students/studentSlice';
+import useClassOptions from '../../../../hooks/useClassOptions';
+import { campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
+
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  }
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+};
 
 function AcademicInfoForm() {
+  const { campusId: activeCampusId } = useAuth();
   const dispatch = useAppDispatch();
   const formData = useAppSelector(selectStudentFormData);
   const academicInfo = formData.academic;
-  
+  const { classOptions, sectionsByClass, sectionOptions, loading: classLoading } = useClassOptions({
+    selectedClass: academicInfo.class || null,
+    campusId: academicInfo.campusId || null,
+  });
+  const [campuses, setCampuses] = React.useState([]);
+  const [campusLoading, setCampusLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    setCampusLoading(true);
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err))
+      .finally(() => setCampusLoading(false));
+  }, []);
+
+  // Default campusId from auth context if not set
+  React.useEffect(() => {
+    if (!academicInfo.campusId && activeCampusId) {
+      dispatch(updateFormData({
+        step: 'academic',
+        data: { campusId: activeCampusId }
+      }));
+    }
+  }, [academicInfo.campusId, activeCampusId, dispatch]);
+
   // Handle input changes
   const handleInputChange = (field, value) => {
-    dispatch(updateFormData({ 
-      step: 'academic',
-      data: { [field]: value }
-    }));
+    dispatch(
+      updateFormData({
+        step: 'academic',
+        data: { [field]: value },
+      })
+    );
   };
-  
+
+  React.useEffect(() => {
+    if (!academicInfo.campusId) return;
+
+    if (academicInfo.class && !classOptions.includes(academicInfo.class)) {
+      handleInputChange('class', '');
+      handleInputChange('section', '');
+      return;
+    }
+
+    if (academicInfo.class && academicInfo.section) {
+      const allowed = sectionsByClass[academicInfo.class] || [];
+      if (!allowed.includes(academicInfo.section)) {
+        handleInputChange('section', '');
+      }
+    }
+  }, [academicInfo.campusId, academicInfo.class, academicInfo.section, classOptions, sectionsByClass]);
+
   // Handle previous education fields
   const handlePreviousEducationChange = (field, value) => {
     const updatedPreviousEducation = {
       ...academicInfo.previousEducation,
       [field]: value
     };
-    
+
     dispatch(updateFormData({
       step: 'academic',
       data: { previousEducation: updatedPreviousEducation }
     }));
   };
-  
-  // Generate current year and next few years for academic year dropdown
+
+  // Generate academic years including past years (from 2024) and future years
   const getCurrentAcademicYears = () => {
     const currentYear = new Date().getFullYear();
+    const startYear = 2024; // Start from 2024
     const years = [];
-    
-    for (let i = -2; i < 5; i++) {
-      const year = currentYear + i;
+
+    // Generate years from 2024 to current year + 4
+    for (let year = startYear; year <= currentYear + 4; year++) {
       const nextYear = year + 1;
-      years.push(`${year}-${nextYear}`);
+      // Use short year format (e.g., "24-25")
+      const shortYear = String(year).slice(-2);
+      const shortNextYear = String(nextYear).slice(-2);
+      years.push(`${shortYear}-${shortNextYear}`);
     }
-    
+
     return years;
   };
-  
+
   const academicYears = getCurrentAcademicYears();
-  
+
   return (
     <Box>
       <Text fontSize="xl" fontWeight="600" mb={6}>
         Academic Information
       </Text>
+
+      {/* Campus Selection */}
+      <FormControl id="campusId" isRequired mb={6}>
+        <FormLabel>Campus</FormLabel>
+        <Select
+          value={academicInfo.campusId || ''}
+          onChange={(e) => handleInputChange('campusId', e.target.value)}
+          placeholder="Select campus"
+          isDisabled={campusLoading}
+        >
+          {campusLoading && <option disabled>Loading campuses...</option>}
+          {campuses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </Select>
+        <FormHelperText>Associate student with a specific school campus</FormHelperText>
+      </FormControl>
 
       {/* Current Academic Information */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
@@ -84,7 +165,7 @@ function AcademicInfoForm() {
             />
           </InputGroup>
         </FormControl>
-        
+
         <FormControl id="rollNumber" isRequired>
           <FormLabel>Roll Number</FormLabel>
           <InputGroup>
@@ -96,7 +177,7 @@ function AcademicInfoForm() {
             />
           </InputGroup>
         </FormControl>
-        
+
         <FormControl id="academicYear" isRequired>
           <FormLabel>Academic Year</FormLabel>
           <Select
@@ -118,39 +199,40 @@ function AcademicInfoForm() {
           <FormLabel>Class</FormLabel>
           <Select
             value={academicInfo.class || ''}
-            onChange={(e) => handleInputChange('class', e.target.value)}
+            onChange={(e) => {
+              const nextClass = e.target.value;
+              handleInputChange('class', nextClass);
+              const allowed = sectionsByClass[nextClass] || [];
+              if (academicInfo.section && !allowed.includes(academicInfo.section)) {
+                handleInputChange('section', '');
+              }
+            }}
             placeholder="Select class"
+            isDisabled={classLoading}
           >
-            <option value="1">Class 1</option>
-            <option value="2">Class 2</option>
-            <option value="3">Class 3</option>
-            <option value="4">Class 4</option>
-            <option value="5">Class 5</option>
-            <option value="6">Class 6</option>
-            <option value="7">Class 7</option>
-            <option value="8">Class 8</option>
-            <option value="9">Class 9</option>
-            <option value="10">Class 10</option>
-            <option value="11">Class 11</option>
-            <option value="12">Class 12</option>
+            {classLoading && classOptions.length === 0 && (
+              <option value="" disabled>Loading classes...</option>
+            )}
+            {classOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </Select>
         </FormControl>
-        
+
         <FormControl id="section" isRequired>
           <FormLabel>Section</FormLabel>
           <Select
             value={academicInfo.section || ''}
             onChange={(e) => handleInputChange('section', e.target.value)}
             placeholder="Select section"
+            isDisabled={classLoading || !academicInfo.class}
           >
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-            <option value="D">D</option>
-            <option value="E">E</option>
+            {sectionOptions.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </Select>
         </FormControl>
-        
+
         <FormControl id="stream">
           <FormLabel>Stream/Group</FormLabel>
           <Select
@@ -190,7 +272,7 @@ function AcademicInfoForm() {
         <FormLabel>Admission Date</FormLabel>
         <Input
           type="date"
-          value={academicInfo.admissionDate || new Date().toISOString().split('T')[0]}
+          value={toDateInputValue(academicInfo.admissionDate) || new Date().toISOString().split('T')[0]}
           onChange={(e) => handleInputChange('admissionDate', e.target.value)}
         />
       </FormControl>
@@ -211,7 +293,7 @@ function AcademicInfoForm() {
             placeholder="Enter previous school name"
           />
         </FormControl>
-        
+
         <FormControl id="previousClass">
           <FormLabel>Previous Class/Grade</FormLabel>
           <Input
@@ -227,11 +309,11 @@ function AcademicInfoForm() {
           <FormLabel>Last Attended Date</FormLabel>
           <Input
             type="date"
-            value={academicInfo.previousEducation?.lastAttendedDate || ''}
+            value={toDateInputValue(academicInfo.previousEducation?.lastAttendedDate)}
             onChange={(e) => handlePreviousEducationChange('lastAttendedDate', e.target.value)}
           />
         </FormControl>
-        
+
         <FormControl id="transferCertificate">
           <FormLabel>Transfer Certificate No.</FormLabel>
           <Input

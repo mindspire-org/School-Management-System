@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
 import { MdPayment, MdFileDownload, MdPrint, MdVisibility, MdOpenInNew, MdAttachMoney, MdEvent, MdCheckCircle } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import BarChart from '../../../components/charts/BarChart';
-import { mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import * as studentsApi from '../../../services/api/students';
 
 function formatCurrency(n){ return new Intl.NumberFormat(undefined,{ style:'currency', currency:'PKR', maximumFractionDigits:0 }).format(n); }
 function formatDate(d){ return d.toLocaleDateString(undefined,{ day:'2-digit', month:'short', year:'numeric' }); }
@@ -17,38 +17,52 @@ export default function FeeStatus(){
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
+  const [student, setStudent] = useState(null);
+  const [fees, setFees] = useState([]);
 
-  const fees = useMemo(()=>{
-    const today = new Date();
-    const make = (id,title,monthOffset,amount,status)=>{
-      const monthDate = new Date(today.getFullYear(), today.getMonth()-monthOffset, 1);
-      const dueDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 10);
-      const paid = status==='paid' ? new Date(monthDate.getFullYear(), monthDate.getMonth(), 8) : null;
-      const overdue = status==='overdue';
-      return { id, title, month: monthDate, amount, status, dueDate, paidDate: paid, overdue, method: paid? 'Online':'', receiptNo: paid? `RCPT-${monthDate.getMonth()+1}${monthDate.getFullYear()}-${student.rollNumber}`:'' };
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
     };
-    return [
-      make('F1','Tuition Fee',0,15000,'pending'),
-      make('F2','Transport Fee',0,3000,'pending'),
-      make('F3','Lab Fee',1,2500,'paid'),
-      make('F4','Tuition Fee',1,15000,'paid'),
-      make('F5','Exam Fee',2,4000,'paid'),
-      make('F6','Library Fine',3,800,'overdue'),
-      make('F7','Tuition Fee',4,15000,'paid'),
-      make('F8','Transport Fee',4,3000,'paid'),
-    ];
-  },[student]);
+    load();
+  }, [user?.role]);
+
+  useEffect(() => {
+    const loadFees = async () => {
+      try {
+        if (!student?.id) return;
+        const data = await studentsApi.getFees(student.id);
+        const invoices = Array.isArray(data?.invoices) ? data.invoices : [];
+        setFees(invoices.map((inv) => {
+          const status = inv.status === 'paid' ? 'paid' : (inv.dueDate && new Date(inv.dueDate) < new Date() ? 'overdue' : 'pending');
+          return {
+            id: inv.id,
+            title: 'Fee Invoice',
+            month: inv.issuedAt ? new Date(inv.issuedAt) : new Date(),
+            amount: Number(inv.amount) || 0,
+            status,
+            dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+            paidDate: status === 'paid' ? (inv.issuedAt ? new Date(inv.issuedAt) : null) : null,
+            method: '',
+            receiptNo: status === 'paid' ? `RCPT-${inv.id}` : '',
+            outstanding: Number(inv.outstanding) || 0,
+          };
+        }));
+      } catch {
+        setFees([]);
+      }
+    };
+    loadFees();
+  }, [student?.id]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
   const totals = useMemo(()=>{
     const due = fees.filter(f=>f.status!=='paid').reduce((s,f)=>s+f.amount,0);
@@ -68,7 +82,7 @@ export default function FeeStatus(){
   const chartOptions = useMemo(()=>({ xaxis:{ categories: months.map(m=>m.toLocaleString(undefined,{ month:'short' })) }, colors:['#38A169','#E53E3E'], dataLabels:{ enabled:false }, legend:{ position:'top' } }),[]);
 
   const downloadReceipt = (f)=>{
-    const content = `${student.name}\n${student.rollNumber}\n${classSection}\nReceipt: ${f.receiptNo}\n${f.title} ${f.month.toLocaleString(undefined,{ month:'long', year:'numeric' })}\nAmount: ${formatCurrency(f.amount)}\nMethod: ${f.method}`;
+    const content = `${student?.name || ''}\n${student?.rollNumber || ''}\n${classSection || ''}\nReceipt: ${f.receiptNo}\n${f.title} ${f.month.toLocaleString(undefined,{ month:'long', year:'numeric' })}\nAmount: ${formatCurrency(f.amount)}\nMethod: ${f.method}`;
     const blob = new Blob([content],{ type:'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=`${f.receiptNo}.txt`; a.click(); URL.revokeObjectURL(url);
   };
@@ -76,7 +90,11 @@ export default function FeeStatus(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Fee Status</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>

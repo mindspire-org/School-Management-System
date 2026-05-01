@@ -32,6 +32,7 @@ import {
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 // Icons
 import {
   MdAttachMoney,
@@ -51,31 +52,31 @@ import {
 } from 'react-icons/md';
 // Mock data
 import { mockStudents } from '../../../../utils/mockData';
-import { 
+import {
   mockFeeStructure,
   mockInstallments,
   mockPaymentHistory,
-  mockDiscounts 
+  mockDiscounts
 } from '../../../../utils/mockFeeData';
 
 export default function StudentFees() {
   const toast = useToast();
   // Get student data (would come from params in a real app)
   const student = mockStudents[0];
-  
+
   // Calculate totals
   const calculateTotals = () => {
     const structure = mockFeeStructure;
-    const totalFee = 
-      structure.tuitionFee.amount + 
-      structure.transportFee.amount + 
+    const totalFee =
+      structure.tuitionFee.amount +
+      structure.transportFee.amount +
       structure.admissionCharges.amount +
       structure.examinationFee.amount +
       structure.libraryFee.amount +
       structure.sportsFee.amount +
       structure.miscCharges.amount;
-    
-    const paidAmount = 
+
+    const paidAmount =
       (structure.tuitionFee.status === 'paid' ? structure.tuitionFee.amount : 0) +
       (structure.transportFee.status === 'paid' ? structure.transportFee.amount : 0) +
       (structure.admissionCharges.status === 'paid' ? structure.admissionCharges.amount : 0) +
@@ -83,14 +84,14 @@ export default function StudentFees() {
       (structure.libraryFee.status === 'paid' ? structure.libraryFee.amount : 0) +
       (structure.sportsFee.status === 'paid' ? structure.sportsFee.amount : 0) +
       (structure.miscCharges.status === 'paid' ? structure.miscCharges.amount : 0);
-    
+
     const pendingAmount = totalFee - paidAmount;
-    
+
     // Calculate amount that's overdue
     const overdueAmount = mockInstallments
       .filter(i => i.status === 'pending' && new Date(i.dueDate) < new Date())
       .reduce((sum, i) => sum + i.amount, 0);
-    
+
     return {
       totalFee,
       paidAmount,
@@ -99,9 +100,9 @@ export default function StudentFees() {
       paymentPercentage: (paidAmount / totalFee) * 100
     };
   };
-  
+
   const totals = calculateTotals();
-  
+
   // Handle make payment
   const handleMakePayment = () => {
     toast({
@@ -139,7 +140,7 @@ export default function StudentFees() {
             </Text>
           </Box>
         </HStack>
-        
+
         <HStack spacing='10px'>
           <Button leftIcon={<MdPayment />} colorScheme='blue' onClick={handleMakePayment}>
             Make Payment
@@ -152,87 +153,10 @@ export default function StudentFees() {
 
       {/* Fee Overview Cards */}
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w='56px'
-              h='56px'
-              bg='linear-gradient(90deg, #4481EB 0%, #04BEFE 100%)'
-              icon={<Icon w='28px' h='28px' as={MdAttachMoney} color='white' />}
-            />
-          }
-          name='Total Fee (Annual)'
-          value={`PKR ${totals.totalFee.toLocaleString()}`}
-        />
-        
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w='56px'
-              h='56px'
-              bg='linear-gradient(90deg, #01B574 0%, #51CB97 100%)'
-              icon={<Icon w='28px' h='28px' as={MdCheckCircle} color='white' />}
-            />
-          }
-          name='Paid Amount'
-          value={`PKR ${totals.paidAmount.toLocaleString()}`}
-          endContent={
-            <Flex flexDirection='column'>
-              <Progress
-                colorScheme='green'
-                size='sm'
-                value={totals.paymentPercentage}
-                w='100%'
-                borderRadius='15px'
-              />
-              <Text
-                fontSize='xs'
-                color='secondaryGray.600'
-                fontWeight='500'
-                mt='4px'
-                textAlign='right'
-              >
-                {totals.paymentPercentage.toFixed(1)}%
-              </Text>
-            </Flex>
-          }
-        />
-        
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w='56px'
-              h='56px'
-              bg='linear-gradient(90deg, #FFB36D 0%, #FD7853 100%)'
-              icon={<Icon w='28px' h='28px' as={MdAccessTime} color='white' />}
-            />
-          }
-          name='Pending Amount'
-          value={`PKR ${totals.pendingAmount.toLocaleString()}`}
-          endContent={
-            <Badge colorScheme='orange' fontSize='sm' mt='10px'>
-              Due by Nov 30
-            </Badge>
-          }
-        />
-        
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w='56px'
-              h='56px'
-              bg='linear-gradient(90deg, #E31A1A 0%, #FF8080 100%)'
-              icon={<Icon w='28px' h='28px' as={MdWarning} color='white' />}
-            />
-          }
-          name='Overdue Amount'
-          value={`PKR ${totals.overdueAmount.toLocaleString()}`}
-          endContent={
-            <Badge colorScheme='red' fontSize='sm' mt='10px'>
-              Immediate attention required
-            </Badge>
-          }
-        />
+        <StatCard title='Total Fee (Annual)' value={`PKR ${totals.totalFee.toLocaleString()}`} icon={MdAttachMoney} colorScheme='blue' />
+        <StatCard title='Paid Amount' value={`PKR ${totals.paidAmount.toLocaleString()}`} icon={MdCheckCircle} colorScheme='green' subValue={`${totals.paymentPercentage.toFixed(1)}%`} />
+        <StatCard title='Pending Amount' value={`PKR ${totals.pendingAmount.toLocaleString()}`} icon={MdAccessTime} colorScheme='orange' note='Due by Nov 30' />
+        <StatCard title='Overdue Amount' value={`PKR ${totals.overdueAmount.toLocaleString()}`} icon={MdWarning} colorScheme='red' note='Immediate attention required' />
       </SimpleGrid>
 
       {/* Payment Timeline */}
@@ -240,11 +164,11 @@ export default function StudentFees() {
         <Text fontSize='lg' fontWeight='bold' mb='20px'>
           Payment Schedule Timeline
         </Text>
-        
+
         <Flex align='center' justify='center' position='relative' mb='20px'>
           {/* Timeline line */}
           <Box w='100%' h='3px' bg='gray.200' position='absolute' zIndex='1' />
-          
+
           {/* Timeline nodes */}
           <Flex w='100%' justify='space-between' position='relative' zIndex='2'>
             {mockInstallments.map((installment, index) => (
@@ -279,12 +203,12 @@ export default function StudentFees() {
                     color='white'
                   />
                 </Box>
-                
+
                 {/* Month */}
                 <Text fontWeight='bold' fontSize='sm'>
                   {installment.month}
                 </Text>
-                
+
                 {/* Due Date */}
                 <Text fontSize='xs' color='gray.500'>
                   {new Date(installment.dueDate).toLocaleDateString('en-US', {
@@ -292,12 +216,12 @@ export default function StudentFees() {
                     month: 'short',
                   })}
                 </Text>
-                
+
                 {/* Amount */}
                 <Text fontSize='sm' fontWeight='500' mt='2px'>
                   PKR {installment.amount.toLocaleString()}
                 </Text>
-                
+
                 {/* Status */}
                 <Badge
                   colorScheme={
@@ -312,14 +236,14 @@ export default function StudentFees() {
                 >
                   {installment.status.toUpperCase()}
                 </Badge>
-                
+
                 {/* Payment Method (if paid) */}
                 {installment.status === 'paid' && (
                   <Text fontSize='xs' color='gray.600' mt='2px'>
                     {installment.paymentMethod}
                   </Text>
                 )}
-                
+
                 {/* Payment Button (if pending) */}
                 {installment.status === 'pending' && (
                   <Button
@@ -342,7 +266,7 @@ export default function StudentFees() {
         <Text fontSize='lg' fontWeight='bold' mb='20px'>
           Fee Structure Breakdown
         </Text>
-        
+
         <Accordion allowMultiple defaultIndex={[0]}>
           {/* Tuition Fee */}
           <AccordionItem border='1px' borderColor='gray.200' borderRadius='md' mb='10px'>
@@ -364,7 +288,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.tuitionFee.description}</Text>
-              
+
               {mockFeeStructure.tuitionFee.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -428,9 +352,9 @@ export default function StudentFees() {
                   <Text fontWeight='500'>{mockFeeStructure.transportFee.route}</Text>
                 </Box>
               </SimpleGrid>
-              
+
               <Text mb='10px'>{mockFeeStructure.transportFee.description}</Text>
-              
+
               {mockFeeStructure.transportFee.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -485,7 +409,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.admissionCharges.description}</Text>
-              
+
               {mockFeeStructure.admissionCharges.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -519,7 +443,7 @@ export default function StudentFees() {
               )}
             </AccordionPanel>
           </AccordionItem>
-          
+
           {/* Examination Fee */}
           <AccordionItem border='1px' borderColor='gray.200' borderRadius='md' mb='10px'>
             <h2>
@@ -540,7 +464,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.examinationFee.description}</Text>
-              
+
               {mockFeeStructure.examinationFee.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -595,7 +519,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.libraryFee.description}</Text>
-              
+
               {mockFeeStructure.libraryFee.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -650,7 +574,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.sportsFee.description}</Text>
-              
+
               {mockFeeStructure.sportsFee.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -705,7 +629,7 @@ export default function StudentFees() {
             </h2>
             <AccordionPanel pb={4} bg='gray.50'>
               <Text mb='10px'>{mockFeeStructure.miscCharges.description}</Text>
-              
+
               {/* Details list */}
               {mockFeeStructure.miscCharges.details && (
                 <Box mb='15px'>
@@ -730,7 +654,7 @@ export default function StudentFees() {
                   </TableContainer>
                 </Box>
               )}
-              
+
               {mockFeeStructure.miscCharges.paymentHistory.length > 0 ? (
                 <Box>
                   <Text fontWeight='500' mb='5px'>Payment History:</Text>
@@ -766,13 +690,13 @@ export default function StudentFees() {
           </AccordionItem>
         </Accordion>
       </Card>
-      
+
       {/* Payment History Table */}
       <Card p='20px' mb='20px'>
         <Text fontSize='lg' fontWeight='bold' mb='20px'>
           Payment History
         </Text>
-        
+
         <TableContainer>
           <Table variant='simple'>
             <Thead>
@@ -812,10 +736,10 @@ export default function StudentFees() {
                         payment.paymentMethod === 'Cash'
                           ? 'purple'
                           : payment.paymentMethod === 'Online'
-                          ? 'blue'
-                          : payment.paymentMethod === 'Cheque'
-                          ? 'cyan'
-                          : 'teal'
+                            ? 'blue'
+                            : payment.paymentMethod === 'Cheque'
+                              ? 'cyan'
+                              : 'teal'
                       }
                     >
                       {payment.paymentMethod}
@@ -907,7 +831,7 @@ export default function StudentFees() {
             </Tbody>
           </Table>
         </TableContainer>
-        
+
         <Flex justify='space-between' align='center' mt='20px'>
           <Text color='gray.600'>
             Showing {mockPaymentHistory.length} of {mockPaymentHistory.length} payments
@@ -928,10 +852,10 @@ export default function StudentFees() {
         <Text fontSize='lg' fontWeight='bold' mb='20px'>
           Applied Discounts
         </Text>
-        
+
         {mockDiscounts.length > 0 ? (
           <Box>
-            <Flex 
+            <Flex
               p='15px'
               bg='blue.50'
               borderRadius='md'
@@ -981,7 +905,7 @@ export default function StudentFees() {
                 </SimpleGrid>
               </Box>
             </Flex>
-            
+
             <TableContainer>
               <Table size='sm'>
                 <Thead>
@@ -1018,10 +942,10 @@ export default function StudentFees() {
             </TableContainer>
           </Box>
         ) : (
-          <Flex 
-            direction='column' 
-            align='center' 
-            justify='center' 
+          <Flex
+            direction='column'
+            align='center'
+            justify='center'
             p='30px'
             bg='gray.50'
             borderRadius='md'
@@ -1040,33 +964,33 @@ export default function StudentFees() {
         <Text fontSize='lg' fontWeight='bold' mb='20px'>
           Fee Payment Actions
         </Text>
-        
+
         <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} gap='20px'>
           <Button colorScheme='blue' size='lg' leftIcon={<MdPayment />} height='80px' flexDirection='column'>
             <Text>Make Payment</Text>
             <Text fontSize='xs' mt='5px'>Pay pending fees</Text>
           </Button>
-          
+
           <Button colorScheme='gray' size='lg' leftIcon={<MdFileDownload />} height='80px' flexDirection='column'>
             <Text>Download Fee Voucher</Text>
             <Text fontSize='xs' mt='5px'>For bank payment</Text>
           </Button>
-          
+
           <Button colorScheme='gray' size='lg' leftIcon={<MdPrint />} height='80px' flexDirection='column'>
             <Text>Print Fee Card</Text>
             <Text fontSize='xs' mt='5px'>Complete history</Text>
           </Button>
-          
+
           <Button colorScheme='gray' size='lg' leftIcon={<MdEmail />} height='80px' flexDirection='column'>
             <Text>Email Fee Details</Text>
             <Text fontSize='xs' mt='5px'>To parent</Text>
           </Button>
-          
+
           <Button colorScheme='gray' size='lg' leftIcon={<MdLocalOffer />} height='80px' flexDirection='column'>
             <Text>Request Concession</Text>
             <Text fontSize='xs' mt='5px'>Apply for discount</Text>
           </Button>
-          
+
           <Button colorScheme='gray' size='lg' leftIcon={<MdCalendarMonth />} height='80px' flexDirection='column'>
             <Text>View Payment Plan</Text>
             <Text fontSize='xs' mt='5px'>Installment details</Text>

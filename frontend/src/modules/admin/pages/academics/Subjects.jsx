@@ -52,6 +52,7 @@ import { AddIcon } from '@chakra-ui/icons';
 import Card from 'components/card/Card.js';
 import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 import {
   MdAssignment,
   MdBook,
@@ -68,6 +69,32 @@ import {
 } from 'react-icons/md';
 import jsPDF from 'jspdf';
 import * as subjectsApi from '../../../../services/api/subjects';
+import { masterDataApi } from '../../../../services/api';
+
+const DeptSelect = ({ value, onChange }) => {
+  const [departments, setDepartments] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await masterDataApi.getDepartments();
+        if (alive) setDepartments(Array.isArray(res) ? res : []);
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
+  }, []);
+  if (departments.length > 0) {
+    return (
+      <Select value={value} onChange={(e) => onChange(e.target.value)} placeholder="Select department">
+        {departments.map((d) => {
+          const label = (d?.name || '').trim();
+          return label ? <option key={d.id ?? label} value={label}>{label}</option> : null;
+        })}
+      </Select>
+    );
+  }
+  return <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Department" />;
+};
 
 const normalizeSubjectRow = (row = {}) => ({
   id: row.id,
@@ -460,7 +487,7 @@ export default function Subjects() {
             `- ${subject.name} (${subject.code || 'No code'}) | Dept: ${subject.department || 'Unassigned'} | Teachers: ${subject.teacherCount}/${subject.primaryTeacherCount} primary`
         ),
       ];
-  const reportContent = [...header, ...topSubjects, ...breakdown].join('\n');
+      const reportContent = [...header, ...topSubjects, ...breakdown].join('\n');
       const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
       triggerFileDownload(blob, `subject-report-${Date.now()}.txt`);
       toast({ title: 'Report generated', status: 'success', duration: 2500 });
@@ -493,25 +520,29 @@ export default function Subjects() {
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap="20px" mb={5}>
-        <MiniStatistics
-          startContent={<IconBox w="56px" h="56px" bg="linear-gradient(90deg,#4481EB 0%,#04BEFE 100%)" icon={<MdBook color="white" />} />}
-          name="Total Subjects"
+        <StatCard
+          title="Total Subjects"
           value={String(stats.total)}
+          icon={MdBook}
+          colorScheme="blue"
         />
-        <MiniStatistics
-          startContent={<IconBox w="56px" h="56px" bg="linear-gradient(90deg,#01B574 0%,#51CB97 100%)" icon={<MdPeople color="white" />} />}
-          name="Departments"
+        <StatCard
+          title="Departments"
           value={String(stats.departments)}
+          icon={MdPeople}
+          colorScheme="green"
         />
-        <MiniStatistics
-          startContent={<IconBox w="56px" h="56px" bg="linear-gradient(90deg,#FFB36D 0%,#FD7853 100%)" icon={<MdTrendingUp color="white" />} />}
-          name="Teacher Links"
+        <StatCard
+          title="Teacher Links"
           value={String(stats.teacherLinks)}
+          icon={MdTrendingUp}
+          colorScheme="orange"
         />
-        <MiniStatistics
-          startContent={<IconBox w="56px" h="56px" bg="linear-gradient(90deg,#8952FF 0%,#AA80FF 100%)" icon={<MdTrendingUp color="white" />} />}
-          name="Unassigned"
+        <StatCard
+          title="Unassigned"
           value={String(stats.unassigned)}
+          icon={MdTrendingUp}
+          colorScheme="purple"
         />
       </SimpleGrid>
 
@@ -592,16 +623,16 @@ export default function Subjects() {
                     </Td>
                     <Td>{subject.department || 'Unassigned'}</Td>
                     <Td>
-                        <Text fontWeight="600">
-                          {teacherNameMap[subject.id]?.length
-                            ? teacherNameMap[subject.id].join(', ')
-                            : 'Unassigned'}
-                        </Text>
-                        <Text fontSize="xs" color={textColorSecondary}>
-                          {subject.teacherCount
-                            ? `${subject.teacherCount} assigned (${subject.primaryTeacherCount} primary)`
-                            : 'No teachers assigned'}
-                        </Text>
+                      <Text fontWeight="600">
+                        {teacherNameMap[subject.id]?.length
+                          ? teacherNameMap[subject.id].join(', ')
+                          : 'Unassigned'}
+                      </Text>
+                      <Text fontSize="xs" color={textColorSecondary}>
+                        {subject.teacherCount
+                          ? `${subject.teacherCount} assigned (${subject.primaryTeacherCount} primary)`
+                          : 'No teachers assigned'}
+                      </Text>
                     </Td>
                     <Td>
                       <Badge colorScheme={subject.teacherCount ? 'green' : 'orange'}>
@@ -658,7 +689,7 @@ export default function Subjects() {
               </FormControl>
               <FormControl>
                 <FormLabel>Department</FormLabel>
-                <Input value={createForm.department} onChange={(e) => handleCreateChange('department', e.target.value)} />
+                <DeptSelect value={createForm.department} onChange={(val) => handleCreateChange('department', val)} />
               </FormControl>
               <FormControl>
                 <FormLabel>Description</FormLabel>
@@ -808,7 +839,7 @@ export default function Subjects() {
                 </FormControl>
                 <FormControl>
                   <FormLabel>Department</FormLabel>
-                  <Input value={editForm.department} onChange={(e) => handleEditChange('department', e.target.value)} />
+                  <DeptSelect value={editForm.department} onChange={(val) => handleEditChange('department', val)} />
                 </FormControl>
                 <FormControl>
                   <FormLabel>Description</FormLabel>
@@ -827,6 +858,6 @@ export default function Subjects() {
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </Box>
+    </Box >
   );
 }

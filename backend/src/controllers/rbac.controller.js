@@ -101,10 +101,31 @@ export const setModulesForRole = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const deleteRole = async (req, res, next) => {
+  try {
+    const role = String(req.params.role || '').toLowerCase();
+    const result = await rbac.deleteRole(role);
+    res.json(result);
+  } catch (e) {
+    const msg = e?.message || 'Failed to delete role';
+    const status = msg.includes('Cannot delete') ? 400 : 500;
+    res.status(status).json({ message: msg });
+  }
+};
+
 export const getMyModules = async (req, res, next) => {
   try {
     const role = String(req.user?.role || '').toLowerCase();
     if (!role) return res.status(400).json({ message: 'No role' });
+
+    // Teacher and student portals show all their own portal sections.
+    // Branch admins see all admin modules — their data is scoped by campusId server-side.
+    // Their data access is already scoped server-side by user_id/campus_id,
+    // so client-side module filtering via admin-portal RBAC names is not needed.
+    if (role === 'teacher' || role === 'student' || role === 'branch_admin') {
+      return res.json({ allowModules: 'ALL', allowSubroutes: 'ALL' });
+    }
+
     const data = await rbac.listModuleAssignments();
     const item = data?.assignments?.[role] || { allowModules: [], allowSubroutes: [] };
     res.json(item);

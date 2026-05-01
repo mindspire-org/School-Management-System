@@ -29,9 +29,10 @@ import { useAuth } from '../../../../contexts/AuthContext';
 
 export default function ManualOverride() {
   const toast = useToast();
-  const { loading: authLoading, isAuthenticated } = useAuth();
+  const { loading: authLoading, isAuthenticated, user } = useAuth();
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const headerBg = useColorModeValue('gray.50', 'gray.800');
+  const canEdit = ['admin', 'branch_admin', 'owner', 'superadmin'].includes(user?.role);
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [cls, setCls] = useState('');
@@ -129,8 +130,8 @@ export default function ManualOverride() {
           <Heading as="h3" size="lg" mb={1}>Manual Override</Heading>
           <Text color={textColorSecondary}>Correct attendance entries with status and remarks</Text>
         </Box>
-        <Button leftIcon={<MdSave />} colorScheme="blue" onClick={saveOverrides} isLoading={saving} isDisabled={items.length===0}>
-          Save Changes
+        <Button leftIcon={<MdSave />} colorScheme="blue" onClick={saveOverrides} isLoading={saving} isDisabled={items.length===0 || !canEdit}>
+          {canEdit ? 'Save Changes' : 'Admin Only'}
         </Button>
       </Flex>
 
@@ -209,14 +210,14 @@ export default function ManualOverride() {
                   <Td>{s.rollNumber || '-'}</Td>
                   <Td><Badge colorScheme='blue'>{s.class}{s.section?'-'+s.section:''}</Badge></Td>
                   <Td>
-                    <Select value={overrides[s.id]?.status || 'present'} onChange={(e)=>updateStatus(s.id, e.target.value)} maxW='160px'>
+                    <Select value={overrides[s.id]?.status || 'present'} onChange={(e)=>updateStatus(s.id, e.target.value)} maxW='160px' isDisabled={!canEdit}>
                       <option value='present'>Present</option>
                       <option value='absent'>Absent</option>
                       <option value='late'>Late</option>
                     </Select>
                   </Td>
                   <Td>
-                    <Input placeholder='Add remarks (optional)' value={overrides[s.id]?.remarks || ''} onChange={(e)=>updateRemarks(s.id, e.target.value)} maxW='320px' />
+                    <Input placeholder='Add remarks (optional)' value={overrides[s.id]?.remarks || ''} onChange={(e)=>updateRemarks(s.id, e.target.value)} maxW='320px' isDisabled={!canEdit} />
                   </Td>
                 </Tr>
               ))}

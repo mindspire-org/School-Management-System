@@ -49,6 +49,27 @@ const getSelfPerson = async ({ role, userId, campusId }) => {
     return { attendanceType, personId: row.id, personName: row.name };
 };
 
+const normalizeTeacherAttendanceStatus = (value) => {
+    const v = String(value || '').toLowerCase();
+    if (v === 'present' || v === 'late' || v === 'absent') return v;
+    // teacher_attendance currently allows only present/absent/late
+    if (v === 'leave') return 'absent';
+    return 'present';
+};
+
+const normalizeStudentAttendanceStatus = (value) => {
+    const v = String(value || '').toLowerCase();
+    if (v === 'present' || v === 'absent' || v === 'late' || v === 'leave') return v;
+    return 'present';
+};
+
+const toLocalISODate = (d) => {
+    const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return new Date().toISOString().slice(0, 10);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+};
+
 const upsertTodayAttendance = async ({ attendanceType, personId, personName, campusId, qrCode, status, markedBy }) => {
     const { start, end } = todayRange();
     const existing = await QRAttendance.findOne({
@@ -72,10 +93,40 @@ const upsertTodayAttendance = async ({ attendanceType, personId, personName, cam
             status: status || existing.status || 'Present',
             markedBy: markedBy ? String(markedBy) : existing.markedBy,
         });
+
+        // Keep student attendance_records in sync so it shows in Student Attendance module
+        if (attendanceType === 'Student') {
+            const day = toLocalISODate(now);
+            const st = normalizeStudentAttendanceStatus(status || existing.status || 'Present');
+            await query(
+                `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
+                 VALUES ($1, $2, $3, NULL, NULL, NOW()::time, $4)
+                 ON CONFLICT (student_id, date)
+                 DO UPDATE SET status = EXCLUDED.status,
+                               check_in_time = COALESCE(attendance_records.check_in_time, EXCLUDED.check_in_time)`,
+                [Number(personId), day, st, Number(campusId)]
+            );
+        }
+
+        // Keep teacher_attendance in sync so it shows in Teacher Attendance module
+        if (attendanceType === 'Teacher') {
+            const day = toLocalISODate(now);
+            const st = normalizeTeacherAttendanceStatus(status || existing.status || 'Present');
+            const checkIn = st === 'present' || st === 'late' ? 'NOW()::time' : 'NULL';
+            await query(
+                `INSERT INTO teacher_attendance (teacher_id, attendance_date, status, check_in_time, check_out_time, remarks, recorded_by)
+                 VALUES ($1, $2, $3, ${checkIn}, NULL, NULL, NULL)
+                 ON CONFLICT (teacher_id, attendance_date)
+                 DO UPDATE SET status = EXCLUDED.status,
+                               check_in_time = COALESCE(teacher_attendance.check_in_time, EXCLUDED.check_in_time),
+                               updated_at = NOW()`,
+                [Number(personId), day, st]
+            );
+        }
         return existing;
     }
 
-    return await QRAttendance.create({
+    const created = await QRAttendance.create({
         attendanceType,
         personId: Number(personId),
         personName: String(personName || 'Unknown'),
@@ -86,6 +137,38 @@ const upsertTodayAttendance = async ({ attendanceType, personId, personName, cam
         markedBy: markedBy ? String(markedBy) : null,
         campusId: Number(campusId),
     });
+
+    // Keep student attendance_records in sync so it shows in Student Attendance module
+    if (attendanceType === 'Student') {
+        const day = toLocalISODate(now);
+        const st = normalizeStudentAttendanceStatus(status || 'Present');
+        await query(
+            `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
+             VALUES ($1, $2, $3, NULL, NULL, NOW()::time, $4)
+             ON CONFLICT (student_id, date)
+             DO UPDATE SET status = EXCLUDED.status,
+                           check_in_time = COALESCE(attendance_records.check_in_time, EXCLUDED.check_in_time)`,
+            [Number(personId), day, st, Number(campusId)]
+        );
+    }
+
+    // Keep teacher_attendance in sync so it shows in Teacher Attendance module
+    if (attendanceType === 'Teacher') {
+        const day = toLocalISODate(now);
+        const st = normalizeTeacherAttendanceStatus(status || 'Present');
+        const checkIn = st === 'present' || st === 'late' ? 'NOW()::time' : 'NULL';
+        await query(
+            `INSERT INTO teacher_attendance (teacher_id, attendance_date, status, check_in_time, check_out_time, remarks, recorded_by)
+             VALUES ($1, $2, $3, ${checkIn}, NULL, NULL, NULL)
+             ON CONFLICT (teacher_id, attendance_date)
+             DO UPDATE SET status = EXCLUDED.status,
+                           check_in_time = COALESCE(teacher_attendance.check_in_time, EXCLUDED.check_in_time),
+                           updated_at = NOW()`,
+            [Number(personId), day, st]
+        );
+    }
+
+    return created;
 };
 
 const scanSessionHandler = async (req, res) => {
@@ -168,7 +251,18 @@ const createCRUD = (Model) => ({
     getAll: async (req, res) => {
         try {
             const { campusId } = req.query;
-            const where = campusId ? { campusId } : {};
+            // Treat 'all' as null/undefined to show data from all campuses
+            const effectiveCampusId = campusId && String(campusId).toLowerCase() !== 'all' ? campusId : null;
+            let where = {};
+            if (effectiveCampusId) {
+                // Include events for this campus AND events marked for 'all' campuses (stored as 0)
+                where = {
+                    [Op.or]: [
+                        { campusId: effectiveCampusId },
+                        { campusId: 0 }
+                    ]
+                };
+            }
             const items = await Model.findAll({ where });
             res.json(items);
         } catch (error) {
@@ -186,7 +280,16 @@ const createCRUD = (Model) => ({
     },
     create: async (req, res) => {
         try {
-            const item = await Model.create(req.body);
+            // Convert 'all' to 0 for campusId (All Campuses events)
+            const body = { ...req.body };
+            if (body.campusId === 'all') {
+                body.campusId = 0;
+            } else if (body.campusId === null || body.campusId === undefined || body.campusId === '') {
+                body.campusId = null;
+            } else {
+                body.campusId = Number(body.campusId);
+            }
+            const item = await Model.create(body);
             res.status(201).json(item);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -215,7 +318,29 @@ const createCRUD = (Model) => ({
 
 // Event routes
 const eventCRUD = createCRUD(Event);
-router.get('/events', eventCRUD.getAll);
+router.get('/events', async (req, res) => {
+    try {
+        const { campusId } = req.query;
+        const effectiveCampusId = campusId && String(campusId).toLowerCase() !== 'all' ? Number(campusId) : null;
+        const params = [];
+        let whereSql = '';
+        if (effectiveCampusId) {
+            params.push(effectiveCampusId);
+            whereSql = `WHERE (e."campusId" = $1 OR e."campusId" = 0)`;
+        }
+        const { rows } = await query(
+            `SELECT e.*, c.name AS "campusName"
+             FROM events e
+             LEFT JOIN campuses c ON c.id = e."campusId"
+             ${whereSql}
+             ORDER BY e."createdAt" DESC`,
+            params
+        );
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 router.get('/events/:id', eventCRUD.getOne);
 router.post('/events', eventCRUD.create);
 router.put('/events/:id', eventCRUD.update);
@@ -232,12 +357,15 @@ router.delete('/certificates/:id', certificateCRUD.delete);
 // QR Attendance routes
 router.get('/qr-attendance', authenticate, async (req, res) => {
     try {
-        const campusId = toInt(req.user?.campusId);
-        if (!campusId) return res.status(400).json({ message: 'campusId is required' });
-
         const role = req.user?.role;
+        const isGlobalAdmin = role === 'owner' || role === 'superadmin' || role === 'admin';
+        const campusId = toInt(req.user?.campusId);
+        if (!campusId && !isGlobalAdmin) {
+            return res.status(400).json({ message: 'campusId is required' });
+        }
         const attendanceType = normalizeAttendanceType(req.query?.attendanceType) || undefined;
-        const where = { campusId };
+        const where = {};
+        if (campusId) where.campusId = campusId;
         if (attendanceType) where.attendanceType = attendanceType;
 
         // Self-only for students/teachers
@@ -252,7 +380,11 @@ router.get('/qr-attendance', authenticate, async (req, res) => {
             const startDate = req.query?.startDate ? new Date(req.query.startDate) : null;
             const endDate = req.query?.endDate ? new Date(req.query.endDate) : null;
             if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
-                return { start: startDate, end: endDate };
+                const s = new Date(startDate);
+                s.setHours(0, 0, 0, 0);
+                const e = new Date(endDate);
+                e.setHours(23, 59, 59, 999);
+                return { start: s, end: e };
             }
             if (req.query?.date) {
                 const d = new Date(req.query.date);

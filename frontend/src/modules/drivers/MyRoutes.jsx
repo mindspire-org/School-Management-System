@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Flex, SimpleGrid, Text, Badge, Icon, HStack, VStack, useColorModeValue, Select, Input, Button, useToast, Table, Thead, Tbody, Tr, Th, Td, Tooltip, IconButton } from '@chakra-ui/react';
 import { MdAltRoute, MdDirectionsBus, MdMap, MdCheckCircle, MdNorthEast, MdSouthWest } from 'react-icons/md';
 import Card from '../../components/card/Card';
 import IconBox from '../../components/icons/IconBox';
+import * as transportApi from '../../services/api/transport';
 
 export default function MyRoutes() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -10,78 +11,61 @@ export default function MyRoutes() {
   const border = useColorModeValue('gray.200', 'gray.600');
   const toast = useToast();
 
-  const demoRoutes = useMemo(() => ([
-    {
-      id: 'R-A',
-      name: 'Route A - North Loop',
-      direction: 'Morning',
-      distance: '18.6 km',
-      duration: '1h 25m',
-      vehicleId: 'BUS-12',
-      stops: [
-        { id: 1, name: 'Maple Ave - Stop 1', time: '07:05 AM', eta: '07:05 AM', status: 'completed' },
-        { id: 2, name: 'Oak Street - Stop 2', time: '07:12 AM', eta: '07:12 AM', status: 'completed' },
-        { id: 3, name: 'Pine Crescent - Stop 3', time: '07:18 AM', eta: '07:19 AM', status: 'completed' },
-        { id: 4, name: 'Birch Lane - Stop 4', time: '07:24 AM', eta: '07:25 AM', status: 'completed' },
-        { id: 5, name: 'Cedar Ct - Stop 5', time: '07:31 AM', eta: '07:32 AM', status: 'completed' },
-        { id: 6, name: 'Walnut Rd - Stop 6', time: '07:37 AM', eta: '07:38 AM', status: 'completed' },
-        { id: 7, name: 'Poplar St - Stop 7', time: '07:42 AM', eta: '07:43 AM', status: 'pending' },
-        { id: 8, name: 'Sycamore Ave - Stop 8', time: '07:47 AM', eta: '07:48 AM', status: 'pending' },
-        { id: 9, name: 'Ash Grove - Stop 9', time: '07:52 AM', eta: '07:53 AM', status: 'pending' },
-        { id: 10, name: 'Willow Park - Stop 10', time: '07:56 AM', eta: '07:57 AM', status: 'pending' },
-        { id: 11, name: 'Elm Heights - Stop 11', time: '07:59 AM', eta: '08:00 AM', status: 'pending' },
-        { id: 12, name: 'School Main Gate', time: '08:05 AM', eta: '08:06 AM', status: 'pending' },
-      ],
-    },
-    {
-      id: 'R-B',
-      name: 'Route B - South Loop',
-      direction: 'Afternoon',
-      distance: '22.1 km',
-      duration: '1h 40m',
-      vehicleId: 'BUS-08',
-      stops: [
-        { id: 1, name: 'School Main Gate', time: '02:35 PM', eta: '02:35 PM', status: 'pending' },
-        { id: 2, name: 'Lakeview Rd - Stop 1', time: '02:48 PM', eta: '02:48 PM', status: 'pending' },
-        { id: 3, name: 'Elm Street - Stop 2', time: '03:01 PM', eta: '03:01 PM', status: 'pending' },
-        { id: 4, name: 'Hilltop Ave - Stop 3', time: '03:16 PM', eta: '03:17 PM', status: 'pending' },
-        { id: 5, name: 'Ridge Blvd - Stop 4', time: '03:28 PM', eta: '03:28 PM', status: 'pending' },
-        { id: 6, name: 'Valley View - Stop 5', time: '03:36 PM', eta: '03:37 PM', status: 'pending' },
-        { id: 7, name: 'Canyon Dr - Stop 6', time: '03:45 PM', eta: '03:46 PM', status: 'pending' },
-        { id: 8, name: 'Riverbank - Stop 7', time: '03:55 PM', eta: '03:55 PM', status: 'pending' },
-        { id: 9, name: 'South Square - Stop 8', time: '04:05 PM', eta: '04:06 PM', status: 'pending' },
-        { id: 10, name: 'Harbor Point - Stop 9', time: '04:18 PM', eta: '04:18 PM', status: 'pending' },
-        { id: 11, name: 'Seaside Ave - Stop 10', time: '04:28 PM', eta: '04:29 PM', status: 'pending' },
-        { id: 12, name: 'Cliffside Rd - Stop 11', time: '04:40 PM', eta: '04:41 PM', status: 'pending' },
-      ],
-    },
-    {
-      id: 'R-C',
-      name: 'Route C - East Loop',
-      direction: 'Morning',
-      distance: '16.3 km',
-      duration: '1h 15m',
-      vehicleId: 'BUS-15',
-      stops: [
-        { id: 1, name: 'Park View - Stop 1', time: '06:55 AM', eta: '06:55 AM', status: 'completed' },
-        { id: 2, name: 'Sunrise Blvd - Stop 2', time: '07:03 AM', eta: '07:03 AM', status: 'completed' },
-        { id: 3, name: 'Civic Center - Stop 3', time: '07:11 AM', eta: '07:11 AM', status: 'completed' },
-        { id: 4, name: 'East Market - Stop 4', time: '07:18 AM', eta: '07:19 AM', status: 'pending' },
-        { id: 5, name: 'Library Rd - Stop 5', time: '07:25 AM', eta: '07:26 AM', status: 'pending' },
-        { id: 6, name: 'Tech Park - Stop 6', time: '07:32 AM', eta: '07:33 AM', status: 'pending' },
-        { id: 7, name: 'Canal View - Stop 7', time: '07:39 AM', eta: '07:40 AM', status: 'pending' },
-        { id: 8, name: 'Old Town - Stop 8', time: '07:47 AM', eta: '07:48 AM', status: 'pending' },
-        { id: 9, name: 'Green Fields - Stop 9', time: '07:53 AM', eta: '07:54 AM', status: 'pending' },
-        { id: 10, name: 'East Gate - Stop 10', time: '08:00 AM', eta: '08:01 AM', status: 'pending' },
-        { id: 11, name: 'School Main Gate', time: '08:07 AM', eta: '08:08 AM', status: 'pending' },
-      ],
-    },
-  ]), []);
-
-  const [routeId, setRouteId] = useState(demoRoutes[0].id);
+  const [routes, setRoutes] = useState([]);
+  const [routeId, setRouteId] = useState('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [routes, setRoutes] = useState(demoRoutes);
+
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      try {
+        const data = await transportApi.listRoutes();
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const mapped = items.map((r) => ({
+          id: String(r.id),
+          name: r.name,
+          direction: '',
+          distance: '',
+          duration: '',
+          vehicleId: r.busesCount ? `Buses: ${r.busesCount}` : '',
+          stops: [],
+        }));
+        setRoutes(mapped);
+        setRouteId(mapped[0]?.id || '');
+      } catch (e) {
+        setRoutes([]);
+        setRouteId('');
+      }
+    };
+    fetchRoutes();
+  }, []);
+
+  useEffect(() => {
+    const fetchStops = async () => {
+      try {
+        if (!routeId) return;
+        const data = await transportApi.listRouteStops(routeId);
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setRoutes((prev) => prev.map((r) => {
+          if (String(r.id) !== String(routeId)) return r;
+          return {
+            ...r,
+            stops: items.map((s, idx) => ({
+              id: String(s.id),
+              name: s.name,
+              time: '',
+              eta: '',
+              status: 'pending',
+              order: idx + 1,
+            })),
+          };
+        }));
+      } catch (e) {
+        // keep page usable even if stops fail
+      }
+    };
+    fetchStops();
+  }, [routeId]);
 
   const selectedRoute = useMemo(() => routes.find(r => r.id === routeId), [routes, routeId]);
   const totalStops = selectedRoute?.stops.length || 0;
@@ -103,19 +87,11 @@ export default function MyRoutes() {
   }, [selectedRoute, statusFilter, query]);
 
   const markCompleted = (sid) => {
-    setRoutes(prev => prev.map(r => {
-      if (r.id !== routeId) return r;
-      return { ...r, stops: r.stops.map(s => s.id === sid ? { ...s, status: 'completed' } : s) };
-    }));
-    toast({ status: 'success', title: 'Stop marked completed' });
+    toast({ status: 'info', title: 'Stop updates will be available once route progress tracking is integrated.' });
   };
 
   const delayFive = (sid) => {
-    setRoutes(prev => prev.map(r => {
-      if (r.id !== routeId) return r;
-      return { ...r, stops: r.stops.map(s => s.id === sid ? { ...s, eta: addMinutes(s.eta, 5) } : s) };
-    }));
-    toast({ status: 'info', title: '+5 min delay applied' });
+    toast({ status: 'info', title: 'ETA updates will be available once live tracking is integrated.' });
   };
 
   const addMinutes = (timeStr, mins) => {
@@ -259,7 +235,7 @@ export default function MyRoutes() {
               <Tbody>
                 {filteredStops.map((s) => (
                   <Tr key={s.id}>
-                    <Td>{s.id}</Td>
+                    <Td>{s.order || s.id}</Td>
                     <Td maxW='280px'>
                       <Text noOfLines={1}>{s.name}</Text>
                     </Td>
@@ -271,10 +247,10 @@ export default function MyRoutes() {
                     <Td isNumeric>
                       <HStack spacing={2} justify='flex-end'>
                         <Tooltip label='Mark completed'>
-                          <IconButton size='sm' aria-label='complete' icon={<MdCheckCircle />} onClick={() => markCompleted(s.id)} isDisabled={s.status === 'completed'} />
+                          <IconButton size='sm' aria-label='complete' icon={<MdCheckCircle />} onClick={() => markCompleted(s.id)} isDisabled />
                         </Tooltip>
                         <Tooltip label='Delay +5 min'>
-                          <Button size='xs' onClick={() => delayFive(s.id)}>+5m</Button>
+                          <Button size='xs' onClick={() => delayFive(s.id)} isDisabled>+5m</Button>
                         </Tooltip>
                       </HStack>
                     </Td>

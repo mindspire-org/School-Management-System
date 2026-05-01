@@ -25,6 +25,7 @@ import expensesRoutes from './expenses.routes.js';
 import campusRoutes from './campuses.routes.js';
 import masterDataRoutes from './masterData.routes.js';
 import sharedContentRoutes from './sharedContent.routes.js';
+import marksRoutes from './marks.routes.js';
 
 // New module routes
 import inventoryRoutes from './inventory.routes.js';
@@ -33,6 +34,8 @@ import cardManagementRoutes from './cardManagement.routes.js';
 import eventsCertificatesRoutes from './eventsCertificates.routes.js';
 import certificatesRoutes from './certificates.routes.js';
 import hrRoutes from './hr.routes.js';
+import webhooksRoutes from './webhooks.routes.js';
+import twilioDashboardRoutes from './twilioDashboard.routes.js';
 
 const router = Router();
 
@@ -56,6 +59,7 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/classes', classRoutes);
 router.use('/syllabus', syllabusRoutes);
 router.use('/grading', gradingRoutes);
+router.use('/marks', marksRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/parents', parentsRoutes);
 router.use('/expenses', expensesRoutes);
@@ -70,5 +74,7 @@ router.use('/card-management', cardManagementRoutes);
 router.use('/events-certificates', eventsCertificatesRoutes);
 router.use('/certificates', certificatesRoutes);
 router.use('/hr', hrRoutes);
+router.use('/webhooks', webhooksRoutes);
+router.use('/twilio-dashboard', twilioDashboardRoutes);
 
 export default router;

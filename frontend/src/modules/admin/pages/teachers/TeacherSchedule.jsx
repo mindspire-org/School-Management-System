@@ -63,6 +63,7 @@ import {
 import Card from 'components/card/Card.js';
 import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 import * as teacherApi from '../../../../services/api/teachers';
 
 const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -158,6 +159,56 @@ const resolveTeacherId = (teacher) => {
   return id === undefined || id === null ? null : Number(id);
 };
 
+const parseAssignmentClasses = (raw) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((v) => (v === undefined || v === null ? '' : String(v).trim()))
+      .filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const str = raw.trim();
+    if (!str) return [];
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((v) => (v === undefined || v === null ? '' : String(v).trim()))
+          .filter(Boolean);
+      }
+    } catch {
+      // ignore
+    }
+    return str
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const splitClassAndSection = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return { className: '', section: '' };
+
+  if (raw.includes('-')) {
+    const parts = raw
+      .split('-')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      return { className: parts[0], section: parts.slice(1).join('-') };
+    }
+  }
+
+  const match = raw.match(/^\s*(\d+)\s*([A-Za-z]+)\s*$/);
+  if (match) {
+    return { className: match[1], section: match[2] };
+  }
+
+  return { className: raw, section: '' };
+};
+
 const TeacherSchedule = () => {
   const [selectedTeacher, setSelectedTeacher] = useState('all');
   const [selectedDay, setSelectedDay] = useState('all');
@@ -173,11 +224,17 @@ const TeacherSchedule = () => {
   const [currentSchedule, setCurrentSchedule] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [roomTarget, setRoomTarget] = useState(null);
+  const [roomValue, setRoomValue] = useState('');
+
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+  const [teacherAssignmentsLoading, setTeacherAssignmentsLoading] = useState(false);
+  const teacherSelectionSeq = useRef(0);
 
   const modalDisclosure = useDisclosure();
   const deleteDisclosure = useDisclosure();
+  const roomDisclosure = useDisclosure();
   const deleteCancelRef = useRef();
-  const teacherSelectionSeq = useRef(0);
   const toast = useToast();
 
   const textColor = useColorModeValue('gray.800', 'white');
@@ -246,127 +303,14 @@ const TeacherSchedule = () => {
     return map;
   }, [teachers]);
 
-  const handleTeacherSelection = useCallback(
-    async (value) => {
-      const rawTeacherId = value;
-      const seq = (teacherSelectionSeq.current += 1);
-
-      let teacherIdNum = Number(rawTeacherId);
-      if (!Number.isFinite(teacherIdNum)) {
-        const match = teachers.find((t) => {
-          const id = resolveTeacherId(t);
-          if (id === null) return false;
-          const name = resolveTeacherName(t);
-          return name && String(name).toLowerCase() === String(rawTeacherId).toLowerCase();
-        });
-        const matchedId = resolveTeacherId(match);
-        if (matchedId !== null) teacherIdNum = matchedId;
-      }
-
-      const teacherIdState = Number.isFinite(teacherIdNum) ? String(teacherIdNum) : String(rawTeacherId || '');
-
-      const selected = teacherMap.get(Number(teacherIdNum));
-      const teacherSubjects = Array.isArray(selected?.subjects) ? selected.subjects : [];
-      const teacherClasses = Array.isArray(selected?.classes) ? selected.classes : [];
-
-      const defaultSubject = selected?.subject || (teacherSubjects.length ? teacherSubjects[0] : '') || '';
-      const defaultClass = teacherClasses.length ? teacherClasses[0] : '';
-
-      setFormState((prev) => ({
-        ...prev,
-        teacherId: teacherIdState,
-        subject: defaultSubject,
-        className: defaultClass,
-      }));
-
-      if (!teacherIdState || !Number.isFinite(teacherIdNum)) {
-        toast({
-          title: 'Teacher selection issue',
-          description: 'Could not resolve teacher id for auto-fill. Please re-select the teacher.',
-          status: 'warning',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      try {
-        const assignments = await teacherApi.listSubjectAssignments({ teacherId: teacherIdNum });
-        if (seq !== teacherSelectionSeq.current) return;
-
-        const rows = Array.isArray(assignments)
-          ? assignments
-          : Array.isArray(assignments?.rows)
-            ? assignments.rows
-            : [];
-        const primary = rows.find((r) => r?.isPrimary) || rows[0];
-        if (!primary) {
-          toast({
-            title: 'No subject assigned',
-            description: 'No subject/class assignment found for this teacher.',
-            status: 'warning',
-            duration: 3000,
-            isClosable: true,
-          });
-          return;
-        }
-
-        const pickedSubject = primary?.subjectName || primary?.subject || primary?.name || '';
-
-        const rawClasses = primary?.classes ?? primary?.class ?? primary?.className ?? [];
-        let classes = [];
-        if (Array.isArray(rawClasses)) {
-          classes = rawClasses;
-        } else if (typeof rawClasses === 'string') {
-          try {
-            const parsed = JSON.parse(rawClasses);
-            classes = Array.isArray(parsed) ? parsed : [];
-          } catch (e) {
-            classes = rawClasses
-              .split(',')
-              .map((v) => v.trim())
-              .filter(Boolean);
-          }
-        }
-
-        const pickedClassRaw =
-          classes.find((c) => typeof c === 'string' && c && !c.includes('-')) ||
-          classes.find((c) => typeof c === 'string' && c) ||
-          '';
-
-        let pickedClass = pickedClassRaw;
-        let pickedSection = '';
-        if (pickedClassRaw && pickedClassRaw.includes('-')) {
-          const parts = pickedClassRaw
-            .split('-')
-            .map((p) => p.trim())
-            .filter(Boolean);
-          if (parts.length >= 2) {
-            pickedClass = parts[0];
-            pickedSection = parts.slice(1).join('-');
-          }
-        }
-
-        setFormState((prev) => ({
-          ...prev,
-          teacherId: teacherIdState,
-          subject: pickedSubject || prev.subject,
-          className: pickedClass || prev.className,
-          section: pickedSection || prev.section,
-        }));
-      } catch (error) {
-        toast({
-          title: 'Auto-fill failed',
-          description: error?.message || 'Could not load teacher assignments for auto-fill.',
-          status: 'error',
-          duration: 4000,
-          isClosable: true,
-        });
-        return;
-      }
-    },
-    [teacherMap, teachers, toast]
-  );
+  const roomOptions = useMemo(() => {
+    const set = new Set();
+    schedules.forEach((s) => {
+      const r = (s.room || '').trim();
+      if (r && r !== '—') set.add(r);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [schedules]);
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter((schedule) => {
@@ -442,6 +386,22 @@ const TeacherSchedule = () => {
     };
   }, [schedules, teachers]);
 
+  const handleSaveRoom = async () => {
+    if (!roomTarget) return;
+    try {
+      const updated = await teacherApi.updateScheduleSlot(roomTarget.id, { room: roomValue || null });
+      const normalized = normalizeScheduleRow(updated);
+      setSchedules((prev) => prev.map((it) => (it.id === normalized.id ? normalized : it)));
+      toast({ title: 'Room updated', status: 'success', duration: 2500, isClosable: true });
+      roomDisclosure.onClose();
+      setRoomTarget(null);
+      setRoomValue('');
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to update room', description: error?.message || 'Please try again.', status: 'error', duration: 4000, isClosable: true });
+    }
+  };
+
   const handleResetFilters = () => {
     setSelectedTeacher('all');
     setSelectedDay('all');
@@ -464,6 +424,12 @@ const TeacherSchedule = () => {
     setCurrentSchedule(null);
     setFormState(initialFormState);
     modalDisclosure.onOpen();
+  };
+
+  const openRoomModal = (schedule) => {
+    setRoomTarget(schedule);
+    setRoomValue(schedule?.room && schedule.room !== '—' ? schedule.room : '');
+    roomDisclosure.onOpen();
   };
 
   const openEditModal = (schedule) => {
@@ -582,6 +548,89 @@ const TeacherSchedule = () => {
     return [...teachers].sort((a, b) => resolveTeacherName(a).localeCompare(resolveTeacherName(b)));
   }, [teachers]);
 
+  const assignmentSubjectOptions = useMemo(() => {
+    const set = new Set();
+    (teacherAssignments || []).forEach((row) => {
+      const name = row?.subjectName || row?.subject || row?.name || '';
+      const trimmed = String(name || '').trim();
+      if (trimmed) set.add(trimmed);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [teacherAssignments]);
+
+  const assignmentClassOptions = useMemo(() => {
+    const set = new Set();
+    (teacherAssignments || []).forEach((row) => {
+      const classes = parseAssignmentClasses(row?.classes ?? row?.class ?? row?.className);
+      classes.forEach((c) => {
+        const trimmed = String(c || '').trim();
+        if (trimmed) set.add(trimmed);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [teacherAssignments]);
+
+  const handleTeacherSelection = useCallback(
+    async (teacherIdValue) => {
+      const seq = (teacherSelectionSeq.current += 1);
+      const teacherIdNum = Number(teacherIdValue);
+
+      setFormState((prev) => ({
+        ...prev,
+        teacherId: teacherIdValue,
+        subject: '',
+        className: '',
+        section: '',
+      }));
+      setTeacherAssignments([]);
+
+      if (!teacherIdValue || !Number.isFinite(teacherIdNum)) return;
+
+      setTeacherAssignmentsLoading(true);
+      try {
+        const assignments = await teacherApi.listSubjectAssignments({ teacherId: teacherIdNum });
+        if (seq !== teacherSelectionSeq.current) return;
+
+        const rows = Array.isArray(assignments)
+          ? assignments
+          : Array.isArray(assignments?.rows)
+            ? assignments.rows
+            : [];
+
+        setTeacherAssignments(rows);
+
+        const primary = rows.find((r) => r?.isPrimary) || rows[0];
+        if (!primary) return;
+
+        const pickedSubject = String(primary?.subjectName || primary?.subject || primary?.name || '').trim();
+        const classes = parseAssignmentClasses(primary?.classes ?? primary?.class ?? primary?.className);
+        const pickedClassRaw = classes[0] ? String(classes[0]).trim() : '';
+        const split = splitClassAndSection(pickedClassRaw);
+
+        setFormState((prev) => ({
+          ...prev,
+          teacherId: teacherIdValue,
+          subject: pickedSubject || prev.subject,
+          className: split.className || prev.className,
+          section: split.section || prev.section,
+        }));
+      } catch (error) {
+        if (seq !== teacherSelectionSeq.current) return;
+        setTeacherAssignments([]);
+        toast({
+          title: 'Auto-fill failed',
+          description: error?.message || 'Could not load teacher assignments.',
+          status: 'error',
+          duration: 4000,
+          isClosable: true,
+        });
+      } finally {
+        if (seq === teacherSelectionSeq.current) setTeacherAssignmentsLoading(false);
+      }
+    },
+    [toast]
+  );
+
   const getTeacherAvatar = (teacherId) => {
     const teacher = teacherMap.get(Number(teacherId));
     return teacher?.avatar || teacher?.photo || teacher?.profilePicture || '';
@@ -690,20 +739,58 @@ const TeacherSchedule = () => {
 
               <FormControl>
                 <FormLabel>Subject</FormLabel>
-                <Input
-                  placeholder="e.g. Mathematics"
-                  value={formState.subject}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, subject: e.target.value }))}
-                />
+                {assignmentSubjectOptions.length ? (
+                  <Select
+                    placeholder={teacherAssignmentsLoading ? 'Loading subjects...' : 'Select subject'}
+                    value={formState.subject}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, subject: e.target.value }))}
+                    isDisabled={!formState.teacherId || teacherAssignmentsLoading}
+                  >
+                    {assignmentSubjectOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="e.g. Mathematics"
+                    value={formState.subject}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, subject: e.target.value }))}
+                  />
+                )}
               </FormControl>
 
               <FormControl>
                 <FormLabel>Class</FormLabel>
-                <Input
-                  placeholder="e.g. 10A"
-                  value={formState.className}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, className: e.target.value }))}
-                />
+                {assignmentClassOptions.length ? (
+                  <Select
+                    placeholder={teacherAssignmentsLoading ? 'Loading classes...' : 'Select class'}
+                    value={formState.className}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const split = splitClassAndSection(next);
+                      setFormState((prev) => ({
+                        ...prev,
+                        className: split.className || next,
+                        section: split.section || prev.section,
+                      }));
+                    }}
+                    isDisabled={!formState.teacherId || teacherAssignmentsLoading}
+                  >
+                    {assignmentClassOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="e.g. 10A"
+                    value={formState.className}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, className: e.target.value }))}
+                  />
+                )}
               </FormControl>
 
               <FormControl>
@@ -737,62 +824,9 @@ const TeacherSchedule = () => {
       </Modal>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5} mb={5}>
-        <MiniStatistics
-          compact
-          startContent={
-            <IconBox
-              w="48px"
-              h="48px"
-              bg="linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)"
-              icon={<Icon as={MdSchedule} w="24px" h="24px" color="white" />}
-            />
-          }
-          name="Total Classes"
-          value={String(scheduleStats.totalClasses)}
-          growth="Across all teachers"
-          trendData={[
-            Math.max(scheduleStats.totalClasses - 5, 0),
-            Math.max(scheduleStats.totalClasses - 2, 0),
-            scheduleStats.totalClasses,
-          ]}
-          trendColor="#4facfe"
-        />
-        <MiniStatistics
-          compact
-          startContent={
-            <IconBox
-              w="48px"
-              h="48px"
-              bg="linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)"
-              icon={<Icon as={MdToday} w="24px" h="24px" color="white" />}
-            />
-          }
-          name="Busiest Day"
-          value={scheduleStats.busiestDay.day}
-          growth={`${scheduleStats.busiestDay.count} classes scheduled`}
-          trendData={weekDays.map((day) => schedules.filter((sched) => sched.dayName === day).length)}
-          trendColor="#43e97b"
-        />
-        <MiniStatistics
-          compact
-          startContent={
-            <IconBox
-              w="48px"
-              h="48px"
-              bg="linear-gradient(135deg,#a18cd1 0%,#fbc2eb 100%)"
-              icon={<Icon as={MdSupervisorAccount} w="24px" h="24px" color="white" />}
-            />
-          }
-          name="Most Classes"
-          value={resolveTeacherName(scheduleStats.busiestTeacher.teacher)}
-          growth={`${scheduleStats.busiestTeacher.classes} classes/week`}
-          trendData={[
-            Math.max(scheduleStats.busiestTeacher.classes - 2, 0),
-            Math.max(scheduleStats.busiestTeacher.classes - 1, 0),
-            scheduleStats.busiestTeacher.classes,
-          ]}
-          trendColor="#a18cd1"
-        />
+        <StatCard title="Total Classes" value={String(scheduleStats.totalClasses)} icon={MdSchedule} colorScheme="blue" note="Across all teachers" />
+        <StatCard title="Busiest Day" value={scheduleStats.busiestDay.day} icon={MdToday} colorScheme="green" note={`${scheduleStats.busiestDay.count} classes scheduled`} />
+        <StatCard title="Most Classes" value={resolveTeacherName(scheduleStats.busiestTeacher.teacher)} icon={MdSupervisorAccount} colorScheme="purple" note={`${scheduleStats.busiestTeacher.classes} classes/week`} />
       </SimpleGrid>
 
       <Card mb={5}>
@@ -982,20 +1016,19 @@ const TeacherSchedule = () => {
                         <Text fontSize="xs" color={textColorSecondary}>Section {schedule.section}</Text>
                       )}
                     </Td>
-                    <Td>{schedule.room}</Td>
+                    <Td onClick={() => openRoomModal(schedule)} cursor="pointer" title="Click to edit room">{schedule.room}</Td>
                     <Td textAlign="right">
                       <HStack spacing={2} justify="flex-end">
-                        <Tooltip label={editingMode ? 'Edit schedule' : 'Enable edit mode to modify'}>
+                        <Tooltip label={'Edit schedule'}>
                           <IconButton
                             size="sm"
                             icon={<Icon as={MdEdit} />}
                             aria-label="Edit schedule"
                             variant="ghost"
-                            onClick={() => editingMode && openEditModal(schedule)}
-                            isDisabled={!editingMode}
+                            onClick={() => openEditModal(schedule)}
                           />
                         </Tooltip>
-                        <Tooltip label={editingMode ? 'Delete schedule' : 'Enable edit mode to delete'}>
+                        <Tooltip label={'Delete schedule'}>
                           <IconButton
                             size="sm"
                             icon={<Icon as={MdDelete} />}
@@ -1003,11 +1036,9 @@ const TeacherSchedule = () => {
                             variant="ghost"
                             colorScheme="red"
                             onClick={() => {
-                              if (!editingMode) return;
                               setDeleteTarget(schedule);
                               deleteDisclosure.onOpen();
                             }}
-                            isDisabled={!editingMode}
                           />
                         </Tooltip>
                       </HStack>
@@ -1038,6 +1069,35 @@ const TeacherSchedule = () => {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+
+      {/* Quick Edit Room Modal */}
+      <Modal isOpen={roomDisclosure.isOpen} onClose={roomDisclosure.onClose} isCentered size="sm">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit Room</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl>
+              <FormLabel>Room</FormLabel>
+              <Input
+                placeholder="e.g. R101"
+                value={roomValue}
+                onChange={(e) => setRoomValue(e.target.value)}
+                list="roomOptionsList"
+              />
+              <datalist id="roomOptionsList">
+                {roomOptions.map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
+            </FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={roomDisclosure.onClose}>Cancel</Button>
+            <Button colorScheme="blue" onClick={handleSaveRoom}>Save</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

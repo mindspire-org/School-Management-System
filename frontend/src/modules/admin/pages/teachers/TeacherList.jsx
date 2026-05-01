@@ -42,19 +42,23 @@ import {
 import Card from 'components/card/Card.js';
 import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
-import { SearchIcon, AddIcon, DownloadIcon, ViewIcon, EditIcon, DeleteIcon } from '@chakra-ui/icons';
-import { 
+import StatCard from '../../../../components/card/StatCard';
+import { SearchIcon, DownloadIcon, ViewIcon, EditIcon, DeleteIcon } from '@chakra-ui/icons';
+import {
   MdMoreVert,
   MdPeople,
   MdSchool,
   MdPersonAdd,
 } from 'react-icons/md';
 import useApi from '../../../../hooks/useApi';
-import { teachersApi } from '../../../../services/api';
+import { teachersApi, campusesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 import TeacherDetailsModal from './TeacherDetailsModal';
 import TeacherEditModal from './TeacherEditModal';
 
 function TeacherList() {
+  const { campusId, user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'owner';
   const [searchTerm, setSearchTerm] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
@@ -70,8 +74,9 @@ function TeacherList() {
   const deleteDisclosure = useDisclosure();
   const editDisclosure = useDisclosure();
   const cancelDeleteRef = useRef();
+  const [campuses, setCampuses] = useState([]);
   const toast = useToast();
-  
+
   // Color mode values
   const textColor = useColorModeValue('gray.800', 'white');
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -93,11 +98,14 @@ function TeacherList() {
   } = useApi((id, payload) => teachersApi.update(id, payload));
 
   const refreshTeachers = useCallback(() => {
-    fetchTeachers({ page: 1, pageSize: 200 });
-  }, [fetchTeachers]);
+    fetchTeachers({ page: 1, pageSize: 200, campusId });
+  }, [fetchTeachers, campusId]);
 
   useEffect(() => {
     refreshTeachers();
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err));
   }, [refreshTeachers]);
 
   const teachers = useMemo(() => teachersResponse?.rows || [], [teachersResponse]);
@@ -173,9 +181,16 @@ function TeacherList() {
         subjectFilter.toLowerCase() === subject ||
         subjectValues.includes(subjectFilter.toLowerCase());
 
-      return matchesSearch && matchesDepartment && matchesStatus && matchesSubject;
+      // Campus filter (safeguard)
+      const matchesCampus =
+        !campusId ||
+        String(campusId).toLowerCase() === 'all' ||
+        !teacher.campusId ||
+        String(teacher.campusId) === String(campusId);
+
+      return matchesSearch && matchesDepartment && matchesStatus && matchesSubject && matchesCampus;
     });
-  }, [teachers, searchTerm, departmentFilter, statusFilter, subjectFilter]);
+  }, [teachers, searchTerm, departmentFilter, statusFilter, subjectFilter, campusId]);
 
   const stats = useMemo(() => {
     const activeCount = teachers.filter((t) => (t.employmentStatus || t.status || '').toLowerCase() === 'active').length;
@@ -238,6 +253,7 @@ function TeacherList() {
     city: teacher?.city || '',
     state: teacher?.state || '',
     postalCode: teacher?.postalCode || '',
+    campusId: teacher?.campusId || '',
   }), []);
 
   const handleEditChange = (e) => {
@@ -356,6 +372,7 @@ function TeacherList() {
     assign('city', editForm.city.trim() || undefined);
     assign('state', editForm.state.trim() || undefined);
     assign('postalCode', editForm.postalCode.trim() || undefined);
+    assign('campusId', editForm.campusId || undefined);
 
     assign('subjects', parseListField(editForm.subjects));
     assign('classes', parseListField(editForm.classes));
@@ -425,24 +442,24 @@ function TeacherList() {
   };
 
   return (
-    <Box 
-      pt={{ base: '130px', md: '80px', xl: '80px' }} 
+    <Box
+      pt={{ base: '130px', md: '80px', xl: '80px' }}
       px={4}
       bg="gray.50"
       minH="100vh"
     >
       {/* Page Header */}
-      <Flex 
-        mb={6} 
-        justify="space-between" 
-        align="center" 
+      <Flex
+        mb={6}
+        justify="space-between"
+        align="center"
         direction={{ base: 'column', md: 'row' }}
         gap={4}
       >
         <Box>
-          <Heading 
-            size="lg" 
-            color="gray.800" 
+          <Heading
+            size="lg"
+            color="gray.800"
             mb={2}
           >
             Teachers Management
@@ -451,53 +468,42 @@ function TeacherList() {
             Manage teaching staff and their information ({filteredTeachers.length} shown of {totalTeachers})
           </Text>
         </Box>
-        <Button 
-          leftIcon={<AddIcon />} 
-          colorScheme="blue" 
-          size="md"
-          _hover={{ transform: 'translateY(-2px)', boxShadow: 'lg' }}
-        >
-          Add New Teacher
-        </Button>
+
       </Flex>
 
       {/* Statistics Cards - redesigned */}
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={6}>
-        <MiniStatistics
-          startContent={<IconBox w='48px' h='48px' bg='linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)' icon={<Icon as={MdPeople} w='24px' h='24px' color='white' />} />}
-          name='Total Teachers'
+        <StatCard
+          title='Total Teachers'
           value={String(stats.total || 0)}
-          growth='+2%'
-          trendData={[stats.total || 0, Math.max((stats.total || 0) - 1, 0), stats.total || 0]}
-          trendColor='#4facfe'
-          compact
+          icon={MdPeople}
+          colorScheme='blue'
+          trend='up'
+          trendValue={2}
         />
-        <MiniStatistics
-          startContent={<IconBox w='48px' h='48px' bg='linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)' icon={<Icon as={MdSchool} w='24px' h='24px' color='white' />} />}
-          name='Active Teachers'
+        <StatCard
+          title='Active Teachers'
           value={String(stats.active || 0)}
-          growth='+1%'
-          trendData={[stats.active || 0, stats.active || 0]}
-          trendColor='#43e97b'
-          compact
+          icon={MdSchool}
+          colorScheme='green'
+          trend='up'
+          trendValue={1}
         />
-        <MiniStatistics
-          startContent={<IconBox w='48px' h='48px' bg='linear-gradient(135deg,#f7971e 0%,#ffd200 100%)' icon={<Icon as={MdPersonAdd} w='24px' h='24px' color='white' />} />}
-          name='On Leave'
+        <StatCard
+          title='On Leave'
           value={String(stats.onLeave || 0)}
-          growth='+0%'
-          trendData={[stats.onLeave || 0, stats.onLeave || 0]}
-          trendColor='#f7971e'
-          compact
+          icon={MdPersonAdd}
+          colorScheme='orange'
+          trend='up'
+          trendValue={0}
         />
-        <MiniStatistics
-          startContent={<IconBox w='48px' h='48px' bg='linear-gradient(135deg,#a18cd1 0%,#fbc2eb 100%)' icon={<Icon as={MdSchool} w='24px' h='24px' color='white' />} />}
-          name='Departments'
+        <StatCard
+          title='Departments'
           value={String(stats.departments || 0)}
-          growth='+0%'
-          trendData={[stats.departments || 0, stats.departments || 0]}
-          trendColor='#a18cd1'
-          compact
+          icon={MdSchool}
+          colorScheme='purple'
+          trend='up'
+          trendValue={0}
         />
       </SimpleGrid>
 
@@ -509,15 +515,15 @@ function TeacherList() {
               <InputLeftElement>
                 <SearchIcon color="gray.300" />
               </InputLeftElement>
-              <Input 
-                placeholder="Search teachers by name, email, or subject..." 
+              <Input
+                placeholder="Search teachers by name, email, or subject..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 bg="white"
               />
             </InputGroup>
-            <Select 
-              placeholder="All Subjects" 
+            <Select
+              placeholder="All Subjects"
               maxW="200px"
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
@@ -526,8 +532,8 @@ function TeacherList() {
                 <option key={subj} value={subj.toLowerCase()}>{subj}</option>
               ))}
             </Select>
-            <Select 
-              placeholder="All Departments" 
+            <Select
+              placeholder="All Departments"
               maxW="200px"
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
@@ -536,8 +542,8 @@ function TeacherList() {
                 <option key={dept} value={dept.toLowerCase()}>{dept}</option>
               ))}
             </Select>
-            <Select 
-              placeholder="All Status" 
+            <Select
+              placeholder="All Status"
               maxW="200px"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -570,13 +576,14 @@ function TeacherList() {
             </HStack>
           </Flex>
         </Box>
-        
+
         <Box pt={0} px={4} pb={4}>
           <Box overflowX="auto">
             <Table variant="simple">
               <Thead>
                 <Tr>
                   <Th>Teacher</Th>
+                  <Th>Campus</Th>
                   <Th>Contact</Th>
                   <Th>Subject</Th>
                   <Th>Department</Th>
@@ -603,9 +610,9 @@ function TeacherList() {
                     <Tr key={teacher.id} _hover={{ bg: 'gray.50' }}>
                       <Td>
                         <Flex align="center">
-                          <Avatar 
-                            size="sm" 
-                            name={teacher.name} 
+                          <Avatar
+                            size="sm"
+                            name={teacher.name}
                             src={teacher.avatar || teacher.photo || undefined}
                             mr={3}
                           />
@@ -618,6 +625,11 @@ function TeacherList() {
                             </Text>
                           </Box>
                         </Flex>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm" color="gray.800" fontWeight="medium">
+                          {teacher.campusName || teacher.campusId || '—'}
+                        </Text>
                       </Td>
                       <Td>
                         <Box>
@@ -649,7 +661,7 @@ function TeacherList() {
                         </Text>
                       </Td>
                       <Td>
-                        <Badge 
+                        <Badge
                           colorScheme={statusColor(teacherStatus)}
                           variant="subtle"
                         >
@@ -666,10 +678,10 @@ function TeacherList() {
                           />
                           <MenuList>
                             <MenuItem icon={<ViewIcon />} onClick={() => openDetails(teacher)}>View Details</MenuItem>
-                            <MenuItem icon={<EditIcon />} onClick={() => openEdit(teacher)}>Edit Teacher</MenuItem>
-                            <MenuItem icon={<DeleteIcon />} color="red.500" onClick={() => confirmDelete(teacher)}>
+                            {isSuperAdmin && <MenuItem icon={<EditIcon />} onClick={() => openEdit(teacher)}>Edit Teacher</MenuItem>}
+                            {isSuperAdmin && <MenuItem icon={<DeleteIcon />} color="red.500" onClick={() => confirmDelete(teacher)}>
                               Delete Teacher
-                            </MenuItem>
+                            </MenuItem>}
                           </MenuList>
                         </Menu>
                       </Td>
@@ -679,7 +691,7 @@ function TeacherList() {
               </Tbody>
             </Table>
           </Box>
-          
+
           {/* Pagination */}
           {!loadingTeachers && filteredTeachers.length > 0 && (
             <Flex justify="space-between" align="center" pt={4} borderTop="1px" borderColor="gray.200" mt={4}>
@@ -699,7 +711,7 @@ function TeacherList() {
               </HStack>
             </Flex>
           )}
-          
+
           {/* No Results */}
           {!loadingTeachers && filteredTeachers.length === 0 && (
             <Box textAlign="center" py={10}>
@@ -736,6 +748,7 @@ function TeacherList() {
         isSubmitting={updatingTeacher}
         avatarPreview={editAvatarPreview}
         onAvatarChange={handleEditAvatarChange}
+        campusOptions={campuses}
       />
 
       <AlertDialog

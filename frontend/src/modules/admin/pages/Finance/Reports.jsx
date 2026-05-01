@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup, IconButton, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input, Progress, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, NumberInput, NumberInputField, Tabs, TabList, TabPanels, Tab, TabPanel } from '@chakra-ui/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Flex, Heading, Text, SimpleGrid, Icon, Badge, Button, ButtonGroup, IconButton, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Input, Progress, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, NumberInput, NumberInputField, Tabs, TabList, TabPanels, Tab, TabPanel, useToast } from '@chakra-ui/react';
 import { MdAssessment, MdArrowDownward, MdArrowUpward, MdFileDownload, MdPictureAsPdf, MdRemoveRedEye, MdEdit } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
@@ -7,8 +7,9 @@ import IconBox from '../../../../components/icons/IconBox';
 import LineChart from '../../../../components/charts/LineChart';
 import BarChart from '../../../../components/charts/BarChart';
 import PieChart from '../../../../components/charts/PieChart';
+import * as reportsApi from '../../../../services/api/reports';
 
-const mockSummary = { revenue: 1250000, refunds: 15000, dues: 320000, rate: 80 };
+const mockSummary = { revenue: 0, refunds: 0, dues: 0, rate: 0 };
 const mockClass = [
   { class: '10-A', billed: 360000, collected: 290000 },
   { class: '10-B', billed: 340000, collected: 270000 },
@@ -32,7 +33,10 @@ const mockFines = [
 
 export default function Reports() {
   const [range, setRange] = useState('this-month');
-  const [rows, setRows] = useState(mockClass);
+  const [rows, setRows] = useState([]);
+  const [feeHeadRows, setFeeHeadRows] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [overdueBuckets, setOverdueBuckets] = useState([]);
   const viewDisc = useDisclosure();
   const editDisc = useDisclosure();
   const [active, setActive] = useState(null);
@@ -41,15 +45,105 @@ export default function Reports() {
   const [reportTab, setReportTab] = useState(0); // 0: Overview, 1: Fee Head, 2: Payment Mode, 3: Transport/Hostel, 4: Overdue Fines
   const [method, setMethod] = useState('all');
   const [klass, setKlass] = useState('all');
+  const [summary, setSummary] = useState(mockSummary);
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
-  const summary = useMemo(() => mockSummary, []);
-  const revVsColl = useMemo(() => ({
-    cats: ['W1','W2','W3','W4'],
-    revenue: [300000, 320000, 310000, 320000],
-    collected: [240000, 260000, 250000, 270000],
-  }), []);
+  useEffect(() => {
+    const getDateRange = (value) => {
+      const today = new Date();
+      let from = null;
+      let to = today;
+      if (value === 'this-month') {
+        from = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else if (value === 'last-month') {
+        from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        to = new Date(today.getFullYear(), today.getMonth(), 0);
+      } else if (value === 'last-90') {
+        from = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+      }
+      const toIso = to.toISOString().slice(0, 10);
+      const fromIso = from ? from.toISOString().slice(0, 10) : null;
+      return { fromDate: fromIso, toDate: toIso };
+    };
 
-  const methodBreakdown = { labels: ['Cash','Bank','Card','Online','JazzCash','EasyPaisa'], values: [40, 25, 12, 10, 7, 6] };
+    const loadSummary = async () => {
+      try {
+        setLoading(true);
+        const { fromDate, toDate } = getDateRange(range);
+        const params = {};
+        if (fromDate) params.fromDate = fromDate;
+        if (toDate) params.toDate = toDate;
+        const data = await reportsApi.financeSummary(params);
+        const paidAmount = Number(data?.paidAmount || 0);
+        const pendingAmount = Number(data?.pendingAmount || 0);
+        const overdueAmount = Number(data?.overdueAmount || 0);
+        const totalAmount = Number(data?.totalAmount || 0);
+        const paidTotal = Number(data?.paidTotal || paidAmount || 0);
+        const revenue = paidTotal;
+        const dues = pendingAmount + overdueAmount;
+        const refunds = Math.max(0, totalAmount - (paidAmount + pendingAmount + overdueAmount));
+        const rate = totalAmount > 0 ? Math.round((paidAmount * 100) / totalAmount) : 0;
+        setSummary({ revenue, refunds, dues, rate });
+
+        const [clsRes, headRes, methodRes, overdueRes] = await Promise.all([
+          reportsApi.financeByClass(params),
+          reportsApi.financeByHead(params),
+          reportsApi.financePaymentMethods(params),
+          reportsApi.financeOverdueBuckets(params),
+        ]);
+        setRows(Array.isArray(clsRes?.items) ? clsRes.items : []);
+        setFeeHeadRows(Array.isArray(headRes?.items) ? headRes.items : []);
+        setPaymentMethods(Array.isArray(methodRes?.items) ? methodRes.items : []);
+        setOverdueBuckets(Array.isArray(overdueRes?.items) ? overdueRes.items : []);
+      } catch (e) {
+        console.error('Failed to load finance summary', e);
+        toast({
+          title: 'Failed to load finance reports',
+          description: e.message || 'Unable to load finance summary.',
+          status: 'error',
+          duration: 6000,
+          isClosable: true,
+        });
+        setSummary(mockSummary);
+        setRows([]);
+        setFeeHeadRows([]);
+        setPaymentMethods([]);
+        setOverdueBuckets([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSummary();
+  }, [range, toast]);
+
+  const revVsColl = useMemo(() => {
+    // Fallback chart built from class-wise totals (not weekly). Keeps UI useful without mock data.
+    const top = (rows || []).slice(0, 6);
+    return {
+      cats: top.map((r) => r.class),
+      revenue: top.map((r) => Number(r.billed || 0)),
+      collected: top.map((r) => Number(r.collected || 0)),
+    };
+  }, [rows]);
+
+  const methodBreakdown = useMemo(() => {
+    const items = Array.isArray(paymentMethods) ? paymentMethods : [];
+    const total = items.reduce((s, it) => s + Number(it.total || 0), 0);
+    const labels = items.map((it) => String(it.method || 'unknown'));
+    const values = items.map((it) => (total > 0 ? Math.round((Number(it.total || 0) * 100) / total) : 0));
+    return { labels, values, totals: items.map((it) => Number(it.total || 0)) };
+  }, [paymentMethods]);
+
+  const feeHeadChart = useMemo(() => {
+    const items = Array.isArray(feeHeadRows) ? feeHeadRows : [];
+    return {
+      cats: items.map((h) => h.head),
+      billed: items.map((h) => Number(h.billed || 0)),
+      collected: items.map((h) => Number(h.collected || 0)),
+    };
+  }, [feeHeadRows]);
 
   const getActiveTable = () => {
     if (reportTab === 0) {
@@ -61,7 +155,7 @@ export default function Reports() {
     }
     if (reportTab === 1) {
       const header = ['Fee Head','Billed','Collected','Rate'];
-      const data = mockFeeHead.map(h => [h.head, h.billed, h.collected, Math.round((h.collected/h.billed)*100)]);
+      const data = (feeHeadRows || []).map(h => [h.head, h.billed, h.collected, Math.round((Number(h.collected||0)/Math.max(1,Number(h.billed||0)))*100)]);
       return { header, data, title: 'Fee Head-wise Report' };
     }
     if (reportTab === 2) {
@@ -71,11 +165,13 @@ export default function Reports() {
     }
     if (reportTab === 3) {
       const header = ['Type','Billed','Collected','Rate'];
-      const data = mockTransportHostel.map(t => [t.type, t.billed, t.collected, Math.round((t.collected/t.billed)*100)]);
+      // Not enough info in current schema to split transport/hostel fees reliably.
+      // Keep table empty until a dedicated backend report exists.
+      const data = [];
       return { header, data, title: 'Transport & Hostel' };
     }
     const header = ['Bucket','Count','Fine'];
-    const data = mockFines.map(f => [f.category, f.count, f.fine]);
+    const data = (overdueBuckets || []).map(f => [f.category, f.count, f.fine]);
     return { header, data, title: 'Overdue Fines' };
   };
 
@@ -163,6 +259,7 @@ export default function Reports() {
         </TabList>
         <TabPanels>
           <TabPanel px={0}>
+            {loading ? <Progress size='sm' isIndeterminate mb={4} /> : null}
             <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
               <Card p={4}>
                 <Heading size='md' mb={3}>Revenue vs Collections</Heading>
@@ -175,21 +272,23 @@ export default function Reports() {
             </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
+            {loading ? <Progress size='sm' isIndeterminate mb={4} /> : null}
             <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
               <Card p={4}>
                 <Heading size='md' mb={3}>Fee Head: Billed vs Collected</Heading>
                 <BarChart chartData={[
-                  { name:'Billed', data: mockFeeHead.map(h=>h.billed) },
-                  { name:'Collected', data: mockFeeHead.map(h=>h.collected) },
-                ]} chartOptions={{ xaxis:{ categories: mockFeeHead.map(h=>h.head) }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
+                  { name:'Billed', data: feeHeadChart.billed },
+                  { name:'Collected', data: feeHeadChart.collected },
+                ]} chartOptions={{ xaxis:{ categories: feeHeadChart.cats }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
               </Card>
               <Card p={4}>
                 <Heading size='md' mb={3}>Fee Head Share (Collected)</Heading>
-                <PieChart chartData={mockFeeHead.map(h=>h.collected)} chartOptions={{ labels: mockFeeHead.map(h=>h.head), legend:{ position:'right' } }} />
+                <PieChart chartData={feeHeadChart.collected} chartOptions={{ labels: feeHeadChart.cats, legend:{ position:'right' } }} />
               </Card>
             </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
+            {loading ? <Progress size='sm' isIndeterminate mb={4} /> : null}
             <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
               <Card p={4}>
                 <Heading size='md' mb={3}>Payment Mode Split</Heading>
@@ -202,29 +301,31 @@ export default function Reports() {
             </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
+            {loading ? <Progress size='sm' isIndeterminate mb={4} /> : null}
             <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
               <Card p={4}>
                 <Heading size='md' mb={3}>Transport/Hostel: Billed vs Collected</Heading>
                 <BarChart chartData={[
-                  { name:'Billed', data: mockTransportHostel.map(t=>t.billed) },
-                  { name:'Collected', data: mockTransportHostel.map(t=>t.collected) },
-                ]} chartOptions={{ xaxis:{ categories: mockTransportHostel.map(t=>t.type) }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
+                  { name:'Billed', data: [] },
+                  { name:'Collected', data: [] },
+                ]} chartOptions={{ xaxis:{ categories: [] }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
               </Card>
               <Card p={4}>
                 <Heading size='md' mb={3}>Collected Distribution</Heading>
-                <PieChart chartData={mockTransportHostel.map(t=>t.collected)} chartOptions={{ labels: mockTransportHostel.map(t=>t.type), legend:{ position:'right' } }} />
+                <PieChart chartData={[]} chartOptions={{ labels: [], legend:{ position:'right' } }} />
               </Card>
             </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
+            {loading ? <Progress size='sm' isIndeterminate mb={4} /> : null}
             <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5} mb={5}>
               <Card p={4}>
                 <Heading size='md' mb={3}>Fine Amount by Bucket</Heading>
-                <BarChart chartData={[{ name:'Fine (Rs)', data: mockFines.map(f=>f.fine) }]} chartOptions={{ xaxis:{ categories: mockFines.map(f=>f.category) }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
+                <BarChart chartData={[{ name:'Fine (Rs)', data: overdueBuckets.map(f=>Number(f.fine||0)) }]} chartOptions={{ xaxis:{ categories: overdueBuckets.map(f=>f.category) }, dataLabels:{ enabled:false }, plotOptions:{ bar:{ columnWidth:'45%' } } }} />
               </Card>
               <Card p={4}>
                 <Heading size='md' mb={3}>Overdue Count</Heading>
-                <PieChart chartData={mockFines.map(f=>f.count)} chartOptions={{ labels: mockFines.map(f=>f.category), legend:{ position:'right' } }} />
+                <PieChart chartData={overdueBuckets.map(f=>Number(f.count||0))} chartOptions={{ labels: overdueBuckets.map(f=>f.category), legend:{ position:'right' } }} />
               </Card>
             </SimpleGrid>
           </TabPanel>

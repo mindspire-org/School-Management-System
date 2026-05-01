@@ -1,12 +1,20 @@
 import { Router } from 'express';
 import { AdmissionEnquiry, PostalRecord, CallLog, VisitorLog, Complaint, ReceptionConfig } from '../models/index.js';
 import { authenticate } from '../middleware/auth.js';
+import { query } from '../config/db.js';
 
 const router = Router();
 
 router.use(authenticate);
 
-const adminRoles = new Set(['admin', 'owner', 'superadmin']);
+const adminRoles = new Set(['owner', 'superadmin']);
+
+const isGlobalAdmin = (role, campusId) => {
+    const r = String(role || '').toLowerCase();
+    // Campus admins (role=admin with campusId) are NOT global admins
+    if (r === 'admin' && campusId) return false;
+    return r === 'admin' || r === 'owner' || r === 'superadmin';
+};
 
 const resolveCampusId = (req) => {
     const headerCampusId =
@@ -15,12 +23,22 @@ const resolveCampusId = (req) => {
         req.headers?.['campus-id'] ??
         req.headers?.['campusid'];
     const requested = headerCampusId ?? req.query?.campusId ?? req.body?.campusId;
+    // Treat 'all' as null/undefined to show data from all campuses
+    if (requested && String(requested).toLowerCase() === 'all') return null;
     const role = req.user?.role;
     const authCampusId = req.user?.campusId;
 
-    if (authCampusId && !adminRoles.has(role)) return authCampusId;
+    if (authCampusId && !isGlobalAdmin(role, authCampusId)) return authCampusId;
     return requested ?? authCampusId;
 };
+
+// Fetch campus name lookup map from DB
+async function getCampusNameMap() {
+    const { rows } = await query('SELECT id, name FROM campuses');
+    const map = {};
+    for (const r of rows) map[String(r.id)] = r.name;
+    return map;
+}
 
 // Generic CRUD helper
 const createCRUD = (Model) => ({
@@ -29,7 +47,14 @@ const createCRUD = (Model) => ({
             const campusId = resolveCampusId(req);
             const where = campusId ? { campusId } : {};
             const items = await Model.findAll({ where });
-            res.json(items);
+            // Attach campusName to each item
+            const campusMap = await getCampusNameMap();
+            const result = items.map(item => {
+                const plain = item.get ? item.get({ plain: true }) : item;
+                plain.campusName = campusMap[String(plain.campusId)] || null;
+                return plain;
+            });
+            res.json(result);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

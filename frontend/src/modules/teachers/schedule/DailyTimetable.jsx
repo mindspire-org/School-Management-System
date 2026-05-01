@@ -35,94 +35,7 @@ import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
 import { useAuth } from '../../../contexts/AuthContext';
 
-// Sample demo data
-const periods = ['08:00', '09:00', '10:00', '11:00', '12:00', '02:00'];
-const sampleWeek = {
-  '9-A': {
-    Mon: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '10:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '02:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-    },
-    Tue: {
-      '08:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '09:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '10:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Islamiat', room: '105', teacher: 'Mr. Hassan' },
-    },
-    Wed: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Thu: {
-      '08:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '09:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Fri: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '02:00': { subject: 'Islamiyat', room: '105', teacher: 'Mr. Hassan' },
-    },
-  },
-  '10-A': {
-    Mon: {
-      '08:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '09:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-    },
-    Tue: {
-      '08:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '09:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Wed: {
-      '08:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '09:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '02:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-    },
-    Thu: {
-      '08:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '09:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '10:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-    },
-    Fri: {
-      '08:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '10:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '02:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-    },
-  },
-};
+import * as teachersApi from '../../../services/api/teachers';
 
 export default function DailyTimetable() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -130,88 +43,89 @@ export default function DailyTimetable() {
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
   const { user } = useAuth();
 
-  const [cls, setCls] = useState('9');
-  const [section, setSection] = useState('A');
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+
+  const [cls, setCls] = useState('');
+  const [section, setSection] = useState('');
   function toYMD(d) { const x = new Date(d.getTime() - d.getTimezoneOffset()*60000); return x.toISOString().slice(0,10); }
   const [date, setDate] = useState(() => toYMD(new Date()));
   const [viewDate, setViewDate] = useState(() => new Date());
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedPeriod, setSelectedPeriod] = useState(null);
 
-  const key = `${cls}-${section}`;
   const dayKey = useMemo(() => {
     const d = new Date(date);
     const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const n = names[d.getDay()] || 'Mon';
     return n;
   }, [date]);
-  const teacherTokens = useMemo(() => {
-    const raw = (user?.name || '').toLowerCase().replace(/\b(mr\.?|ms\.?|mrs\.?|miss|dr\.?|prof\.?|teacher)\b/g, '').trim();
-    const toks = raw.split(/\s+/).filter(Boolean);
-    return toks.length ? toks : ['ali'];
-  }, [user]);
 
-  // Auto-pick class-section that has this teacher's periods
   useEffect(() => {
-    try {
-      for (const cs of Object.keys(sampleWeek)) {
-        const week = sampleWeek[cs] || {};
-        for (const day of Object.keys(week)) {
-          const slots = week[day] || {};
-          const hasMine = Object.values(slots).some(v => v && (v.subject === 'Break' || (v.teacher && String(v.teacher).toLowerCase().includes(teacherTokens[0]))));
-          if (hasMine) {
-            const [c, s] = cs.split('-');
-            if (c && s) { setCls(c); setSection(s); }
-            return;
-          }
-        }
+    let mounted = true;
+    (async () => {
+      if (!user) return;
+      try {
+        const res = await teachersApi.listSchedules({ day: dayKey });
+        const data = Array.isArray(res) ? res : [];
+        if (mounted) setScheduleSlots(data);
+      } catch (e) {
+        console.error('Failed to load schedule', e);
+        if (mounted) setScheduleSlots([]);
       }
-    } catch {}
-  }, [teacherTokens]);
+    })();
+    return () => { mounted = false; };
+  }, [user, dayKey]);
 
-  const isMine = (teacherStr) => {
-    if (!teacherStr || teacherStr === '-') return false;
-    const s = String(teacherStr).toLowerCase();
-    return teacherTokens.some((t) => s.includes(t));
-  };
+  const allTimes = useMemo(() => {
+    const set = new Set(scheduleSlots.map(s => String(s.startTime || '').slice(0,5)).filter(Boolean));
+    const list = Array.from(set);
+    list.sort();
+    return list.length ? list : ['08:00','09:00','10:00','11:00','12:00','14:00'];
+  }, [scheduleSlots]);
 
-  // Build aggregated map: time -> array of { cs, subject, room, teacher } only for this teacher
-  const { dayEntriesByTime, breakTimes } = useMemo(() => {
-    const map = {}; periods.forEach(p => { map[p] = []; });
-    const breaks = new Set();
-    Object.keys(sampleWeek).forEach((cs) => {
-      const dayObj = sampleWeek[cs]?.[dayKey] || {};
-      periods.forEach((t) => {
-        const v = dayObj[t];
-        if (!v) return;
-        if (v.subject === 'Break') { breaks.add(t); return; }
-        if (isMine(v.teacher)) { map[t].push({ cs, subject: v.subject, room: v.room, teacher: v.teacher }); }
+  const filteredSlots = useMemo(() => {
+    return scheduleSlots.filter(s =>
+      (!cls || String(s.class) === String(cls)) &&
+      (!section || String(s.section) === String(section))
+    );
+  }, [scheduleSlots, cls, section]);
+
+  const dayEntriesByTime = useMemo(() => {
+    const map = {};
+    allTimes.forEach(t => { map[t] = []; });
+    filteredSlots.forEach(s => {
+      const t = String(s.startTime || '').slice(0,5);
+      if (!t) return;
+      if (!map[t]) map[t] = [];
+      map[t].push({
+        cs: `${s.class || ''}-${s.section || ''}`.replace(/^-|-$/g, ''),
+        subject: s.subject || '-',
+        room: s.room || '-',
+        teacher: s.teacherName || user?.name || '-',
       });
     });
-    return { dayEntriesByTime: map, breakTimes: breaks };
-  }, [dayKey, isMine]);
+    return map;
+  }, [allTimes, filteredSlots, user]);
 
   const kpis = useMemo(() => {
     let total = 0; const subj = new Set(); let breaks = 0;
-    periods.forEach((t) => {
+    allTimes.forEach((t) => {
       const arr = dayEntriesByTime[t] || [];
-      total += arr.length + (breakTimes.has(t) && arr.length===0 ? 1 : 0);
+      total += arr.length;
       arr.forEach(e => subj.add(e.subject));
-      if (breakTimes.has(t)) breaks += 1;
     });
     return { total, breaks, subjects: subj.size };
-  }, [dayEntriesByTime, breakTimes]);
+  }, [dayEntriesByTime, allTimes]);
 
-  const chartData = useMemo(() => ([{ name: 'Lectures', data: periods.map(p => (dayEntriesByTime[p]?.length || 0)) }]), [dayEntriesByTime]);
-  const chartOptions = useMemo(() => ({ xaxis: { categories: periods }, dataLabels: { enabled: false }, colors: ['#3182CE'] }), []);
+  const chartData = useMemo(() => ([{ name: 'Lectures', data: allTimes.map(p => (dayEntriesByTime[p]?.length || 0)) }]), [dayEntriesByTime, allTimes]);
+  const chartOptions = useMemo(() => ({ xaxis: { categories: allTimes }, dataLabels: { enabled: false }, colors: ['#3182CE'] }), [allTimes]);
 
   const totals = useMemo(() => {
-    const lectures = periods.reduce((s,p)=> s + (dayEntriesByTime[p]?.length || 0), 0);
-    const breaks = Array.from(breakTimes).length;
-    return { lectures, breaks };
-  }, [dayEntriesByTime, breakTimes]);
+    const lectures = allTimes.reduce((s,p)=> s + (dayEntriesByTime[p]?.length || 0), 0);
+    return { lectures, breaks: 0 };
+  }, [dayEntriesByTime, allTimes]);
 
-  const rows = useMemo(() => periods.map(p => {
+  const rows = useMemo(() => allTimes.map(p => {
     const arr = dayEntriesByTime[p] || [];
     if (arr.length > 0) {
       const classes = arr.map(e => e.cs).join(', ');
@@ -220,16 +134,14 @@ export default function DailyTimetable() {
       const teacher = arr.length === 1 ? arr[0].teacher : (subject==='Multiple' ? (user?.name || '-') : arr[0].teacher);
       return { time: p, classes, subject, room, teacher };
     }
-    if (breakTimes.has(p)) return { time: p, classes: '-', subject: 'Break', room: '-', teacher: '-' };
     return { time: p, classes: '-', subject: '-', room: '-', teacher: '-' };
-  }), [dayEntriesByTime, breakTimes, user]);
+  }), [dayEntriesByTime, allTimes, user]);
 
   const exportCSV = () => {
     const header = ['Date','Time','Class','Subject','Room','Teacher'];
-    const data = periods.flatMap(p => {
+    const data = allTimes.flatMap(p => {
       const arr = dayEntriesByTime[p] || [];
       if (arr.length > 0) return arr.map(e => [date || 'Today', p, e.cs, e.subject, e.room, e.teacher]);
-      if (breakTimes.has(p)) return [[date || 'Today', p, '-', 'Break', '-', '-']];
       return [[date || 'Today', p, '-', '-', '-', '-']];
     });
     const csv = [header, ...data].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -297,14 +209,24 @@ export default function DailyTimetable() {
         <Flex gap='16px' w='100%' wrap='nowrap'>
           <HStack spacing={3} flexWrap='wrap' rowGap={3}>
             <Select value={cls} onChange={e=>setCls(e.target.value)} size='sm' maxW='140px'>
-              <option>9</option><option>10</option>
+              <option value=''>All</option>
+              {Array.from(new Set(scheduleSlots.map(s => String(s.class)).filter(Boolean))).sort((a,b)=>Number(a)-Number(b)).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </Select>
             <Select value={section} onChange={e=>setSection(e.target.value)} size='sm' maxW='120px'>
-              <option>A</option><option>B</option>
+              <option value=''>All</option>
+              {Array.from(new Set(scheduleSlots
+                .filter(s => !cls || String(s.class) === String(cls))
+                .map(s => String(s.section))
+                .filter(Boolean)
+              )).sort().map(sec => (
+                <option key={sec} value={sec}>{sec}</option>
+              ))}
             </Select>
           </HStack>
           <HStack>
-            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>{const t=new Date();setCls('9');setSection('A');setDate(toYMD(t));setViewDate(t);}}>Reset</Button>
+            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>{const t=new Date();setCls('');setSection('');setDate(toYMD(t));setViewDate(t);}}>Reset</Button>
             <Button size='sm' variant='outline' leftIcon={<Icon as={MdPrint}/>} onClick={()=>window.print()}>Print</Button>
             <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdFileDownload}/>} onClick={exportCSV}>Export CSV</Button>
           </HStack>

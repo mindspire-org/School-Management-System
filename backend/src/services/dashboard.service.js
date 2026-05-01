@@ -15,11 +15,16 @@ export const getOverview = async (campusId) => {
     ),
     // Teacher Attendance Breakdown
     query(
-      `SELECT ta.status, COUNT(*)::int AS count
+      `SELECT
+         CASE
+           WHEN ta.status = 'absent' AND LOWER(COALESCE(ta.remarks, '')) = 'leave' THEN 'leave'
+           ELSE ta.status
+         END AS status,
+         COUNT(*)::int AS count
        FROM teacher_attendance ta
        JOIN teachers t ON t.id = ta.teacher_id
        WHERE ta.attendance_date = CURRENT_DATE ${whereSql.replace('campus_id', 't.campus_id')}
-       GROUP BY ta.status`
+       GROUP BY 1`
     ),
     query(
       `SELECT id, message, severity, created_at
@@ -52,7 +57,7 @@ export const getOverview = async (campusId) => {
     present: tMap.present || 0,
     absent: tMap.absent || 0,
     late: tMap.late || 0,
-    leave: tMap.leave || 0, // Assuming 'leave' status exists
+    leave: tMap.leave || 0,
     marked: (tMap.present || 0) + (tMap.absent || 0) + (tMap.late || 0) + (tMap.leave || 0)
   };
 

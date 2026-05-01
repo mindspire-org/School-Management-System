@@ -4,6 +4,7 @@ import { MdHistory, MdSecurity, MdFileDownload, MdRefresh, MdSearch, MdEdit } fr
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
 
 const mockLogs = [
   { id: 'LOG-0001', ts: '2025-11-12 09:21', user: 'Admin User', action: 'Login', module: 'Auth', status: 'Success', ip: '10.0.0.5' },
@@ -23,12 +24,12 @@ export default function ActivityLogs() {
   const editDisc = useDisclosure();
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
 
-  const stats = useMemo(() => ({ total: rows.length, success: rows.filter(l=>l.status==='Success').length, denied: rows.filter(l=>l.status==='Denied').length }), [rows]);
+  const stats = useMemo(() => ({ total: rows.length, success: rows.filter(l => l.status === 'Success').length, denied: rows.filter(l => l.status === 'Denied').length }), [rows]);
 
   const filtered = useMemo(() => rows.filter(l => {
     const bySearch = !search || l.user.toLowerCase().includes(search.toLowerCase()) || l.action.toLowerCase().includes(search.toLowerCase()) || l.id.toLowerCase().includes(search.toLowerCase());
-    const byModule = module==='all' || l.module===module;
-    const byStatus = status==='all' || l.status===status;
+    const byModule = module === 'all' || l.module === module;
+    const byStatus = status === 'all' || l.status === status;
     return bySearch && byModule && byStatus;
   }), [rows, search, module, status]);
 
@@ -41,15 +42,27 @@ export default function ActivityLogs() {
         </Box>
         <ButtonGroup>
           <Button leftIcon={<MdRefresh />} variant='outline' onClick={() => window.location.reload()}>Refresh</Button>
-          <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export CSV</Button>
-          <Button leftIcon={<MdFileDownload />} colorScheme='blue'>Export PDF</Button>
+          <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue' onClick={()=>{
+            const header = ['ID','Timestamp','User','Action','Module','Status','IP'];
+            const data = filtered.map(l => [l.id, l.ts, l.user, l.action, l.module, l.status, l.ip]);
+            const csv = [header, ...data].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='activity_logs.csv'; a.click(); URL.revokeObjectURL(url);
+          }}>Export CSV</Button>
+          <Button leftIcon={<MdFileDownload />} colorScheme='blue' onClick={()=>{
+            const styles = `<style>body{font-family:Arial;padding:16px;} h2{margin:0 0 8px} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:6px;font-size:11px} th{background:#f5f5f5;text-align:left}</style>`;
+            const rowsHtml = filtered.map(l => `<tr><td>${l.id}</td><td>${l.ts}</td><td>${l.user}</td><td>${l.action}</td><td>${l.module}</td><td>${l.status}</td><td>${l.ip}</td></tr>`).join('');
+            const w = window.open('', '_blank'); if(!w) return;
+            w.document.write(`<html><head><title>Activity Logs</title>${styles}</head><body><h2>Activity Logs</h2><table><thead><tr><th>ID</th><th>Timestamp</th><th>User</th><th>Action</th><th>Module</th><th>Status</th><th>IP</th></tr></thead><tbody>${rowsHtml}</tbody></table><script>window.onload=function(){window.print();setTimeout(()=>window.close(),300);}</script></body></html>`);
+            w.document.close();
+          }}>Export PDF</Button>
         </ButtonGroup>
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5} mb={5}>
-        <MiniStatistics name="Total" value={String(stats.total)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdHistory} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Success" value={String(stats.success)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdSecurity} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Denied" value={String(stats.denied)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdSecurity} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Total" value={String(stats.total)} icon={MdHistory} colorScheme="blue" />
+        <StatCard title="Success" value={String(stats.success)} icon={MdSecurity} colorScheme="green" />
+        <StatCard title="Denied" value={String(stats.denied)} icon={MdSecurity} colorScheme="red" />
       </SimpleGrid>
 
       <Card p={4} mb={5}>
@@ -98,7 +111,7 @@ export default function ActivityLogs() {
                   <Td>{l.user}</Td>
                   <Td>{l.action}</Td>
                   <Td><Badge colorScheme='blue'>{l.module}</Badge></Td>
-                  <Td><Badge colorScheme={l.status==='Success'?'green':'red'}>{l.status}</Badge></Td>
+                  <Td><Badge colorScheme={l.status === 'Success' ? 'green' : 'red'}>{l.status}</Badge></Td>
                   <Td>{l.ip}</Td>
                   <Td>
                     <Button size='sm' variant='outline' mr={2} onClick={() => { setSelected(l); disc.onOpen(); }}>Details</Button>
@@ -140,15 +153,15 @@ export default function ActivityLogs() {
           <ModalBody>
             <FormControl mb={3}>
               <FormLabel>User</FormLabel>
-              <Input value={form.user} onChange={(e)=> setForm(f=>({ ...f, user: e.target.value }))} />
+              <Input value={form.user} onChange={(e) => setForm(f => ({ ...f, user: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Action</FormLabel>
-              <Input value={form.action} onChange={(e)=> setForm(f=>({ ...f, action: e.target.value }))} />
+              <Input value={form.action} onChange={(e) => setForm(f => ({ ...f, action: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Module</FormLabel>
-              <Select value={form.module} onChange={(e)=> setForm(f=>({ ...f, module: e.target.value }))}>
+              <Select value={form.module} onChange={(e) => setForm(f => ({ ...f, module: e.target.value }))}>
                 <option>Auth</option>
                 <option>Finance</option>
                 <option>Reports</option>
@@ -157,23 +170,23 @@ export default function ActivityLogs() {
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Status</FormLabel>
-              <Select value={form.status} onChange={(e)=> setForm(f=>({ ...f, status: e.target.value }))}>
+              <Select value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))}>
                 <option>Success</option>
                 <option>Denied</option>
               </Select>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>IP</FormLabel>
-              <Input value={form.ip} onChange={(e)=> setForm(f=>({ ...f, ip: e.target.value }))} />
+              <Input value={form.ip} onChange={(e) => setForm(f => ({ ...f, ip: e.target.value }))} />
             </FormControl>
             <FormControl>
               <FormLabel>Timestamp</FormLabel>
-              <Input value={form.ts} onChange={(e)=> setForm(f=>({ ...f, ts: e.target.value }))} />
+              <Input value={form.ts} onChange={(e) => setForm(f => ({ ...f, ts: e.target.value }))} />
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{ setRows(prev => prev.map(x => x.id===form.id ? { ...form } : x)); editDisc.onClose(); }}>Save</Button>
+            <Button colorScheme='blue' onClick={() => { setRows(prev => prev.map(x => x.id === form.id ? { ...form } : x)); editDisc.onClose(); }}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

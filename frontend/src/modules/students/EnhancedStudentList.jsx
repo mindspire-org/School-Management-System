@@ -18,7 +18,7 @@ import {
   Text,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { MdAdd, MdPersonAdd } from 'react-icons/md';
+import { MdPersonAdd } from 'react-icons/md';
 import { Link, useNavigate } from 'react-router-dom';
 
 // Import components
@@ -399,14 +399,6 @@ const EnhancedStudentList = () => {
         </Box>
         <Flex justify="flex-end" align="center" gap={2}>
           <StudentExportOptions students={filteredStudents} totalCount={pagination.totalItems} />
-          <Button
-            leftIcon={<MdAdd />}
-            colorScheme="brand"
-            as={Link}
-            to="/admin/students/add"
-          >
-            Add New Student
-          </Button>
         </Flex>
       </Grid>
 

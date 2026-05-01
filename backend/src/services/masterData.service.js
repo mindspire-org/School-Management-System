@@ -10,7 +10,21 @@ const ensureCampusId = async (campusId) => {
 
 // --- Subjects ---
 export const getSubjects = async (campusId) => {
-    const { rows } = await query(`SELECT * FROM subjects ORDER BY name ASC`);
+    const num = Number(campusId);
+    if (Number.isFinite(num) && num > 0) {
+        const { rows } = await query(
+            `SELECT *
+               FROM subjects
+              WHERE COALESCE(is_shared, FALSE) = TRUE
+                 OR campus_id = $1
+              ORDER BY name ASC`,
+            [num]
+        );
+        return rows;
+    }
+    const { rows } = await query(
+        `SELECT * FROM subjects ORDER BY name ASC`
+    );
     return rows;
 };
 
@@ -41,7 +55,21 @@ export const deleteSubject = async (id) => {
 
 // --- Designations ---
 export const getDesignations = async (campusId) => {
-    const { rows } = await query(`SELECT * FROM designations ORDER BY title ASC`);
+    const num = Number(campusId);
+    if (Number.isFinite(num) && num > 0) {
+        const { rows } = await query(
+            `SELECT *
+               FROM designations
+              WHERE COALESCE(is_shared, FALSE) = TRUE
+                 OR campus_id = $1
+              ORDER BY title ASC`,
+            [num]
+        );
+        return rows;
+    }
+    const { rows } = await query(
+        `SELECT * FROM designations ORDER BY title ASC`
+    );
     return rows;
 };
 
@@ -72,7 +100,21 @@ export const deleteDesignation = async (id) => {
 
 // --- Fee Rules ---
 export const getFeeRules = async (campusId) => {
-    const { rows } = await query(`SELECT * FROM fee_structures ORDER BY created_at DESC`);
+    const num = Number(campusId);
+    if (Number.isFinite(num) && num > 0) {
+        const { rows } = await query(
+            `SELECT *
+               FROM fee_structures
+              WHERE COALESCE(is_shared, FALSE) = TRUE
+                 OR campus_id = $1
+              ORDER BY created_at DESC`,
+            [num]
+        );
+        return rows;
+    }
+    const { rows } = await query(
+        `SELECT * FROM fee_structures ORDER BY created_at DESC`
+    );
     return rows;
 };
 
@@ -103,7 +145,21 @@ export const deleteFeeRule = async (id) => {
 
 // --- Departments ---
 export const getDepartments = async (campusId) => {
-    const { rows } = await query(`SELECT * FROM departments ORDER BY name ASC`);
+    const num = Number(campusId);
+    if (Number.isFinite(num) && num > 0) {
+        const { rows } = await query(
+            `SELECT *
+               FROM departments
+              WHERE COALESCE(is_shared, FALSE) = TRUE
+                 OR campus_id = $1
+              ORDER BY name ASC`,
+            [num]
+        );
+        return rows;
+    }
+    const { rows } = await query(
+        `SELECT * FROM departments ORDER BY name ASC`
+    );
     return rows;
 };
 

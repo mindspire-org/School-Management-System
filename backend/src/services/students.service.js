@@ -78,9 +78,11 @@ export const list = async ({ page = 1, pageSize = 50, q, class: cls, section, fa
                           s.bus_number AS "busNumber", s.bus_assigned AS "busAssigned", s.parent_name AS "parentName", s.parent_phone AS "parentPhone", s.status, s.admission_date AS "admissionDate", s.avatar,
                           s.avatar AS "photo", s.avatar AS "photoUrl",
                           s.personal, s.academic, s.parent, s.transport, s.fee,
-                          s.campus_id AS "campusId"
+                          s.campus_id AS "campusId",
+                          c.name AS "campusName"
                    FROM students s
                    LEFT JOIN inv ON inv.student_id = s.id
+                   LEFT JOIN campuses c ON c.id = s.campus_id
                    ${whereSql}
                    ORDER BY s.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   const { rows } = await query(dataSql, [...params, pageSize, offset]);

@@ -1,9 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { mockUsers } from '../../../utils/mockData';
 import { STORAGE_KEYS } from '../../../utils/constants';
+import { config } from '../../../config/env';
 
 // Mock API function for login
 const loginAPI = async (credentials) => {
+  if (!config?.ENABLE_DEMO_AUTH) {
+    throw new Error('Demo auth is disabled');
+  }
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       // Find user in mock data

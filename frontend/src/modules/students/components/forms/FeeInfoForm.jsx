@@ -35,27 +35,25 @@ import {
   selectStudentFormData,
 } from '../../../../redux/features/students/studentSlice';
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  }
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+};
+
 function FeeInfoForm() {
   const dispatch = useAppDispatch();
   const formData = useAppSelector(selectStudentFormData);
   const feeInfo = formData.fee || {};
   const transportInfo = formData.transport || {};
-
-  const getCurrentAcademicYears = () => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-
-    for (let i = -2; i < 5; i++) {
-      const year = currentYear + i;
-      const nextYear = year + 1;
-      years.push(`${year}-${nextYear}`);
-    }
-
-    return years;
-  };
-
-  const academicYears = getCurrentAcademicYears();
-
+  
   // UI colors
   const borderColor = useColorModeValue("gray.200", "gray.600");
   const bgColor = useColorModeValue("gray.50", "gray.800");
@@ -142,11 +140,8 @@ function FeeInfoForm() {
             onChange={(e) => handleInputChange('academicYear', e.target.value)}
             placeholder="Select academic year"
           >
-            {academicYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
+            <option value="2024-2025">2024-2025</option>
+            <option value="2025-2026">2025-2026</option>
           </Select>
         </FormControl>
       </SimpleGrid>
@@ -376,7 +371,7 @@ function FeeInfoForm() {
           <FormLabel>First Payment Due Date</FormLabel>
           <Input
             type="date"
-            value={feeInfo.firstPaymentDue || ''}
+            value={toDateInputValue(feeInfo.firstPaymentDue)}
             onChange={(e) => handleInputChange('firstPaymentDue', e.target.value)}
           />
         </FormControl>

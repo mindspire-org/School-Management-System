@@ -16,6 +16,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SidebarContext } from './contexts/SidebarContext';
 import ProtectedRoute from './contexts/ProtectedRoute';
 import ReduxWrapper from './components/wrappers/ReduxWrapper';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export default function Main() {
   // eslint-disable-next-line
@@ -31,66 +32,47 @@ export default function Main() {
             setToggleSidebar,
           }}
         >
-          {/* The AuthProvider must be inside Routes to access useNavigate hook */}
-          <Routes>
-            <Route
-              path="auth/*"
-              element={
-                <AuthProvider>
-                  <AuthLayout />
-                </AuthProvider>
-              }
-            />
-            <Route
-              path="admin/*"
-              element={
-                <AuthProvider>
-                  <ProtectedRoute allowedRoles={['admin']}>
-                    <AdminLayout theme={currentTheme} setTheme={setCurrentTheme} />
-                  </ProtectedRoute>
-                </AuthProvider>
-              }
-            />
-            <Route
-              path="teacher/*"
-              element={
-                <AuthProvider>
-                  <ProtectedRoute allowedRoles={['teacher']}>
-                    <TeacherLayout theme={currentTheme} setTheme={setCurrentTheme} />
-                  </ProtectedRoute>
-                </AuthProvider>
-              }
-            />
-            <Route
-              path="student/*"
-              element={
-                <AuthProvider>
-                  <ProtectedRoute allowedRoles={['student']}>
-                    <StudentLayout theme={currentTheme} setTheme={setCurrentTheme} />
-                  </ProtectedRoute>
-                </AuthProvider>
-              }
-            />
-            <Route
-              path="rtl/*"
-              element={
-                <AuthProvider>
-                  <RTLLayout theme={currentTheme} setTheme={setCurrentTheme} />
-                </AuthProvider>
-              }
-            />
-            <Route
-              path="driver/*"
-              element={
-                <AuthProvider>
-                  <ProtectedRoute allowedRoles={['driver']}>
-                    <DriverLayout theme={currentTheme} setTheme={setCurrentTheme} />
-                  </ProtectedRoute>
-                </AuthProvider>
-              }
-            />
-            <Route path="/" element={<Navigate to="/auth/sign-in" replace />} />
-          </Routes>
+          <ErrorBoundary>
+            <AuthProvider>
+              <Routes>
+                <Route path="auth/*" element={<AuthLayout />} />
+                <Route
+                  path="admin/*"
+                  element={
+                    <ProtectedRoute allowedRoles={['owner', 'admin', 'parent', 'superadmin', 'branch_admin']}>
+                      <AdminLayout theme={currentTheme} setTheme={setCurrentTheme} />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="teacher/*"
+                  element={
+                    <ProtectedRoute allowedRoles={['teacher']}>
+                      <TeacherLayout />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="student/*"
+                  element={
+                    <ProtectedRoute allowedRoles={['student']}>
+                      <StudentLayout />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="rtl/*" element={<RTLLayout theme={currentTheme} setTheme={setCurrentTheme} />} />
+                <Route
+                  path="driver/*"
+                  element={
+                    <ProtectedRoute allowedRoles={['driver']}>
+                      <DriverLayout />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/" element={<Navigate to="/auth/sign-in" replace />} />
+              </Routes>
+            </AuthProvider>
+          </ErrorBoundary>
         </SidebarContext.Provider>
       </ChakraProvider>
     </ReduxWrapper>

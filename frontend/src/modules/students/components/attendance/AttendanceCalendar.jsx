@@ -66,7 +66,8 @@ const AttendanceCalendar = ({ studentId, month, attendanceData, onDateSelect }) 
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateString = date.toISOString().split('T')[0];
+      // Use local date string (YYYY-MM-DD) instead of toISOString to avoid UTC issues
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const status = attendanceData[dateString] ? attendanceData[dateString].status : 'not-marked';
       
       days.push({

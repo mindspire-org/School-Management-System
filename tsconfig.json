@@ -1,24 +1,11 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "jsx": "react-jsx",
-    "strict": false,
-    "skipLibCheck": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "paths": {
-      "*": ["./*"]
-    },
-    "types": ["vite/client"]
+      "@/*": ["frontend/src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["frontend/src"],
+  "exclude": ["backend", "electron", "frontend-legacy", "node_modules", "dist", "release", "frontend/src/index.js"]
 }

@@ -110,7 +110,7 @@ export const remove = async (id) => {
 export const bulkCreate = async (items = []) => {
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return [];
-  // Build multi-values insert
+  // Build multi-values upsert — ON CONFLICT updates marks/grade for existing (exam_id, student_id, subject)
   const params = [];
   const values = rows.map((r, i) => {
     const baseIndex = i * 5;
@@ -119,6 +119,10 @@ export const bulkCreate = async (items = []) => {
   }).join(',');
   const sql = `INSERT INTO exam_results (exam_id, student_id, subject, marks, grade)
                VALUES ${values}
+               ON CONFLICT (exam_id, student_id, subject) DO UPDATE
+                 SET marks = EXCLUDED.marks,
+                     grade = EXCLUDED.grade,
+                     updated_at = NOW()
                RETURNING id, exam_id AS "examId", student_id AS "studentId", subject, marks, grade`;
   const res = await query(sql, params);
   return res.rows || [];

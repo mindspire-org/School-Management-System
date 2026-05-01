@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Text,
@@ -36,43 +36,80 @@ import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
-import { mockStudents } from '../../../utils/mockData';
+import * as attendanceApi from '../../../services/api/attendance';
+import * as studentsApi from '../../../services/api/students';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function DailyAttendance() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const headerBg = useColorModeValue('white', 'gray.800');
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [cls, setCls] = useState('');
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
-  const [statuses, setStatuses] = useState(() => Object.fromEntries(mockStudents.map(s => [s.id, 'Present'])));
+  const [items, setItems] = useState([]);
+  const [statuses, setStatuses] = useState({});
   const [selected, setSelected] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
+  const [classOptions, setClassOptions] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fetchingRef = useRef(false);
 
-  const classes = useMemo(() => Array.from(new Set(mockStudents.map(s => s.class))), []);
-  const sections = useMemo(() => Array.from(new Set(mockStudents.map(s => s.section))), []);
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const payload = await studentsApi.list({ pageSize: 200 });
+        const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
+        const classes = Array.from(new Set((rows || []).map((s) => s.class).filter(Boolean)));
+        const sections = Array.from(new Set((rows || []).map((s) => s.section).filter(Boolean)));
+        setClassOptions(classes);
+        setSectionOptions(sections);
+      } catch (_) {}
+    };
+    if (!authLoading && isAuthenticated) loadOptions();
+  }, [authLoading, isAuthenticated]);
 
-  const filtered = useMemo(() =>
-    mockStudents.filter(s =>
-      (!cls || s.class === cls) &&
-      (!section || s.section === section) &&
-      (!q || s.name.toLowerCase().includes(q.toLowerCase()) || s.rollNumber.toLowerCase().includes(q.toLowerCase()))
-    ), [cls, section, q]
-  );
+  const loadDaily = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      setLoading(true);
+      const data = await attendanceApi.listDaily({ date, class: cls || undefined, section: section || undefined, q: q || undefined });
+      const rows = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setItems(rows);
+      const st = {};
+      rows.forEach((r) => { st[r.id] = r.status || 'present'; });
+      setStatuses(st);
+    } catch (e) {
+      const id = 'teacher-daily-attendance-error';
+      if (!toast.isActive(id)) toast({ id, title: 'Failed to load attendance', status: 'error' });
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) loadDaily();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated, date, cls, section]);
 
   const kpis = useMemo(() => {
-    const subset = filtered.map(s => ({ id: s.id, st: statuses[s.id] }));
-    const present = subset.filter(x => x.st === 'Present').length;
-    const absent = subset.filter(x => x.st === 'Absent').length;
-    const late = subset.filter(x => x.st === 'Late').length;
+    const subset = items.map(s => ({ id: s.id, st: (statuses[s.id]||'present').toLowerCase() }));
+    const present = subset.filter(x => x.st === 'present').length;
+    const absent = subset.filter(x => x.st === 'absent').length;
+    const late = subset.filter(x => x.st === 'late').length;
     return { present, absent, late, total: subset.length };
-  }, [filtered, statuses]);
+  }, [items, statuses]);
 
   const exportCSV = () => {
     const header = ['Date','Name','Roll','Class','Section','Status'];
-    const rows = filtered.map(s => [date, s.name, s.rollNumber, s.class, s.section, statuses[s.id] || '-']);
+    const rows = items.map(s => [date, s.name, s.rollNumber || '', s.class || '', s.section || '', (statuses[s.id] || '-')]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -83,8 +120,18 @@ export default function DailyAttendance() {
     URL.revokeObjectURL(url);
   };
 
-  const saveAttendance = () => {
-    toast({ title: 'Attendance saved', description: `${kpis.present} present, ${kpis.absent} absent, ${kpis.late} late`, status: 'success', duration: 2000 });
+  const saveAttendance = async () => {
+    try {
+      setSaving(true);
+      const records = items.map((s) => ({ studentId: s.id, status: statuses[s.id] || 'present' }));
+      await attendanceApi.upsertDaily({ date, records });
+      toast({ title: 'Attendance saved', description: `${kpis.present} present, ${kpis.absent} absent, ${kpis.late} late`, status: 'success', duration: 2000 });
+      await loadDaily();
+    } catch (_) {
+      toast({ title: 'Failed to save attendance', status: 'error' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -134,18 +181,18 @@ export default function DailyAttendance() {
           <HStack spacing={3} flexWrap='wrap' rowGap={3}>
             <Input type='date' value={date} onChange={e=>setDate(e.target.value)} size='sm' maxW='180px' />
             <Select placeholder='Class' value={cls} onChange={e=>setCls(e.target.value)} size='sm' maxW='160px'>
-              {classes.map(c => <option key={c} value={c}>{c}</option>)}
+              {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
             </Select>
             <Select placeholder='Section' value={section} onChange={e=>setSection(e.target.value)} size='sm' maxW='160px'>
-              {sections.map(s => <option key={s} value={s}>{s}</option>)}
+              {sectionOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </Select>
             <HStack>
               <Input placeholder='Search student' value={q} onChange={e=>setQ(e.target.value)} size='sm' maxW='220px' />
-              <IconButton aria-label='Search' icon={<MdSearch />} size='sm' />
+              <IconButton aria-label='Search' icon={<MdSearch />} size='sm' onClick={loadDaily} />
             </HStack>
           </HStack>
           <HStack>
-            <Button leftIcon={<MdRefresh />} size='sm' variant='outline' onClick={()=>{setCls('');setSection('');setQ('');}}>Reset</Button>
+            <Button leftIcon={<MdRefresh />} size='sm' variant='outline' onClick={()=>{setQ(''); loadDaily();}} isLoading={loading}>Refresh</Button>
             <Button leftIcon={<MdFileDownload />} size='sm' colorScheme='blue' onClick={exportCSV}>Export CSV</Button>
           </HStack>
         </Flex>
@@ -165,7 +212,7 @@ export default function DailyAttendance() {
       <Card p='0'>
         <Flex justify='space-between' align='center' p='12px' borderBottom='1px solid' borderColor='gray.100'>
           <Text fontWeight='600'>Students</Text>
-          <Button size='sm' leftIcon={<MdSave />} colorScheme='green' onClick={saveAttendance}>Save Attendance</Button>
+          <Button size='sm' leftIcon={<MdSave />} colorScheme='green' onClick={saveAttendance} isLoading={saving} isDisabled={items.length===0}>Save Attendance</Button>
         </Flex>
         <Box overflowX='auto'>
           <Box minW='880px'>
@@ -181,7 +228,7 @@ export default function DailyAttendance() {
                 </Tr>
               </Thead>
               <Tbody>
-                {filtered.map(s => (
+                {items.map(s => (
                   <Tr key={s.id} _hover={{ bg: hoverBg }}>
                     <Td>
                       <HStack spacing={3} maxW='280px'>
@@ -192,17 +239,17 @@ export default function DailyAttendance() {
                         </Box>
                       </HStack>
                     </Td>
-                    <Td>{s.rollNumber}</Td>
-                    <Td>{s.class}-{s.section}</Td>
+                    <Td>{s.rollNumber || '-'}</Td>
+                    <Td>{(s.class || '-') + (s.section ? '-' + s.section : '')}</Td>
                     <Td>
-                      <Select size='sm' value={statuses[s.id]} onChange={e=>setStatuses(prev=>({...prev, [s.id]: e.target.value}))} maxW='140px'>
-                        <option>Present</option>
-                        <option>Absent</option>
-                        <option>Late</option>
+                      <Select size='sm' value={statuses[s.id] || 'present'} onChange={e=>setStatuses(prev=>({...prev, [s.id]: e.target.value}))} maxW='140px'>
+                        <option value='present'>Present</option>
+                        <option value='absent'>Absent</option>
+                        <option value='late'>Late</option>
                       </Select>
                     </Td>
                     <Td isNumeric>
-                      <Badge colorScheme={s.attendance >= 90 ? 'green' : s.attendance >= 80 ? 'yellow' : 'red'}>{s.attendance}%</Badge>
+                      <Badge colorScheme={s.attendance >= 90 ? 'green' : s.attendance >= 80 ? 'yellow' : 'red'}>{s.attendance || 0}%</Badge>
                     </Td>
                     <Td>
                       <HStack justify='flex-end'>
@@ -216,10 +263,10 @@ export default function DailyAttendance() {
                     </Td>
                   </Tr>
                 ))}
-                {filtered.length === 0 && (
+                {items.length === 0 && (
                   <Tr>
                     <Td colSpan={6}>
-                      <Box p='12px' textAlign='center' color={textSecondary}>No students found.</Box>
+                      <Box p='12px' textAlign='center' color={textSecondary}>{loading ? 'Loading...' : 'No students found.'}</Box>
                     </Td>
                   </Tr>
                 )}

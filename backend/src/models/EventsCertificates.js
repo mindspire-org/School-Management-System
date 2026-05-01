@@ -13,7 +13,7 @@ export default (sequelize) => {
         organizer: { type: DataTypes.STRING },
         budget: { type: DataTypes.DECIMAL(10, 2) },
         photos: { type: DataTypes.ARRAY(DataTypes.STRING), defaultValue: [] },
-        campusId: { type: DataTypes.INTEGER, allowNull: false },
+        campusId: { type: DataTypes.INTEGER, allowNull: true },
     }, { tableName: 'events', timestamps: true });
 
     const Certificate = sequelize.define('Certificate', {
@@ -65,7 +65,7 @@ export default (sequelize) => {
         showSerial: { type: DataTypes.BOOLEAN, defaultValue: true, field: 'show_serial' },
         serialPrefix: { type: DataTypes.TEXT, defaultValue: 'CERT-', field: 'serial_prefix' },
         serialPadding: { type: DataTypes.INTEGER, defaultValue: 6, field: 'serial_padding' },
-        campusId: { type: DataTypes.INTEGER, allowNull: false },
+        campusId: { type: DataTypes.INTEGER, allowNull: true },
     }, { tableName: 'certificate_templates', timestamps: true });
 
     const IssuedCertificate = sequelize.define('IssuedCertificate', {

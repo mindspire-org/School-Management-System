@@ -35,11 +35,12 @@ router.get(
 router.post(
   '/',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'superadmin'),
   [
     body('className').isString().notEmpty(),
     body('section').isString().notEmpty(),
     body('academicYear').optional().isString(),
+    body('isShared').optional().isBoolean(),
     body('classTeacherId').optional().isInt({ min: 1 }),
     body('capacity').optional().isInt({ min: 1 }),
     body('enrolledStudents').optional().isInt({ min: 0 }),
@@ -57,12 +58,13 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'superadmin'),
   [
     param('id').isInt(),
     body('className').optional().isString().notEmpty(),
     body('section').optional().isString().notEmpty(),
     body('academicYear').optional().isString(),
+    body('isShared').optional().isBoolean(),
     body('classTeacherId').optional().isInt({ min: 1 }),
     body('capacity').optional().isInt({ min: 1 }),
     body('enrolledStudents').optional().isInt({ min: 0 }),
@@ -80,7 +82,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'superadmin'),
   [param('id').isInt()],
   validate,
   classController.remove
@@ -91,7 +93,7 @@ router.get('/:id/subjects', authenticate, [param('id').isInt()], validate, class
 router.post(
   '/:id/subjects',
   authenticate,
-  authorize('admin', 'owner'),
+  authorize('admin', 'owner', 'superadmin'),
   [param('id').isInt()],
   validate,
   classController.upsertSubjects

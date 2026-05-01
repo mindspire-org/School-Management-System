@@ -1,26 +1,140 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Flex, Heading, Text, SimpleGrid, Icon, Button, ButtonGroup, useColorModeValue, Table, Thead, Tbody, Tr, Th, Td, Select, Checkbox, InputGroup, InputLeftElement, Input } from '@chakra-ui/react';
 import { MdSecurity, MdAdminPanelSettings, MdPeople, MdFileDownload, MdRefresh } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import { rbacApi, authApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
-const roles = ['Administrator','Teacher','Accountant','Viewer'];
-const modules = ['Students','Teachers','Finance','Transport','Attendance','Reports','Communication','Settings'];
-const permList = ['view','create','edit','delete','export','manage'];
+const roleMap = { admin: 'Administrator', teacher: 'Teacher', student: 'Student', driver: 'Driver' };
+const baseModules = ['students', 'teachers', 'parents', 'finance', 'transport', 'attendance', 'reports', 'communication', 'settings'];
+const displayToKey = {
+  Students: 'students',
+  Teachers: 'teachers',
+  Finance: 'finance',
+  Transport: 'transport',
+  Attendance: 'attendance',
+  Reports: 'reports',
+  Communication: 'communication',
+  Settings: 'settings',
+  Parents: 'parents',
+  Dashboard: 'dashboard',
+  Academics: 'academics',
+};
+const actions = ['view', 'edit', 'export', 'manage'];
 
 export default function Permissions() {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
+  const theadBg = useColorModeValue('gray.50', 'gray.800');
+  const rowHoverBg = useColorModeValue('gray.50', 'gray.700');
+  const { user, moduleAccess } = useAuth();
   const [roleFilter, setRoleFilter] = useState('all');
   const [moduleFilter, setModuleFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [assignments, setAssignments] = useState({});
+  // Only allowed roles that can be created by admin
+  const [roles, setRoles] = useState(['admin', 'student', 'teacher', 'driver', 'parent']);
+  // When Owner is viewing, we should respect modules assigned to Admin (licensed by Owner)
+  const [adminAllowed, setAdminAllowed] = useState(null);
+  const [licAllowed, setLicAllowed] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await rbacApi.getPermissions();
+        // Filter to only show allowed roles (exclude owner)
+        const rs = Array.isArray(data?.roles) ? data.roles.filter(r => ['admin', 'student', 'teacher', 'driver', 'parent'].includes(r)) : ['admin', 'student', 'teacher', 'driver', 'parent'];
+        setRoles(rs);
+        setAssignments(data?.assignments || {});
+      } catch (_) { }
+    };
+    load();
+  }, []);
+
+  // Owner context: fetch Admin licensing to filter visible modules accordingly
+  useEffect(() => {
+    const loadAdminModules = async () => {
+      if (!user || user.role !== 'owner') { setAdminAllowed(null); return; }
+      try {
+        const mods = await rbacApi.getModules();
+        const allowed = Array.isArray(mods?.assignments?.admin?.allowModules)
+          ? mods.assignments.admin.allowModules
+          : [];
+        setAdminAllowed(allowed);
+      } catch (_) {
+        setAdminAllowed([]);
+      }
+    };
+    loadAdminModules();
+  }, [user]);
+
+  // Licensing cap: Always fetch licensed modules (what the Owner purchased)
+  useEffect(() => {
+    const fetchLic = async () => {
+      try {
+        const st = await authApi.status();
+        const arr = Array.isArray(st?.allowedModules) ? st.allowedModules : [];
+        setLicAllowed(arr);
+      } catch (_) { }
+    };
+    fetchLic();
+
+    const onFocus = () => fetchLic();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchLic();
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
+
+  // Determine which modules to show based on licensing. Owner sees all.
+  const allowedModules = useMemo(() => {
+    const licKeys = (Array.isArray(licAllowed) ? licAllowed : [])
+      .map((n) => displayToKey[n] || (typeof n === 'string' ? n.toLowerCase() : null))
+      .filter(Boolean);
+    if (user?.role === 'owner') {
+      const adminKeys = (Array.isArray(adminAllowed) ? adminAllowed : [])
+        .map((n) => displayToKey[n] || (typeof n === 'string' ? n.toLowerCase() : null))
+        .filter(Boolean);
+      const keys = adminKeys.filter(k => licKeys.includes(k));
+      return baseModules.filter((m) => keys.includes(m));
+    }
+    const allow = moduleAccess?.allowModules;
+    let roleKeys = [];
+    if (allow === 'ALL') roleKeys = baseModules; else if (Array.isArray(allow)) {
+      roleKeys = allow.map((n) => displayToKey[n] || (typeof n === 'string' ? n.toLowerCase() : null)).filter(Boolean);
+    }
+    const keys = (roleKeys.length ? roleKeys : []).filter(k => licKeys.includes(k));
+    return baseModules.filter((m) => keys.includes(m));
+  }, [user, moduleAccess, adminAllowed, licAllowed]);
 
   const rows = useMemo(() => {
-    const base = modules.flatMap((m) => permList.map((p) => ({ key: `${m}.${p}`, module: m, action: p })));
-    return base.filter(r => (moduleFilter==='all' || r.module===moduleFilter) && (!search || r.key.toLowerCase().includes(search.toLowerCase())));
-  }, [moduleFilter, search]);
+    const base = allowedModules.flatMap((m) => actions.map((a) => ({ key: `${m}.${a}`, module: m, action: a })));
+    return base.filter(r => (moduleFilter === 'all' || r.module === moduleFilter) && (!search || r.key.toLowerCase().includes(search.toLowerCase())));
+  }, [moduleFilter, search, allowedModules]);
 
-  const stats = useMemo(() => ({ modules: modules.length, roles: roles.length, perms: modules.length * permList.length }), []);
+  const stats = useMemo(() => ({ modules: allowedModules.length, roles: roles.length, perms: allowedModules.length * actions.length }), [roles, allowedModules]);
+
+  const toggle = (role, perm, checked) => {
+    setAssignments((prev) => {
+      const curr = new Set(prev[role] || []);
+      if (checked) curr.add(perm); else curr.delete(perm);
+      return { ...prev, [role]: Array.from(curr) };
+    });
+  };
+
+  const save = async () => {
+    const rs = roleFilter === 'all' ? roles : [roleFilter];
+    for (const r of rs) {
+      try { await rbacApi.setPermissions(r, assignments[r] || []); } catch (_) { }
+    }
+  };
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
@@ -31,8 +145,30 @@ export default function Permissions() {
         </Box>
         <ButtonGroup>
           <Button leftIcon={<MdRefresh />} variant='outline' onClick={() => window.location.reload()}>Refresh</Button>
-          <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export CSV</Button>
-          <Button leftIcon={<MdFileDownload />} colorScheme='blue'>Export PDF</Button>
+          <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue' onClick={()=>{
+            const visibleRoles = roles.filter(r => roleFilter === 'all' || r === roleFilter);
+            const header = ['Permission', ...visibleRoles.map(r => roleMap[r] || r)];
+            const body = rows.map(row=>{
+              const cells = visibleRoles.map(r => (assignments[r] || []).includes(row.key) ? 'Yes' : 'No');
+              return [row.key, ...cells];
+            });
+            const csv = [header, ...body].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='permissions.csv'; a.click(); URL.revokeObjectURL(url);
+          }}>Export CSV</Button>
+          <Button leftIcon={<MdFileDownload />} colorScheme='blue' onClick={()=>{
+            const visibleRoles = roles.filter(r => roleFilter === 'all' || r === roleFilter);
+            const headerHtml = ['Permission', ...visibleRoles.map(r => roleMap[r] || r)].map(h=>`<th>${h}</th>`).join('');
+            const rowsHtml = rows.map(row=>{
+              const cells = visibleRoles.map(r => ((assignments[r] || []).includes(row.key) ? 'Yes' : 'No')).map(c=>`<td>${c}</td>`).join('');
+              return `<tr><td>${row.key}</td>${cells}</tr>`;
+            }).join('');
+            const styles = `<style>body{font-family:Arial;padding:16px;} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:6px;font-size:11px} th{background:#f5f5f5;text-align:left} h2{margin:0 0 8px}</style>`;
+            const w = window.open('', '_blank'); if(!w) return;
+            w.document.write(`<html><head><title>Permissions</title>${styles}</head><body><h2>Permissions</h2><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table><script>window.onload=function(){window.print();setTimeout(()=>window.close(),300);}</script></body></html>`);
+            w.document.close();
+          }}>Export PDF</Button>
+          <Button colorScheme='green' onClick={save}>Save</Button>
         </ButtonGroup>
       </Flex>
 
@@ -52,11 +188,11 @@ export default function Permissions() {
           </InputGroup>
           <Select maxW='220px' value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
             <option value='all'>All Modules</option>
-            {modules.map(m => <option key={m} value={m}>{m}</option>)}
+            {allowedModules.map(m => <option key={m} value={m}>{m}</option>)}
           </Select>
           <Select maxW='220px' value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value='all'>All Roles</option>
-            {roles.map(r => <option key={r} value={r}>{r}</option>)}
+            {roles.map(r => <option key={r} value={r}>{roleMap[r] || r}</option>)}
           </Select>
         </Flex>
       </Card>
@@ -64,21 +200,21 @@ export default function Permissions() {
       <Card>
         <Box overflowX='auto'>
           <Table variant='simple' size='sm'>
-            <Thead bg={useColorModeValue('gray.50', 'gray.800')}>
+            <Thead bg={theadBg}>
               <Tr>
                 <Th>Permission</Th>
-                {roles.filter(r => roleFilter==='all' || r===roleFilter).map((r) => (
-                  <Th key={r} isNumeric>{r}</Th>
+                {roles.filter(r => roleFilter === 'all' || r === roleFilter).map((r) => (
+                  <Th key={r} isNumeric>{roleMap[r] || r}</Th>
                 ))}
               </Tr>
             </Thead>
             <Tbody>
               {rows.map((r) => (
-                <Tr key={r.key} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                <Tr key={r.key} _hover={{ bg: rowHoverBg }}>
                   <Td><Text fontWeight='600'>{r.key}</Text></Td>
-                  {roles.filter(x => roleFilter==='all' || x===roleFilter).map((role) => (
+                  {roles.filter(x => roleFilter === 'all' || x === roleFilter).map((role) => (
                     <Td key={role} isNumeric>
-                      <Checkbox defaultChecked={Math.random() > 0.5} />
+                      <Checkbox isChecked={(assignments[role] || []).includes(r.key)} onChange={(e) => toggle(role, r.key, e.target.checked)} />
                     </Td>
                   ))}
                 </Tr>

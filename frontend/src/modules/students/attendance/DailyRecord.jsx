@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, SimpleGrid, VStack, HStack, Badge, Table, Thead, Tbody, Tr, Th, Td, Button, useColorModeValue, Icon, Flex } from '@chakra-ui/react';
 import { MdFileDownload, MdPrint, MdCheckCircle, MdTrendingUp, MdAccessTime } from 'react-icons/md';
 import Card from '../../../components/card/Card';
@@ -6,36 +6,96 @@ import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
-import { mockStudents, mockAttendanceLogs } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as attendanceApi from '../../../services/api/attendance';
+import * as studentsApi from '../../../services/api/students';
 
 export default function DailyRecord() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { user } = useAuth();
-  const student = useMemo(() => {
-    if (user?.role === 'student') {
-      const byEmail = mockStudents.find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s => s.name?.toLowerCase() === user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id: 999, name: user.name, rollNumber: 'STU999', class: '10', section: 'A', email: user.email };
-    }
-    return mockStudents[0];
-  }, [user]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [student, setStudent] = useState(null);
 
   const todayLogs = useMemo(() => {
-    const logs = mockAttendanceLogs.filter(l => l.studentName === student.name);
-    if (logs.length > 0) return logs;
-    return [
-      { id: 's1', timestamp: '08:15:10 AM', studentName: student.name, studentId: student.rollNumber || 'STU999', rfidTag: 'RFID-SYN1', busNumber: 'BUS-001', status: 'Boarding', location: 'Main Gate' },
-      { id: 's2', timestamp: '01:50:22 PM', studentName: student.name, studentId: student.rollNumber || 'STU999', rfidTag: 'RFID-SYN1', busNumber: 'BUS-001', status: 'Leaving', location: 'Main Gate' },
-    ];
-  }, [student]);
+    const today = new Date().toISOString().slice(0, 10);
+    const rec = records.find(r => String(r?.date || '').slice(0, 10) === today);
+    if (!rec) return [];
+    const list = [];
+    if (rec.checkInTime) list.push({ type: 'checkIn', time: rec.checkInTime });
+    if (rec.checkOutTime) list.push({ type: 'checkOut', time: rec.checkOutTime });
+    return list;
+  }, [records]);
+
+  // Fetch last 7 days attendance for the logged-in student
+  useEffect(() => {
+    const loadSelf = async () => {
+      try {
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const rows = Array.isArray(payload?.rows) ? payload.rows : (Array.isArray(payload) ? payload : []);
+        setStudent(rows?.[0] || null);
+      } catch {
+        setStudent(null);
+      }
+    };
+    if (user?.role === 'student') loadSelf();
+  }, [user]);
+
+  useEffect(() => {
+    const sid = student?.id;
+    if (!sid) return; // cannot fetch without a numeric student id
+
+    const toISO = (d) => d.toISOString().slice(0, 10);
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+
+    const startDate = toISO(start);
+    const endDate = toISO(end);
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await attendanceApi.list({ studentId: sid, startDate, endDate });
+        setRecords(Array.isArray(res?.items) ? res.items : []);
+      } catch (e) {
+        setError(e?.message || 'Failed to load attendance');
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [student?.id]);
 
   const last7 = useMemo(() => {
-    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    return days.map((d, i) => ({ day: d, status: i % 6 !== 5 ? 'Present' : 'Absent', in: '08:15 AM', out: '01:45 PM' }));
-  }, []);
+    const byDate = new Map();
+    for (const r of records) {
+      // normalize to YYYY-MM-DD if backend returns full ISO
+      const d = (r.date || '').slice(0, 10);
+      byDate.set(d, r);
+    }
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const dt = new Date();
+      dt.setDate(dt.getDate() - i);
+      const key = dt.toISOString().slice(0, 10);
+      const weekday = dt.toLocaleDateString(undefined, { weekday: 'short' });
+      const rec = byDate.get(key);
+      let status = 'N/A';
+      if (rec?.status === 'present' || rec?.status === 'late') status = 'Present';
+      else if (rec?.status === 'absent') status = 'Absent';
+      days.push({
+        day: weekday,
+        status,
+        in: rec?.checkInTime || '-',
+        out: rec?.checkOutTime || '-',
+      });
+    }
+    return days;
+  }, [records]);
 
   const presentCount = last7.filter(d => d.status === 'Present').length;
 
@@ -56,7 +116,11 @@ export default function DailyRecord() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Daily Attendance</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {student.class}{student.section}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {student?.class ? ` • Class ${student.class}${student.section || ''}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -86,6 +150,10 @@ export default function DailyRecord() {
           />
         </Flex>
       </Box>
+
+      {!!error && (
+        <Text fontSize='sm' color='red.500' mb='12px'>{error}</Text>
+      )}
 
       <Card p='16px' mb='16px'>
         <HStack justify='space-between' mb='12px'>

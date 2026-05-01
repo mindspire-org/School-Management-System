@@ -7,8 +7,8 @@ import { validate } from '../middleware/validate.js';
 const router = Router();
 
 router.get('/', authenticate, authorize('admin','owner'), controller.list);
-router.get('/:key', authenticate, authorize('admin','owner'), [param('key').isString()], validate, controller.getByKey);
-router.put('/:key', authenticate, authorize('admin','owner'), [param('key').isString(), body('value').exists()], validate, controller.setKey);
-router.delete('/:key', authenticate, authorize('admin','owner'), [param('key').isString()], validate, controller.removeKey);
+router.get('/:key', authenticate, authorize('admin','owner','superadmin'), [param('key').isString()], validate, controller.getByKey);
+router.put('/:key', authenticate, authorize('admin','owner','superadmin'), [param('key').isString(), body('value').exists()], validate, controller.setKey);
+router.delete('/:key', authenticate, authorize('admin','owner','superadmin'), [param('key').isString()], validate, controller.removeKey);
 
 export default router;

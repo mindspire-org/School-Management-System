@@ -1,8 +1,12 @@
 // User Role Constants
 export const USER_ROLES = {
+  OWNER: 'owner',
   ADMIN: 'admin',
+  BRANCH_ADMIN: 'branch_admin',
   TEACHER: 'teacher',
   STUDENT: 'student',
+  DRIVER: 'driver',
+  PARENT: 'parent',
 };
 
 // Attendance Status Constants
@@ -162,7 +166,7 @@ export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
 // API Endpoints (for future backend integration)
 export const API_ENDPOINTS = {
-  BASE_URL: import.meta.env?.VITE_API_URL || 'http://localhost:5000/api',
+  BASE_URL: import.meta.env?.VITE_API_URL || 'http://localhost:5001/api',
   AUTH: {
     LOGIN: '/auth/login',
     LOGOUT: '/auth/logout',
@@ -226,10 +230,12 @@ export const DATE_FORMATS = {
 // Local Storage Keys
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'sms_auth_token',
+  REFRESH_TOKEN: 'sms_refresh_token',
   USER_DATA: 'sms_user_data',
   THEME: 'sms_theme',
   LANGUAGE: 'sms_language',
   SIDEBAR_STATE: 'sms_sidebar_state',
+  SELECTED_CAMPUS_ID: 'sms_selected_campus_id',
 };
 
 // Validation Rules

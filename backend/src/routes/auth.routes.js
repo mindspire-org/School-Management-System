@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import * as authController from '../controllers/auth.controller.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, optionalAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -29,10 +29,11 @@ router.post(
 // Public status endpoint used by frontend to toggle login buttons before setup
 router.get('/status', authController.status);
 
+// Register route: optional auth — if token present, req.user is set for role validation;
+// if no token, public registration is allowed for basic roles when licensing is configured.
 router.post(
   '/register',
-  authenticate,
-  authorize('admin', 'owner'),
+  optionalAuth,
   [
     body('email').isEmail(),
     body('password').isString().isLength({ min: 6 }),
@@ -41,7 +42,7 @@ router.post(
       const v = String(value || '').trim();
       if (!v) return true;
       if (['teacher', 'student', 'driver', 'parent'].includes(v)) return true;
-      if (v === 'admin' && req.user?.role === 'owner') return true;
+      if ((v === 'admin' || v === 'branch_admin') && (req.user?.role === 'owner' || req.user?.role === 'superadmin')) return true;
       throw new Error('Invalid role');
     }),
     body('campusId').optional().isInt({ min: 1 }),

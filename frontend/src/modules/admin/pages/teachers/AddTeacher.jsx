@@ -29,11 +29,19 @@ import {
   Textarea,
   Badge,
   useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
 } from '@chakra-ui/react';
 import { AddIcon, CheckIcon } from '@chakra-ui/icons';
 import Card from 'components/card/Card.js';
 import useApi from '../../../../hooks/useApi';
-import { teachersApi } from '../../../../services/api';
+import { teachersApi, campusesApi, masterDataApi, classesApi } from '../../../../services/api';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const createInitialFormState = () => ({
   name: '',
@@ -74,6 +82,7 @@ const createInitialFormState = () => ({
   probationEndDate: '',
   contractEndDate: '',
   workHoursPerWeek: '',
+  campusId: '',
 });
 
 /**
@@ -82,27 +91,146 @@ const createInitialFormState = () => ({
 const AddTeacher = () => {
   // Form state
   const [formData, setFormData] = useState(createInitialFormState);
-  
+
+  const { campusId: activeCampusId, user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'owner';
+
   // Additional state for subjects and classes (arrays)
   const [subjects, setSubjects] = useState([]);
   const [classes, setClasses] = useState([]);
   const [newSubject, setNewSubject] = useState('');
   const [newClass, setNewClass] = useState('');
-  const subjectSuggestions = useMemo(() => ['Mathematics','Physics','Chemistry','Biology','English','Computer Science','Urdu','Islamiat'], []);
-  const classSuggestions = useMemo(() => ['9A','9B','10A','10B','11A','11B','12A','12B'], []);
-  
+  const [masterSubjects, setMasterSubjects] = useState([]);
+  const [masterDepartments, setMasterDepartments] = useState([]);
+  const [masterDesignations, setMasterDesignations] = useState([]);
+  const [masterClassSections, setMasterClassSections] = useState([]);
+  const [masterDataError, setMasterDataError] = useState('');
+
+  const subjectSuggestions = useMemo(() => {
+    const fromApi = masterSubjects
+      .map((s) => (s?.name || '').trim())
+      .filter(Boolean);
+    return fromApi.length
+      ? fromApi
+      : ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Computer Science', 'Urdu', 'Islamiat'];
+  }, [masterSubjects]);
+
+  const classSuggestions = useMemo(() => {
+    const fromApi = masterClassSections
+      .map((c) => {
+        const cn = String(c?.className || '').trim();
+        const sec = String(c?.section || '').trim();
+        const label = sec ? `${cn}${sec}` : cn;
+        return label.trim();
+      })
+      .filter(Boolean);
+    return fromApi.length
+      ? fromApi
+      : ['9A', '9B', '10A', '10B', '11A', '11B', '12A', '12B'];
+  }, [masterClassSections]);
+
   // Form validation state
   const [errors, setErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  const [reviewReady, setReviewReady] = useState(true);
-  
+
+  const [campuses, setCampuses] = useState([]);
+  const [campusLoading, setCampusLoading] = useState(false);
+
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState(null);
+
+  useEffect(() => {
+    setCampusLoading(true);
+    campusesApi.list({ pageSize: 100 })
+      .then(res => setCampuses(res.rows || []))
+      .catch(err => console.error('Failed to fetch campuses', err))
+      .finally(() => setCampusLoading(false));
+  }, []);
+
+  // Default campusId from auth context if not set
+  useEffect(() => {
+    if (!formData.campusId && activeCampusId) {
+      setFormData(prev => ({ ...prev, campusId: activeCampusId }));
+    }
+    // If no campus is selected globally, ensure campusId is empty to force selection
+    if (!activeCampusId && formData.campusId === activeCampusId) {
+      setFormData(prev => ({ ...prev, campusId: '' }));
+    }
+  }, [formData.campusId, activeCampusId]);
+
   // Color mode values
   const textColor = useColorModeValue('gray.800', 'white');
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const brand = useColorModeValue('blue.500', 'blue.300');
   const toast = useToast();
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setMasterDataError('');
+      const results = await Promise.allSettled([
+        masterDataApi.getSubjects(),
+        masterDataApi.getDepartments(),
+        masterDataApi.getDesignations(),
+        classesApi.list({ page: 1, pageSize: 200 }),
+      ]);
+
+      const [subjectsRes, departmentsRes, designationsRes, classSectionsRes] = results;
+
+      const errors = [];
+
+      if (subjectsRes.status === 'fulfilled') {
+        const data = Array.isArray(subjectsRes.value) ? subjectsRes.value : [];
+        if (alive) setMasterSubjects(data);
+      } else {
+        errors.push('subjects');
+        if (alive) setMasterSubjects([]);
+      }
+
+      if (departmentsRes.status === 'fulfilled') {
+        const data = Array.isArray(departmentsRes.value) ? departmentsRes.value : [];
+        if (alive) setMasterDepartments(data);
+      } else {
+        errors.push('departments');
+        if (alive) setMasterDepartments([]);
+      }
+
+      if (designationsRes.status === 'fulfilled') {
+        const data = Array.isArray(designationsRes.value) ? designationsRes.value : [];
+        if (alive) setMasterDesignations(data);
+      } else {
+        errors.push('designations');
+        if (alive) setMasterDesignations([]);
+      }
+
+      if (classSectionsRes.status === 'fulfilled') {
+        const raw = classSectionsRes.value;
+        const data = Array.isArray(raw?.rows) ? raw.rows : Array.isArray(raw) ? raw : [];
+        if (alive) setMasterClassSections(data);
+      } else {
+        errors.push('classes');
+        if (alive) setMasterClassSections([]);
+      }
+
+      if (errors.length) {
+        const msg = `Failed to load: ${errors.join(', ')}`;
+        if (alive) setMasterDataError(msg);
+        toast({
+          title: 'Master data load issue',
+          description: msg,
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [toast]);
 
   const resetForm = useCallback(() => {
     setFormData(createInitialFormState());
@@ -114,20 +242,90 @@ const AddTeacher = () => {
     setPhotoPreview('');
     setErrors({});
     setCurrentStep(0);
+    setGeneratedCredentials(null);
+    setCredentialsModalOpen(false);
   }, []);
 
   const handleSuccess = useCallback((res) => {
+    const creds = res?.credentials;
+    if (creds && (creds.username || creds.password)) {
+      setGeneratedCredentials({
+        username: creds.username || '',
+        password: creds.password || '',
+      });
+      setCredentialsModalOpen(true);
+    }
     toast({
       title: 'Teacher added',
-      description: res?.name ? `${res.name} has been added successfully.` : 'Teacher created successfully.',
+      description: res?.name ? `${res.name} has been added successfully with subject and class allocations.` : 'Teacher created successfully with subject and class allocations.',
       status: 'success',
       duration: 5000,
       isClosable: true,
     });
-    resetForm();
+    if (!creds) resetForm();
   }, [resetForm, toast]);
 
   const handleError = useCallback((error) => {
+    // Check for 409 Conflict (Duplicate email/employeeId)
+    if (error?.status === 409 || error?.data?.status === 409) {
+      const msg = error?.data?.message || error?.message || 'Conflict: Email or Employee ID already exists.';
+      const nextErrors = {};
+      
+      if (msg.toLowerCase().includes('email')) nextErrors.email = 'Email already in use';
+      if (msg.toLowerCase().includes('employee id')) nextErrors.employeeId = 'Employee ID already in use';
+      
+      if (Object.keys(nextErrors).length) {
+        setErrors((prev) => ({ ...prev, ...nextErrors }));
+        // Switch to the relevant step if needed
+        if (nextErrors.email) setCurrentStep(0);
+        else if (nextErrors.employeeId) setCurrentStep(1);
+      }
+
+      toast({
+        title: 'Conflict Detected',
+        description: msg,
+        status: 'error',
+        duration: 6000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const apiErrors = Array.isArray(error?.data?.errors) ? error.data.errors : null;
+    if (apiErrors && apiErrors.length) {
+      const mapped = {};
+      apiErrors.forEach((e) => {
+        const key = e?.param;
+        const msg = e?.msg;
+        if (key && msg && !mapped[key]) mapped[key] = msg;
+      });
+
+      // Map backend field paths to our form field names
+      const remap = {
+        nationalId: 'nationalId',
+        phone: 'phone',
+        emergencyPhone: 'emergencyPhone',
+      };
+      const nextErrors = {};
+      Object.entries(mapped).forEach(([k, v]) => {
+        if (remap[k]) nextErrors[remap[k]] = v;
+      });
+      if (Object.keys(nextErrors).length) {
+        setErrors((prev) => ({ ...prev, ...nextErrors }));
+      }
+
+      const details = apiErrors
+        .map((e) => `${e.param}: ${e.msg}`)
+        .join('; ');
+      toast({
+        title: 'Failed to add teacher',
+        description: details,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+      });
+      return;
+    }
     toast({
       title: 'Failed to add teacher',
       description: error?.data?.message || error?.message || 'Something went wrong. Please try again.',
@@ -157,24 +355,22 @@ const AddTeacher = () => {
     { key: 'review', title: 'Review', sub: 'Verify details' },
   ]), []);
 
-  useEffect(() => {
-    const stepKey = steps[currentStep]?.key;
-    if (stepKey !== 'review') {
-      setReviewReady(true);
-      return;
-    }
-
-    setReviewReady(false);
-    const id = setTimeout(() => setReviewReady(true), 500);
-    return () => clearTimeout(id);
-  }, [currentStep, steps]);
-  
   // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    
+
     // Clear error when field is modified
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
+
+  const handleDigitsChange = (name, minLen = 10, maxLen = 15) => (e) => {
+    const only = digitsOnly(e.target.value).slice(0, maxLen);
+    setFormData((prev) => ({ ...prev, [name]: only }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
@@ -200,7 +396,7 @@ const AddTeacher = () => {
     const url = URL.createObjectURL(f);
     setPhotoPreview(url);
   };
-  
+
   // Add a subject to the list
   const handleAddSubject = () => {
     if (newSubject && !subjects.includes(newSubject)) {
@@ -208,12 +404,12 @@ const AddTeacher = () => {
       setNewSubject('');
     }
   };
-  
+
   // Remove a subject from the list
   const handleRemoveSubject = (subject) => {
     setSubjects(subjects.filter(s => s !== subject));
   };
-  
+
   // Add a class to the list
   const handleAddClass = () => {
     if (newClass && !classes.includes(newClass)) {
@@ -221,33 +417,35 @@ const AddTeacher = () => {
       setNewClass('');
     }
   };
-  
+
   // Remove a class from the list
   const handleRemoveClass = (cls) => {
     setClasses(classes.filter(c => c !== cls));
   };
-  
+
   // Validate the form
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Invalid email format';
-    
+
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.qualification.trim()) newErrors.qualification = 'Qualification is required';
     if (!formData.joiningDate) newErrors.joiningDate = 'Joining date is required';
-    if (!formData.employeeId.trim()) newErrors.employeeId = 'Employee ID is required';
-    if (!formData.department.trim()) newErrors.department = 'Department is required';
-    if (!formData.designation.trim()) newErrors.designation = 'Designation is required';
     if (!formData.baseSalary) newErrors.baseSalary = 'Basic salary is required';
     if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.dob) newErrors.dob = 'Date of birth is required';
-    
+
     if (subjects.length === 0) newErrors.subjects = 'At least one subject is required';
     if (classes.length === 0) newErrors.classes = 'At least one class is required';
     
+    // Require campus selection when in All Campuses mode
+    if (!activeCampusId && !formData.campusId) {
+      newErrors.campusId = 'Please select a campus (required in All Campuses mode)';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -262,16 +460,20 @@ const AddTeacher = () => {
       if (!formData.phone.trim()) e.phone = 'Phone is required';
       if (!formData.gender) e.gender = 'Select gender';
       if (!formData.dob) e.dob = 'Date of birth is required';
+      if (!formData.qualification.trim()) e.qualification = 'Qualification is required';
       setErrors((prev) => ({ ...prev, ...e }));
       return Object.keys(e).length === 0;
     }
     if (k === 'professional') {
       const e = {};
-      if (!formData.qualification.trim()) e.qualification = 'Qualification is required';
       if (!formData.joiningDate) e.joiningDate = 'Joining date is required';
       if (!formData.employeeId.trim()) e.employeeId = 'Employee ID is required';
       if (!formData.department.trim()) e.department = 'Department is required';
       if (!formData.designation.trim()) e.designation = 'Designation is required';
+      // Require campus selection when in All Campuses mode
+      if (!activeCampusId && !formData.campusId) {
+        e.campusId = 'Please select a campus (required in All Campuses mode)';
+      }
       setErrors((prev) => ({ ...prev, ...e }));
       return Object.keys(e).length === 0;
     }
@@ -291,22 +493,18 @@ const AddTeacher = () => {
     return true;
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) e.preventDefault();
     if (validateStep(currentStep)) setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
   };
-  const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
-  
+  const prevStep = (e) => {
+    if (e) e.preventDefault();
+    setCurrentStep((s) => Math.max(s - 1, 0));
+  };
+
   // Handle form submission
   const handleSubmit = async (e) => {
-    e?.preventDefault?.();
-
-    const stepKey = steps[currentStep]?.key;
-    if (stepKey !== 'review') {
-      nextStep();
-      return;
-    }
-
-    if (!reviewReady) return;
+    e.preventDefault();
 
     if (isSubmitting) return;
 
@@ -350,7 +548,25 @@ const AddTeacher = () => {
 
     await createTeacher(payload);
   };
-  
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(String(text || ''));
+      toast({ title: 'Copied', status: 'success', duration: 1500, isClosable: true });
+    } catch (_) {
+      toast({ title: 'Copy failed', status: 'error', duration: 2000, isClosable: true });
+    }
+  };
+
+  if (!isSuperAdmin) {
+    return (
+      <Box pt={{ base: '130px', md: '80px', xl: '80px' }} textAlign="center" py={20}>
+        <Text fontSize="xl" fontWeight="bold" color="red.500">Access Denied</Text>
+        <Text color="gray.500" mt={2}>Only super administrators can add teachers.</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       {/* Page Header */}
@@ -368,24 +584,7 @@ const AddTeacher = () => {
             const complete = idx < currentStep;
             const active = idx === currentStep;
             return (
-              <HStack
-                key={s.key}
-                spacing={3}
-                cursor="pointer"
-                onClick={() => {
-                  if (idx <= currentStep) {
-                    setCurrentStep(idx);
-                    return;
-                  }
-
-                  let nextIdx = currentStep;
-                  while (nextIdx < idx) {
-                    if (!validateStep(nextIdx)) break;
-                    nextIdx += 1;
-                  }
-                  setCurrentStep(nextIdx);
-                }}
-              >
+              <HStack key={s.key} spacing={3} cursor="pointer" onClick={() => setCurrentStep(idx)}>
                 <Circle size="32px" bg={complete ? 'green.500' : active ? brand : 'gray.200'} color={complete || active ? 'white' : 'gray.600'}>
                   {complete ? <CheckIcon boxSize={3} /> : idx + 1}
                 </Circle>
@@ -401,7 +600,7 @@ const AddTeacher = () => {
 
       {/* Form Card */}
       <Card>
-        <Box>
+        <form onSubmit={handleSubmit}>
           <VStack spacing={6} align="stretch" p={4}>
             {currentStep === 0 && (
               <Box>
@@ -425,7 +624,14 @@ const AddTeacher = () => {
                   </FormControl>
                   <FormControl isInvalid={errors.phone}>
                     <FormLabel>Phone Number</FormLabel>
-                    <Input name="phone" value={formData.phone} onChange={handleChange} placeholder="Enter phone number" />
+                    <Input
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleDigitsChange('phone', 10, 15)}
+                      placeholder="Enter phone number (10-15 digits)"
+                      inputMode="numeric"
+                      maxLength={15}
+                    />
                     {errors.phone && <FormErrorMessage>{errors.phone}</FormErrorMessage>}
                   </FormControl>
                   <FormControl isInvalid={errors.qualification}>
@@ -464,7 +670,14 @@ const AddTeacher = () => {
                   </FormControl>
                   <FormControl>
                     <FormLabel>National ID</FormLabel>
-                    <Input name='nationalId' value={formData.nationalId} onChange={handleChange} placeholder='CNIC / National ID' />
+                    <Input
+                      name='nationalId'
+                      value={formData.nationalId}
+                      onChange={handleDigitsChange('nationalId', 13)}
+                      placeholder='CNIC (13 digits)'
+                      inputMode='numeric'
+                      maxLength={13}
+                    />
                   </FormControl>
                   <FormControl>
                     <FormLabel>Address Line 1</FormLabel>
@@ -493,9 +706,17 @@ const AddTeacher = () => {
                     <FormLabel>Contact Name</FormLabel>
                     <Input name='emergencyName' value={formData.emergencyName} onChange={handleChange} placeholder='Full name' />
                   </FormControl>
-                  <FormControl>
-                    <FormLabel>Phone</FormLabel>
-                    <Input name='emergencyPhone' value={formData.emergencyPhone} onChange={handleChange} placeholder='Phone number' />
+                  <FormControl isInvalid={errors.emergencyPhone}>
+                    <FormLabel>Emergency Phone</FormLabel>
+                    <Input
+                      name='emergencyPhone'
+                      value={formData.emergencyPhone}
+                      onChange={handleDigitsChange('emergencyPhone', 10, 15)}
+                      placeholder='Emergency phone (10-15 digits)'
+                      inputMode='numeric'
+                      maxLength={15}
+                    />
+                    {errors.emergencyPhone && <FormErrorMessage>{errors.emergencyPhone}</FormErrorMessage>}
                   </FormControl>
                   <FormControl>
                     <FormLabel>Relation</FormLabel>
@@ -516,6 +737,21 @@ const AddTeacher = () => {
                       <option value="partTime">Part Time</option>
                     </Select>
                   </FormControl>
+                  <FormControl isRequired isInvalid={errors.campusId}>
+                    <FormLabel>Campus</FormLabel>
+                    <Select
+                      name="campusId"
+                      value={formData.campusId}
+                      onChange={handleChange}
+                      placeholder="Select campus"
+                      isDisabled={campusLoading}
+                    >
+                      {campuses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </Select>
+                    {errors.campusId && <FormErrorMessage>{errors.campusId}</FormErrorMessage>}
+                  </FormControl>
                   <FormControl isInvalid={errors.joiningDate}>
                     <FormLabel>Joining Date</FormLabel>
                     <Input name="joiningDate" type="date" value={formData.joiningDate} onChange={handleChange} />
@@ -528,12 +764,46 @@ const AddTeacher = () => {
                   </FormControl>
                   <FormControl isInvalid={errors.department}>
                     <FormLabel>Department</FormLabel>
-                    <Input name='department' value={formData.department} onChange={handleChange} placeholder='e.g., Science, Humanities' />
+                    <Select
+                      name='department'
+                      value={formData.department}
+                      onChange={handleChange}
+                      placeholder={masterDepartments.length > 0 ? 'Select department' : 'No departments found'}
+                    >
+                      {masterDepartments.map((d) => {
+                        const label = (d?.name || '').trim();
+                        if (!label) return null;
+                        return (
+                          <option key={d.id ?? label} value={label}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </Select>
                     {errors.department && <FormErrorMessage>{errors.department}</FormErrorMessage>}
                   </FormControl>
                   <FormControl isInvalid={errors.designation}>
                     <FormLabel>Designation</FormLabel>
-                    <Input name='designation' value={formData.designation} onChange={handleChange} placeholder='e.g., Senior Lecturer' />
+                    <Select
+                      name='designation'
+                      value={formData.designation}
+                      onChange={handleChange}
+                      placeholder={masterDesignations.length > 0 ? 'Select designation' : 'No designations found'}
+                    >
+                      {masterDesignations
+                        .filter((x) => {
+                          const title = (x?.title || '').trim();
+                          return Boolean(title);
+                        })
+                        .map((d) => {
+                          const label = (d?.title || d?.name || '').trim();
+                          return (
+                            <option key={d.id ?? label} value={label}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                    </Select>
                     {errors.designation && <FormErrorMessage>{errors.designation}</FormErrorMessage>}
                   </FormControl>
                   <FormControl>
@@ -748,38 +1018,52 @@ const AddTeacher = () => {
 
             <Divider />
             <Flex justify="space-between">
-              <Button type="button" variant="outline" onClick={prevStep} isDisabled={currentStep === 0 || isSubmitting}>Back</Button>
+              <Button variant="outline" type="button" onClick={prevStep} isDisabled={currentStep === 0 || isSubmitting}>Back</Button>
               {currentStep < steps.length - 1 ? (
-                <Button
-                  key="next"
-                  type="button"
-                  colorScheme="blue"
-                  onClick={(evt) => {
-                    evt?.preventDefault();
-                    nextStep();
-                  }}
-                  isDisabled={isSubmitting}
-                >
-                  Next
-                </Button>
+                <Button colorScheme="blue" type="button" onClick={nextStep} isDisabled={isSubmitting}>Next</Button>
               ) : (
-                <Button
-                  key="submit"
-                  colorScheme="blue"
-                  size="lg"
-                  type="button"
-                  onClick={handleSubmit}
-                  isDisabled={!reviewReady || isSubmitting}
-                  isLoading={isSubmitting}
-                  loadingText="Submitting"
-                >
-                  Add Teacher
-                </Button>
+                <Button colorScheme="blue" size="lg" type="submit" isLoading={isSubmitting} loadingText="Submitting">Add Teacher</Button>
               )}
             </Flex>
           </VStack>
-        </Box>
+        </form>
       </Card>
+
+      <Modal isOpen={credentialsModalOpen} onClose={() => setCredentialsModalOpen(false)} isCentered size='md'>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Teacher Login Created</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text mb={3} color={textColorSecondary}>
+              Share these credentials with the teacher. This password is shown only once.
+            </Text>
+            <VStack align='stretch' spacing={4}>
+              <FormControl>
+                <FormLabel>Username</FormLabel>
+                <InputGroup>
+                  <Input value={generatedCredentials?.username || ''} isReadOnly />
+                  <Button ml={2} onClick={() => copyText(generatedCredentials?.username || '')}>Copy</Button>
+                </InputGroup>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Temporary Password</FormLabel>
+                <InputGroup>
+                  <Input value={generatedCredentials?.password || ''} isReadOnly />
+                  <Button ml={2} onClick={() => copyText(generatedCredentials?.password || '')}>Copy</Button>
+                </InputGroup>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant='outline' mr={3} onClick={() => setCredentialsModalOpen(false)}>Close</Button>
+            <Button colorScheme='blue' onClick={() => {
+              setCredentialsModalOpen(false);
+              resetForm();
+            }}>Done</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -28,7 +28,7 @@ import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
-import { mockStudents } from '../../../utils/mockData';
+import * as studentsApi from '../../../services/api/students';
 
 export default function StudentList() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -36,20 +36,34 @@ export default function StudentList() {
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
   const gridColor = useColorModeValue('#EDF2F7', '#2D3748');
 
+  const [students, setStudents] = useState([]);
+
   const [cls, setCls] = useState('');
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
 
-  const classes = useMemo(() => Array.from(new Set(mockStudents.map(s => s.class))).sort(), []);
-  const sections = useMemo(() => Array.from(new Set(mockStudents.map(s => s.section))).sort(), []);
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const data = await studentsApi.list({ page: 1, pageSize: 200 });
+        setStudents(Array.isArray(data?.rows) ? data.rows : []);
+      } catch (e) {
+        setStudents([]);
+      }
+    };
+    fetchStudents();
+  }, []);
+
+  const classes = useMemo(() => Array.from(new Set(students.map(s => s.class))).filter(Boolean).sort(), [students]);
+  const sections = useMemo(() => Array.from(new Set(students.map(s => s.section))).filter(Boolean).sort(), [students]);
 
   const filtered = useMemo(() => (
-    mockStudents.filter(s =>
+    students.filter(s =>
       (!cls || s.class === cls) &&
       (!section || s.section === section) &&
-      (!q || s.name.toLowerCase().includes(q.toLowerCase()) || s.rollNumber.toLowerCase().includes(q.toLowerCase()))
+      (!q || String(s.name || '').toLowerCase().includes(q.toLowerCase()) || String(s.rollNumber || '').toLowerCase().includes(q.toLowerCase()))
     )
-  ), [cls, section, q]);
+  ), [students, cls, section, q]);
 
   const kpis = useMemo(() => {
     const total = filtered.length;

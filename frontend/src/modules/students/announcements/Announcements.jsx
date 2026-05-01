@@ -1,60 +1,63 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex } from '@chakra-ui/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, SimpleGrid, VStack, HStack, Select, Input, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Icon, useColorModeValue, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure, Flex, useToast } from '@chakra-ui/react';
 import { MdMarkEmailRead, MdVisibility, MdFileDownload, MdPrint, MdNotificationsActive, MdDateRange } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
-import { mockStudents } from '../../../utils/mockData';
 import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
+import * as notificationsApi from '../../../services/api/notifications';
 
 function formatDate(d){ return d.toLocaleDateString(undefined,{ day:'2-digit', month:'short', year:'numeric' }); }
 
 export default function Announcements(){
   const textSecondary = useColorModeValue('gray.600','gray.400');
+  const rowBg = useColorModeValue('gray.50','whiteAlpha.100');
   const { user } = useAuth();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
   const [selected, setSelected] = useState(null);
 
-  const student = useMemo(()=>{
-    if (user?.role==='student'){
-      const byEmail = mockStudents.find(s=>s.email?.toLowerCase()===user.email?.toLowerCase());
-      if (byEmail) return byEmail;
-      const byName = mockStudents.find(s=>s.name?.toLowerCase()===user.name?.toLowerCase());
-      if (byName) return byName;
-      return { id:999, name:user.name, rollNumber:'STU999', class:'10', section:'A', email:user.email };
-    }
-    return mockStudents[0];
-  },[user]);
-  const classSection = `${student.class}${student.section}`;
+  const [student, setStudent] = useState(null);
+  const [items, setItems] = useState([]);
 
-  // Demo announcements scoped to student
-  const demo = useMemo(()=>{
-    const today = new Date();
-    const mk = (id,type,title,daysAgo,source,msg,read=false)=>({ id, type, title, message: msg, source, date: new Date(today.getFullYear(), today.getMonth(), today.getDate()-daysAgo), read });
-    return [
-      mk('A1','assignment','Math Assignment Posted',1,'Dr. Sarah Wilson',`New Algebra assignment for ${classSection}. Submit by Friday.`),
-      mk('A2','grade','Chemistry Quiz Graded',3,'Mr. Michael Brown','Your Chemistry quiz has been graded. Check Results page.'),
-      mk('A3','attendance','Attendance Reminder',2,'Admin','Low attendance alert: keep above 90% this month.'),
-      mk('A4','fee','Fee Due in 3 Days',4,'Accounts','Please clear current month fee to avoid late charges.'),
-      mk('A5','notice','PTM on Saturday',6,'School Office','Parent-Teacher Meeting scheduled this weekend.','read'),
-      mk('A6','assignment','English Essay Feedback',0,'Ms. Emily Davis','Feedback posted for your essay submission.','read'),
-    ];
-  },[classSection]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+
+      try {
+        const payload = await notificationsApi.list({ page: 1, pageSize: 200 });
+        setItems(Array.isArray(payload?.items) ? payload.items : []);
+      } catch {
+        setItems([]);
+      }
+    };
+    load();
+  }, [user?.role]);
+
+  const classSection = `${student?.class || ''}${student?.section || ''}`;
 
   const [type, setType] = useState('all');
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState(demo);
 
   const filtered = useMemo(()=> items.filter(n => (
-    (type==='all' || n.type===type) && (!query || n.title.toLowerCase().includes(query.toLowerCase()) || n.message.toLowerCase().includes(query.toLowerCase()))
+    (type==='all' || String(n?.type || '').toLowerCase()===String(type).toLowerCase()) &&
+    (!query || String(n?.message || '').toLowerCase().includes(query.toLowerCase()))
   )),[items, type, query]);
 
   const kpis = useMemo(()=>{
     const total = items.length;
-    const unread = items.filter(i=>!i.read).length;
-    const thisWeek = items.filter(i=> (Date.now()-i.date.getTime())/(1000*60*60*24) <= 7).length;
+    const unread = items.filter(i=>!i?.isRead).length;
+    const thisWeek = items.filter(i=> i?.createdAt && (Date.now()-new Date(i.createdAt).getTime())/(1000*60*60*24) <= 7).length;
     return { total, unread, thisWeek };
   },[items]);
 
@@ -62,11 +65,28 @@ export default function Announcements(){
   const chartData = useMemo(()=> ([{ name:'Announcements', data: chartTypes.map(t => items.filter(i=>i.type===t).length) }]), [items]);
   const chartOptions = useMemo(()=> ({ xaxis:{ categories: chartTypes.map(t=>t.toUpperCase()) }, colors:['#805AD5'], dataLabels:{ enabled:false } }), []);
 
-  const markAllRead = ()=> setItems(prev => prev.map(i=>({ ...i, read:true })));
-  const toggleRead = (id)=> setItems(prev => prev.map(i=> i.id===id? { ...i, read:!i.read } : i));
+  const markAllRead = async ()=>{
+    const unreadIds = (items || []).filter(i => i?.id && !i?.isRead).map(i => i.id);
+    if (!unreadIds.length) return;
+    try {
+      await Promise.all(unreadIds.map((id) => notificationsApi.markRead(id)));
+      setItems(prev => (prev || []).map(i => ({ ...i, isRead: true })));
+    } catch (e) {
+      toast({ status: 'error', title: 'Failed to mark all read' });
+    }
+  };
+  const toggleRead = async (id)=>{
+    try {
+      if (!id) return;
+      await notificationsApi.markRead(id);
+      setItems(prev => (prev || []).map(i=> i.id===id? { ...i, isRead:true } : i));
+    } catch (e) {
+      toast({ status: 'error', title: 'Failed to mark as read' });
+    }
+  };
 
   const exportCsv = ()=>{
-    const rows = ['Type,Title,Date,Status,Source,Message', ...filtered.map(r=> `${r.type},${r.title},${formatDate(r.date)},${r.read?'read':'unread'},${r.source},"${r.message.replace(/"/g,'""')}"`)];
+    const rows = ['Type,Date,Status,Message', ...filtered.map(r=> `${r.type || ''},${r.createdAt ? String(r.createdAt).slice(0,10) : ''},${r.isRead?'read':'unread'},"${String(r.message || '').replace(/"/g,'""')}"`)];
     const blob = new Blob([rows.join('\n')],{ type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='announcements.csv'; a.click(); URL.revokeObjectURL(url);
   };
@@ -74,7 +94,11 @@ export default function Announcements(){
   return (
     <Box pt={{ base:'130px', md:'80px', xl:'80px' }}>
       <Text fontSize='2xl' fontWeight='bold' mb='6px'>Announcements</Text>
-      <Text fontSize='md' color={textSecondary} mb='16px'>{student.name} • Roll {student.rollNumber} • Class {classSection}</Text>
+      <Text fontSize='md' color={textSecondary} mb='16px'>
+        {(student?.name || user?.name || '')}
+        {student?.rollNumber ? ` • Roll ${student.rollNumber}` : ''}
+        {classSection ? ` • Class ${classSection}` : ''}
+      </Text>
 
       <Box mb='16px'>
         <Flex gap='16px' w='100%' wrap='nowrap'>
@@ -126,19 +150,18 @@ export default function Announcements(){
 
       <Card p='0' mb='16px'>
         <Table size='sm' variant='striped' colorScheme='gray'>
-          <Thead><Tr><Th>Title</Th><Th>Type</Th><Th>Date</Th><Th>Source</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
+          <Thead><Tr><Th>Message</Th><Th>Type</Th><Th>Date</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
           <Tbody>
             {filtered.map(n => (
               <Tr key={n.id}>
-                <Td>{n.title}</Td>
-                <Td><Badge colorScheme='purple'>{n.type.toUpperCase()}</Badge></Td>
-                <Td>{formatDate(n.date)}</Td>
-                <Td>{n.source}</Td>
-                <Td>{n.read? <Badge colorScheme='green'>Read</Badge> : <Badge colorScheme='red'>Unread</Badge>}</Td>
+                <Td>{n.message}</Td>
+                <Td><Badge colorScheme='purple'>{String(n.type || 'notice').toUpperCase()}</Badge></Td>
+                <Td>{n.createdAt ? formatDate(new Date(n.createdAt)) : '-'}</Td>
+                <Td>{n.isRead? <Badge colorScheme='green'>Read</Badge> : <Badge colorScheme='red'>Unread</Badge>}</Td>
                 <Td>
                   <HStack>
                     <Button size='xs' leftIcon={<Icon as={MdVisibility} />} onClick={()=>{ setSelected(n); onOpen(); }}>View</Button>
-                    <Button size='xs' variant='outline' onClick={()=>toggleRead(n.id)}>{n.read? 'Mark Unread':'Mark Read'}</Button>
+                    {!n.isRead && <Button size='xs' variant='outline' onClick={()=>toggleRead(n.id)}>Mark Read</Button>}
                   </HStack>
                 </Td>
               </Tr>
@@ -161,8 +184,8 @@ export default function Announcements(){
             compact
             startContent={<IconBox w='44px' h='44px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdMarkEmailRead} w='22px' h='22px' color='white' />} />}
             name='Unread'
-            value={String(filtered.filter(n=>!n.read).length)}
-            trendData={[0,1,1,2,filtered.filter(n=>!n.read).length]}
+            value={String(filtered.filter(n=>!n.isRead).length)}
+            trendData={[0,1,1,2,filtered.filter(n=>!n.isRead).length]}
             trendColor='#f5576c'
           />
         </Flex>
@@ -182,14 +205,14 @@ export default function Announcements(){
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>{selected?.title}</ModalHeader>
+          <ModalHeader>Announcement</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {selected ? (
               <VStack align='start' spacing={2}>
-                <Text fontWeight='600'>{selected.source} • {selected.type.toUpperCase()}</Text>
-                <Text color={textSecondary}>{formatDate(selected.date)}</Text>
-                <Text>{selected.message}</Text>
+                <Text fontWeight='600'>{String(selected.type || 'notice').toUpperCase()}</Text>
+                <Text color={textSecondary}>{selected.createdAt ? formatDate(new Date(selected.createdAt)) : '-'}</Text>
+                <Text>{selected.message || ''}</Text>
               </VStack>
             ) : null}
           </ModalBody>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Flex,
@@ -26,6 +26,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Portal,
   useDisclosure,
   Modal,
   ModalOverlay,
@@ -38,31 +39,82 @@ import {
   FormLabel,
   NumberInput,
   NumberInputField,
+  useToast,
 } from '@chakra-ui/react';
 import { MdPerson, MdSearch, MdAdd, MdThumbUp, MdFileDownload, MdPictureAsPdf, MdRemoveRedEye, MdMoreVert, MdEdit } from 'react-icons/md';
 import Card from '../../../../components/card/Card';
 import MiniStatistics from '../../../../components/card/MiniStatistics';
 import IconBox from '../../../../components/icons/IconBox';
+import StatCard from '../../../../components/card/StatCard';
+import * as driversApi from '../../../../services/api/drivers';
+import * as transportApi from '../../../../services/api/transport';
+import { campusesApi } from '../../../../services/api';
 
-const mockDrivers = [
-  { id: 'DRV-01', name: 'Imran Khan', phone: '0300-1111111', license: 'L-12345', status: 'On Duty', bus: 'BUS-101', rating: 4.7 },
-  { id: 'DRV-02', name: 'Ali Raza', phone: '0301-2222222', license: 'L-54321', status: 'Off Duty', bus: '-', rating: 4.4 },
-  { id: 'DRV-03', name: 'Zeeshan', phone: '0302-3333333', license: 'L-67890', status: 'On Duty', bus: 'BUS-103', rating: 4.8 },
-];
+const normalize = (d) => ({
+  id: d.id,
+  name: d.name,
+  phone: d.phone || '-',
+  license: d.licenseNumber || '-',
+  status: String(d.status || 'active').toLowerCase() === 'active' ? 'On Duty' : 'Off Duty',
+  bus: d.busNumber || '-',
+  busId: d.busId || '',
+  busNumber: d.busNumber || null,
+  rating: 0,
+});
 
 export default function DriverManagement() {
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
-  const [rows, setRows] = useState(mockDrivers);
+  const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(null);
   const viewDisc = useDisclosure();
   const editDisc = useDisclosure();
-  const [form, setForm] = useState({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', rating: 0 });
+  const [form, setForm] = useState({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', busId: '', rating: 0, campusId: '' });
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
+  const tableHoverBg = useColorModeValue('gray.50', 'gray.700');
+  const [buses, setBuses] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+
+  const loadDrivers = async () => {
+    try {
+      const data = await driversApi.list({ status: 'active', pageSize: 100 });
+      const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setRows(items.map(normalize));
+    } catch (e) {
+      toast({ title: 'Failed to load drivers', status: 'error' });
+    }
+  };
+
+  const loadBuses = async () => {
+    try {
+      const res = await transportApi.listBuses();
+      const items = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
+      setBuses(items);
+    } catch (e) {
+      toast({ title: 'Failed to load buses', status: 'error' });
+    }
+  };
+
+  const loadCampuses = async () => {
+    try {
+      const res = await campusesApi.list({ pageSize: 100 });
+      setCampuses(res?.rows || []);
+    } catch (e) {
+      console.error('Failed to load campuses', e);
+    }
+  };
+
+  useEffect(() => {
+    loadDrivers();
+    loadBuses();
+    loadCampuses();
+  }, []);
 
   const filtered = useMemo(() => {
     return rows.filter((d) => {
-      const matchesSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase());
+      const term = (search || '').toLowerCase();
+      const matchesSearch = !term || d.name.toLowerCase().includes(term) || String(d.id).toLowerCase().includes(term);
       const matchesStatus = status === 'all' || d.status.toLowerCase() === status;
       return matchesSearch && matchesStatus;
     });
@@ -84,17 +136,17 @@ export default function DriverManagement() {
           <Text color={textColorSecondary}>Manage drivers, duty status, and licenses</Text>
         </Box>
         <ButtonGroup>
-          <Button leftIcon={<MdAdd />} colorScheme="blue">Add Driver</Button>
+          <Button leftIcon={<MdAdd />} colorScheme="blue" onClick={() => { setForm({ id: '', name: '', phone: '', license: '', status: 'On Duty', bus: '', busId: '', rating: 0, campusId: '' }); editDisc.onOpen(); }}>Add Driver</Button>
           <Button leftIcon={<MdFileDownload />} variant='outline' colorScheme='blue'>Export CSV</Button>
           <Button leftIcon={<MdPictureAsPdf />} colorScheme='blue'>Export PDF</Button>
         </ButtonGroup>
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 4 }} spacing={5} mb={5}>
-        <MiniStatistics name="Total Drivers" value={String(stats.total)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#00c6ff 0%,#0072ff 100%)' icon={<Icon as={MdPerson} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="On Duty" value={String(stats.onDuty)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#11998e 0%,#38ef7d 100%)' icon={<Icon as={MdThumbUp} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Off Duty" value={String(stats.offDuty)} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#f5576c 0%,#f093fb 100%)' icon={<Icon as={MdPerson} w='28px' h='28px' color='white' />} />} />
-        <MiniStatistics name="Avg Rating" value={`${stats.avgRating}/5`} startContent={<IconBox w='56px' h='56px' bg='linear-gradient(90deg,#FDBB2D 0%,#22C1C3 100%)' icon={<Icon as={MdThumbUp} w='28px' h='28px' color='white' />} />} />
+        <StatCard title="Total Drivers" value={String(stats.total)} icon={MdPerson} colorScheme="blue" />
+        <StatCard title="On Duty" value={String(stats.onDuty)} icon={MdThumbUp} colorScheme="green" />
+        <StatCard title="Off Duty" value={String(stats.offDuty)} icon={MdPerson} colorScheme="red" />
+        <StatCard title="Avg Rating" value={`${stats.avgRating}/5`} icon={MdThumbUp} colorScheme="orange" />
       </SimpleGrid>
 
       <Card p={4} mb={5}>
@@ -130,7 +182,7 @@ export default function DriverManagement() {
             </Thead>
             <Tbody>
               {filtered.map((d) => (
-                <Tr key={d.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                <Tr key={d.id} _hover={{ bg: tableHoverBg }}>
                   <Td><Text fontWeight='600'>{d.name}</Text></Td>
                   <Td>{d.id}</Td>
                   <Td>{d.phone}</Td>
@@ -140,13 +192,31 @@ export default function DriverManagement() {
                   <Td isNumeric>{d.rating.toFixed(1)}</Td>
                   <Td>
                     <Flex align='center' gap={1}>
-                      <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={()=>{ setSelected(d); viewDisc.onOpen(); }} />
-                      <Menu>
+                      <IconButton aria-label='View' icon={<MdRemoveRedEye />} size='sm' variant='ghost' onClick={() => { setSelected(d); viewDisc.onOpen(); }} />
+                      <Menu isLazy placement='bottom-end'>
                         <MenuButton as={IconButton} aria-label='More' icon={<MdMoreVert />} size='sm' variant='ghost' />
-                        <MenuList>
-                          <MenuItem onClick={()=>{ setSelected(d); viewDisc.onOpen(); }}>View Details</MenuItem>
-                          <MenuItem onClick={()=>{ setSelected(d); setForm({ ...d }); editDisc.onOpen(); }}>Edit</MenuItem>
-                        </MenuList>
+                        <Portal>
+                          <MenuList zIndex={1500}>
+                            <MenuItem onClick={() => { setSelected(d); viewDisc.onOpen(); }}>View Details</MenuItem>
+                            <MenuItem onClick={() => { setSelected(d); setForm({ ...d, busId: d.busId || '', campusId: d.campusId || '' }); editDisc.onOpen(); }}>Edit</MenuItem>
+                            <MenuItem color='red.500' onClick={async () => {
+                              if (!window.confirm('Delete this driver?')) return;
+                              try {
+                                await driversApi.remove(d.id);
+                                await loadDrivers();
+                                toast({ title: 'Driver deleted', status: 'success' });
+                              } catch (e) {
+                                if (e?.status === 409 && e?.data?.hasFinancialRecords) {
+                                  if (window.confirm('This driver has financial records. Delete anyway?')) {
+                                    try { await driversApi.remove(d.id, { force: 'true' }); await loadDrivers(); toast({ title: 'Driver deleted', status: 'success' }); } catch (err) { toast({ title: 'Failed', status: 'error' }); }
+                                  }
+                                } else {
+                                  toast({ title: 'Failed to delete driver', status: 'error' });
+                                }
+                              }
+                            }}>Delete</MenuItem>
+                          </MenuList>
+                        </Portal>
                       </Menu>
                     </Flex>
                   </Td>
@@ -169,7 +239,7 @@ export default function DriverManagement() {
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>ID</Text><Text>{selected.id}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Phone</Text><Text>{selected.phone}</Text></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>License</Text><Text>{selected.license}</Text></Flex>
-                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Status</Text><Badge colorScheme={selected.status==='On Duty'?'green':'gray'}>{selected.status}</Badge></Flex>
+                <Flex justify='space-between' mb={2}><Text fontWeight='600'>Status</Text><Badge colorScheme={selected.status === 'On Duty' ? 'green' : 'gray'}>{selected.status}</Badge></Flex>
                 <Flex justify='space-between' mb={2}><Text fontWeight='600'>Assigned Bus</Text><Text>{selected.bus}</Text></Flex>
                 <Flex justify='space-between'><Text fontWeight='600'>Rating</Text><Text>{selected.rating.toFixed(1)}</Text></Flex>
               </Box>
@@ -189,39 +259,80 @@ export default function DriverManagement() {
           <ModalBody>
             <FormControl mb={3}>
               <FormLabel>Name</FormLabel>
-              <Input value={form.name} onChange={(e)=> setForm(f=>({ ...f, name: e.target.value }))} />
+              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Phone</FormLabel>
-              <Input value={form.phone} onChange={(e)=> setForm(f=>({ ...f, phone: e.target.value }))} />
+              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>License</FormLabel>
-              <Input value={form.license} onChange={(e)=> setForm(f=>({ ...f, license: e.target.value }))} />
+              <Input value={form.license} onChange={(e) => setForm(f => ({ ...f, license: e.target.value }))} />
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Status</FormLabel>
-              <Select value={form.status.toLowerCase()} onChange={(e)=> setForm(f=>({ ...f, status: e.target.value==='on duty'?'On Duty':'Off Duty' }))}>
+              <Select value={form.status.toLowerCase()} onChange={(e) => setForm(f => ({ ...f, status: e.target.value === 'on duty' ? 'On Duty' : 'Off Duty' }))}>
                 <option value='on duty'>On Duty</option>
                 <option value='off duty'>Off Duty</option>
               </Select>
             </FormControl>
             <FormControl mb={3}>
               <FormLabel>Assigned Bus</FormLabel>
-              <Input value={form.bus} onChange={(e)=> setForm(f=>({ ...f, bus: e.target.value }))} />
+              <Select value={String(form.busId || '')} onChange={(e) => setForm(f => ({ ...f, busId: e.target.value ? Number(e.target.value) : '' }))}>
+                <option value=''>Unassigned</option>
+                {buses.map((b) => (
+                  <option key={b.id} value={b.id}>{b.number}</option>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl mb={3} isRequired>
+              <FormLabel>Campus</FormLabel>
+              <Select placeholder='Select campus' value={form.campusId} onChange={(e) => setForm(f => ({ ...f, campusId: e.target.value }))}>
+                {campuses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
             </FormControl>
             <FormControl>
               <FormLabel>Rating</FormLabel>
-              <NumberInput min={0} max={5} step={0.1} value={form.rating} onChange={(v)=> setForm(f=>({ ...f, rating: Number(v)||0 }))}>
+              <NumberInput min={0} max={5} step={0.1} value={form.rating} onChange={(v) => setForm(f => ({ ...f, rating: Number(v) || 0 }))}>
                 <NumberInputField />
               </NumberInput>
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant='ghost' mr={3} onClick={editDisc.onClose}>Cancel</Button>
-            <Button colorScheme='blue' onClick={()=>{
-              setRows(prev => prev.map(r => r.id===form.id ? { ...form } : r));
-              editDisc.onClose();
+            <Button colorScheme='blue' onClick={async () => {
+              try {
+                if (!form.name || !form.name.trim()) {
+                  toast({ title: 'Name is required', status: 'warning' });
+                  return;
+                }
+                if (!form.campusId) {
+                  toast({ title: 'Please select a campus', status: 'warning' });
+                  return;
+                }
+                const driverData = {
+                    name: form.name,
+                    phone: form.phone,
+                    licenseNumber: form.license,
+                    status: form.status === 'On Duty' ? 'active' : 'inactive',
+                    campusId: Number(form.campusId),
+                };
+                if (form.busId) driverData.busId = Number(form.busId);
+                
+                if (form.id) {
+                  await driversApi.update(form.id, driverData);
+                } else {
+                  await driversApi.create(driverData);
+                }
+                await loadDrivers();
+                editDisc.onClose();
+                toast({ title: 'Driver saved', status: 'success' });
+              } catch (e) { 
+                console.error(e);
+                toast({ title: e?.response?.data?.error || 'Failed to save driver', status: 'error' }); 
+              }
             }}>Save</Button>
           </ModalFooter>
         </ModalContent>

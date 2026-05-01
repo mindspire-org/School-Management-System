@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
   Flex,
   HStack,
-  VStack,
   SimpleGrid,
   Select,
   Button,
@@ -34,95 +33,9 @@ import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
 import { useAuth } from '../../../contexts/AuthContext';
 
-const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const periods = ['08:00', '09:00', '10:00', '11:00', '12:00', '02:00'];
+import * as teachersApi from '../../../services/api/teachers';
 
-const sampleWeek = {
-  '9-A': {
-    Mon: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '10:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '02:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-    },
-    Tue: {
-      '08:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '09:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '10:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Islamiat', room: '105', teacher: 'Mr. Hassan' },
-    },
-    Wed: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Thu: {
-      '08:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '09:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Fri: {
-      '08:00': { subject: 'Mathematics', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '02:00': { subject: 'Islamiyat', room: '105', teacher: 'Mr. Hassan' },
-    },
-  },
-  '10-A': {
-    Mon: {
-      '08:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '09:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-    },
-    Tue: {
-      '08:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '09:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '10:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '02:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-    },
-    Wed: {
-      '08:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '09:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '10:00': { subject: 'Physics', room: '302', teacher: 'Mr. Aslam' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '02:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-    },
-    Thu: {
-      '08:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-      '09:00': { subject: 'Pak Studies', room: '101', teacher: 'Mr. Nadeem' },
-      '10:00': { subject: 'Computer Science', room: 'Lab-1', teacher: 'Ms. Ayesha' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '02:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-    },
-    Fri: {
-      '08:00': { subject: 'Math', room: '201', teacher: 'Mr. Ali' },
-      '09:00': { subject: 'English', room: '104', teacher: 'Ms. Sara' },
-      '10:00': { subject: 'Chemistry', room: '305', teacher: 'Mr. Khan' },
-      '11:00': { subject: 'Break', room: '-', teacher: '-' },
-      '12:00': { subject: 'Urdu', room: '103', teacher: 'Mr. Imran' },
-      '02:00': { subject: 'Biology', room: '306', teacher: 'Ms. Hina' },
-    },
-  },
-};
+const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 export default function WeeklyTimetable() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
@@ -130,8 +43,10 @@ export default function WeeklyTimetable() {
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
   const { user } = useAuth();
 
-  const [cls, setCls] = useState('9');
-  const [section, setSection] = useState('A');
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+
+  const [cls, setCls] = useState('');
+  const [section, setSection] = useState('');
   function toYMD(d) { const x = new Date(d.getTime() - d.getTimezoneOffset()*60000); return x.toISOString().slice(0,10); }
   const [weekStart, setWeekStart] = useState(() => {
     const t = new Date(); const offset = (t.getDay() + 6) % 7; const m = new Date(t); m.setDate(t.getDate() - offset);
@@ -142,51 +57,70 @@ export default function WeeklyTimetable() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  const key = `${cls}-${section}`;
-  const weekDataRaw = useMemo(() => sampleWeek[key] || {}, [key]);
-  const teacherTokens = useMemo(() => {
-    const raw = (user?.name || '').toLowerCase().replace(/\b(mr\.?|ms\.?|mrs\.?|miss|dr\.?|prof\.?|teacher)\b/g, '').trim();
-    const toks = raw.split(/\s+/).filter(Boolean);
-    return toks.length ? toks : ['ali'];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!user) return;
+      try {
+        const res = await teachersApi.listSchedules({});
+        const data = Array.isArray(res) ? res : [];
+        if (mounted) setScheduleSlots(data);
+      } catch (e) {
+        console.error('Failed to load weekly schedules', e);
+        if (mounted) setScheduleSlots([]);
+      }
+    })();
+    return () => { mounted = false; };
   }, [user]);
 
-  const isMine = (teacherStr) => {
-    if (!teacherStr || teacherStr === '-') return false;
-    const s = String(teacherStr).toLowerCase();
-    return teacherTokens.some((t) => s.includes(t));
-  };
+  const periods = useMemo(() => {
+    const set = new Set(scheduleSlots.map(s => String(s.startTime || '').slice(0,5)).filter(Boolean));
+    const list = Array.from(set);
+    list.sort();
+    return list.length ? list : ['08:00','09:00','10:00','11:00','12:00','14:00'];
+  }, [scheduleSlots]);
 
-  // Build aggregated map across ALL classes: day -> time -> [{ cs, subject, room, teacher }]
-  const { weekEntries, breakTimesByDay } = useMemo(() => {
-    const out = {}; const breaks = {};
-    days.forEach(d => { out[d] = {}; periods.forEach(p => { out[d][p] = []; }); breaks[d] = new Set(); });
-    Object.keys(sampleWeek).forEach((cs) => {
-      const week = sampleWeek[cs] || {};
-      days.forEach((d) => {
-        const slots = week[d] || {};
-        periods.forEach((t) => {
-          const v = slots[t];
-          if (!v) return;
-          if (v.subject === 'Break') { breaks[d].add(t); return; }
-          if (isMine(v.teacher)) out[d][t].push({ cs, subject: v.subject, room: v.room, teacher: v.teacher });
-        });
-      });
-    });
-    return { weekEntries: out, breakTimesByDay: breaks };
-  }, [isMine]);
+  const availableClasses = useMemo(() => {
+    const set = new Set(scheduleSlots.map(s => String(s.class)).filter(Boolean));
+    const list = Array.from(set);
+    list.sort((a,b)=>Number(a)-Number(b));
+    return list;
+  }, [scheduleSlots]);
 
-  const matchesClass = (cs) => {
-    if (!cls && !section) return true;
-    const [c, s] = cs.split('-');
-    return (!cls || c === cls) && (!section || s === section);
-  };
+  const availableSections = useMemo(() => {
+    const set = new Set(scheduleSlots
+      .filter(s => !cls || String(s.class) === String(cls))
+      .map(s => String(s.section))
+      .filter(Boolean)
+    );
+    const list = Array.from(set);
+    list.sort();
+    return list;
+  }, [scheduleSlots, cls]);
 
-  // Filtered entries based on optional class/section selection
+  // Build filtered weekly map: day -> time -> [{ cs, subject, room, teacher }]
   const filteredWeek = useMemo(() => {
     const out = {};
-    days.forEach(d => { out[d] = {}; periods.forEach(p => { out[d][p] = (weekEntries[d][p] || []).filter(e => matchesClass(e.cs)); }); });
+    days.forEach(d => { out[d] = {}; periods.forEach(p => { out[d][p] = []; }); });
+
+    scheduleSlots
+      .filter(s => (!cls || String(s.class) === String(cls)) && (!section || String(s.section) === String(section)))
+      .forEach(s => {
+        const dayIndex = Number(s.dayOfWeek);
+        const dayName = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][dayIndex - 1];
+        if (!days.includes(dayName)) return;
+        const t = String(s.startTime || '').slice(0,5);
+        if (!t) return;
+        if (!out[dayName][t]) out[dayName][t] = [];
+        out[dayName][t].push({
+          cs: `${s.class || ''}-${s.section || ''}`.replace(/^-|-$/g, ''),
+          subject: s.subject || '-',
+          room: s.room || '-',
+          teacher: s.teacherName || user?.name || '-',
+        });
+      });
     return out;
-  }, [weekEntries, cls, section]);
+  }, [scheduleSlots, cls, section, periods, user]);
 
   const kpis = useMemo(() => {
     let total = 0; let breaks = 0; const subjects = new Set();
@@ -194,10 +128,9 @@ export default function WeeklyTimetable() {
       const arr = filteredWeek[d][p] || [];
       total += arr.length;
       arr.forEach(e => subjects.add(e.subject));
-      if (breakTimesByDay[d].has(p)) breaks += 1;
     }));
     return { total, breaks, subjects: subjects.size };
-  }, [filteredWeek, breakTimesByDay]);
+  }, [filteredWeek, periods]);
 
   const tableRows = useMemo(() => periods.map(time => ({
     time,
@@ -210,16 +143,14 @@ export default function WeeklyTimetable() {
         const teacher = arr.length === 1 ? arr[0].teacher : (subject==='Multiple' ? (user?.name || '-') : arr[0].teacher);
         return { day, time, subject, classes, room, teacher };
       }
-      if (breakTimesByDay[day].has(time)) return { day, time, subject: 'Break', classes: '-', room: '-', teacher: '-' };
       return { day, time, subject: '-', classes: '-', room: '-', teacher: '-' };
     }),
-  })), [filteredWeek, breakTimesByDay, user]);
+  })), [filteredWeek, periods, user]);
 
   const exportCSV = () => {
     const header = ['WeekStart','Filters (Class-Section)','Time', ...days];
     const filterLabel = cls || section ? `${cls||''}-${section||''}` : 'All';
     const data = tableRows.map(r => [weekStart || 'This Week', filterLabel, r.time, ...r.cells.map(c => {
-      if (c.subject === 'Break') return 'Break';
       if (c.subject === '-') return '-';
       const clsTxt = c.classes && c.classes !== '-' ? ` @ ${c.classes}` : '';
       const rmTxt = c.room && c.room !== '-' ? ` (Rm ${c.room})` : '';
@@ -230,14 +161,13 @@ export default function WeeklyTimetable() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'weekly_timetable.csv'; a.click(); URL.revokeObjectURL(url);
   };
 
-  const chartData = useMemo(() => ([{ name: 'Lessons', data: days.map(d => periods.reduce((s,p)=> s + (filteredWeek[d][p]?.length || 0), 0)) }]), [filteredWeek]);
+  const chartData = useMemo(() => ([{ name: 'Lessons', data: days.map(d => periods.reduce((s,p)=> s + (filteredWeek[d][p]?.length || 0), 0)) }]), [filteredWeek, periods]);
   const chartOptions = useMemo(() => ({ xaxis: { categories: days }, colors: ['#805AD5'] }), []);
 
   const totals = useMemo(() => {
     const lessons = days.reduce((s,d)=> s + periods.reduce((t,p)=> t + (filteredWeek[d][p]?.length || 0), 0), 0);
-    const breaks = days.reduce((s,d)=> s + Array.from(breakTimesByDay[d] || []).length, 0);
-    return { lessons, breaks };
-  }, [filteredWeek, breakTimesByDay]);
+    return { lessons, breaks: 0 };
+  }, [filteredWeek, periods]);
 
   const onCellClick = (cell) => {
     // Also set selectedDate based on weekStart + day index so the mini table reflects that day
@@ -283,9 +213,8 @@ export default function WeeklyTimetable() {
       const teacher = arr.length === 1 ? arr[0].teacher : (subject==='Multiple' ? (user?.name || '-') : arr[0].teacher);
       return { time, subject, room, teacher, classes };
     }
-    if (breakTimesByDay[selectedDayKey]?.has(time)) return { time, subject: 'Break', room: '-', teacher: '-', classes: '-' };
     return { time, subject: '-', room: '-', teacher: '-', classes: '-' };
-  }), [filteredWeek, selectedDayKey, breakTimesByDay, user]);
+  }), [filteredWeek, selectedDayKey, user, periods]);
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
@@ -318,29 +247,6 @@ export default function WeeklyTimetable() {
             trendData={[2,2,3,3,4,4]}
             trendColor='#01B574'
           />
-        </Flex>
-      </Box>
-
-      <Card p='16px' mb='16px'>
-        <Flex gap={3} flexWrap='wrap' align='center' justify='space-between'>
-          <HStack spacing={3} flexWrap='wrap' rowGap={3}>
-            <Select value={cls} onChange={e=>setCls(e.target.value)} size='sm' maxW='140px'>
-              <option>9</option><option>10</option>
-            </Select>
-            <Select value={section} onChange={e=>setSection(e.target.value)} size='sm' maxW='120px'>
-              <option>A</option><option>B</option>
-            </Select>
-          </HStack>
-          <HStack>
-            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>{const t=new Date(); setCls('9'); setSection('A'); setViewDate(t); setWeekStart(toMondayStr(t)); setSelectedDate(t.toISOString().slice(0,10));}}>Reset</Button>
-            <Button size='sm' variant='outline' leftIcon={<Icon as={MdPrint}/>} onClick={()=>window.print()}>Print</Button>
-            <Button size='sm' colorScheme='purple' leftIcon={<Icon as={MdFileDownload}/>} onClick={exportCSV}>Export CSV</Button>
-          </HStack>
-        </Flex>
-      </Card>
-
-      <Card p='16px' mb='16px'>
-        <Flex align='center' justify='space-between' mb='10px'>
           <HStack>
             <Button size='sm' onClick={()=>setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))}>{'<'}</Button>
             <Text fontWeight='600'>{monthYearLabel}</Text>
@@ -351,6 +257,29 @@ export default function WeeklyTimetable() {
             <Text fontSize='sm' color={textSecondary}>Selected: {selectedDate}</Text>
           </HStack>
         </Flex>
+      </Box>
+
+      <Card p='16px' mb='16px'>
+        <Flex gap='16px' w='100%' wrap='nowrap'>
+          <HStack spacing={3} flexWrap='wrap' rowGap={3}>
+            <Select value={cls} onChange={e=>setCls(e.target.value)} size='sm' maxW='140px'>
+              <option value=''>All</option>
+              {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+            <Select value={section} onChange={e=>setSection(e.target.value)} size='sm' maxW='120px'>
+              <option value=''>All</option>
+              {availableSections.map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </HStack>
+          <HStack>
+            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>{const t=new Date();setCls('');setSection('');setWeekStart(toYMD(t));setSelectedDate(toYMD(t));}}>Reset</Button>
+            <Button size='sm' variant='outline' leftIcon={<Icon as={MdPrint}/>} onClick={()=>window.print()}>Print</Button>
+            <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdFileDownload}/>} onClick={exportCSV}>Export CSV</Button>
+          </HStack>
+        </Flex>
+      </Card>
+
+      <Card p='16px' mb='16px'>
         <SimpleGrid columns={7} spacing='6px'>
           {weekDays.map(d => (<Box key={d} textAlign='center' fontSize='xs' color={textSecondary}>{d}</Box>))}
           {calendarDays.map((d, idx) => {

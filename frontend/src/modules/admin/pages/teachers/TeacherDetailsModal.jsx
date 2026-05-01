@@ -24,6 +24,28 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 
+const formatClassLabel = (cls) => {
+  if (cls === undefined || cls === null) return '—';
+  if (typeof cls === 'string' || typeof cls === 'number') return String(cls);
+  if (typeof cls === 'object') {
+    const section = cls.section ?? cls.sectionName;
+    const className = cls.className ?? cls.class ?? cls.grade ?? cls.name;
+    const year = cls.academicYear ?? cls.year;
+    const base = [className, section].filter(Boolean).join('-') || cls.id || cls.code || '—';
+    return year ? `${base} (${year})` : String(base);
+  }
+  return String(cls);
+};
+
+const classKey = (cls, idx) => {
+  if (cls === undefined || cls === null) return `cls-${idx}`;
+  if (typeof cls === 'string' || typeof cls === 'number') return String(cls);
+  if (typeof cls === 'object') {
+    return String(cls.id || cls.classId || cls.code || `${cls.className || cls.class || ''}-${cls.section || ''}-${cls.academicYear || ''}-${idx}`);
+  }
+  return `cls-${idx}`;
+};
+
 const InfoItem = ({ label, value, textColor, textColorSecondary }) => (
   <Box>
     <Text fontSize="xs" color={textColorSecondary} textTransform="uppercase" letterSpacing="0.08em">
@@ -148,10 +170,10 @@ const TeacherDetailsModal = ({ isOpen, onClose, teacher, formatCurrency, statusC
                 <Text fontWeight='600' mb={2}>Classes</Text>
                 {classes.length ? (
                   <Wrap>
-                    {classes.map((cls) => (
-                      <WrapItem key={cls}>
+                    {classes.map((cls, idx) => (
+                      <WrapItem key={classKey(cls, idx)}>
                         <Tag colorScheme='green' variant='subtle'>
-                          <TagLabel>{cls}</TagLabel>
+                          <TagLabel>{formatClassLabel(cls)}</TagLabel>
                         </Tag>
                       </WrapItem>
                     ))}

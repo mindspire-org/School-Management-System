@@ -1,6 +1,7 @@
 import { http } from '../http';
 
 export const list = (params) => http.get('/teachers', { params });
+export const me = () => http.get('/teachers/me');
 export const getById = (id) => http.get(`/teachers/${id}`);
 export const create = (data) => http.post('/teachers', data);
 export const update = (id, data) => http.put(`/teachers/${id}`, data);
@@ -10,17 +11,28 @@ export const listSchedules = (params) => http.get('/teachers/schedules', { param
 export const createScheduleSlot = (data) => http.post('/teachers/schedules', data);
 export const updateScheduleSlot = (id, data) => http.put(`/teachers/schedules/${id}`, data);
 export const deleteScheduleSlot = (id) => http.delete(`/teachers/schedules/${id}`);
+export const listMyClasses = (params) => http.get('/teachers/my-classes', { params });
+export const listStudentsBySubject = (params) => http.get('/teachers/students-by-subject', { params });
 export const getAttendance = (params) => http.get('/teachers/attendance', { params });
+export const getTeacherMonthlyAttendance = (teacherId, params) => http.get(`/teachers/${teacherId}/attendance/monthly`, { params });
+export const markMyAttendance = (data) => http.post('/teachers/attendance/me', data);
 export const saveAttendance = (data) => http.post('/teachers/attendance', data);
 export const getPayrolls = (params) => http.get('/teachers/payrolls', { params });
 export const createPayroll = (data) => http.post('/teachers/payrolls', data);
 export const updatePayroll = (id, data) => http.patch(`/teachers/payrolls/${id}`, data);
+export const deletePayroll = (id) => http.delete(`/teachers/payrolls/${id}`);
 export const getPerformanceReviews = (params) => http.get('/teachers/performance', { params });
 export const createPerformanceReview = (data) => http.post('/teachers/performance', data);
 export const updatePerformanceReview = (id, data) => http.patch(`/teachers/performance/${id}`, data);
 export const listSubjects = (params) => http.get('/teachers/subjects', { params });
+export const listSubjectsByClass = (params) => http.get('/teachers/subjects/by-class', { params });
 export const createSubject = (data) => http.post('/teachers/subjects', data);
+export const updateSubject = (id, data) => http.patch(`/teachers/subjects/${id}`, data);
 export const listSubjectAssignments = (params) => http.get('/teachers/subjects/assignments', { params });
 export const assignSubject = (data) => http.post('/teachers/subjects/assignments', data);
 export const updateSubjectAssignment = (id, data) => http.patch(`/teachers/subjects/assignments/${id}`, data);
 export const deleteSubjectAssignment = (id) => http.delete(`/teachers/subjects/assignments/${id}`);
+export const backfillSubjectAssignments = () => http.post('/teachers/subjects/backfill');
+export const getDashboardStats = (id) => http.get(`/teachers/${id}/dashboard-stats`);
+export const changeMyPassword = (data) => http.post('/teachers/me/change-password', data);
+export const updateMe = (data) => http.put('/teachers/me', data);

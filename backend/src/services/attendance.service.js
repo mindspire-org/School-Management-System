@@ -1,4 +1,5 @@
 ﻿import { query } from '../config/db.js';
+import * as settingsService from './settings.service.js';
 
 export const list = async ({ studentId, startDate, endDate, page = 1, pageSize = 50, campusId }) => {
   const params = [];
@@ -38,6 +39,29 @@ export const getById = async (id) => {
 };
 
 export const create = async ({ studentId, date, status, remarks, createdBy, campusId }) => {
+  // Get school start time from settings
+  let finalStatus = status;
+  if (status === 'present') {
+    try {
+      const profileSetting = await settingsService.getByKey('school.profile');
+      if (profileSetting && profileSetting.value) {
+        const profile = JSON.parse(profileSetting.value);
+        if (profile.schoolStartTime) {
+          const now = new Date();
+          const [startH, startM] = profile.schoolStartTime.split(':').map(Number);
+          const currentH = now.getHours();
+          const currentM = now.getMinutes();
+
+          if (currentH > startH || (currentH === startH && currentM > startM)) {
+            finalStatus = 'late';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error checking school start time:', e);
+    }
+  }
+
   // Upsert logic:
   // - On first mark of the day (no existing row): set check_in_time = NOW() for present/late, else null
   // - On subsequent mark for same day (existing row): if check_in_time is set and check_out_time is NULL, set check_out_time = NOW()
@@ -62,7 +86,7 @@ export const create = async ({ studentId, date, status, remarks, createdBy, camp
                check_out_time AS "checkOutTime",
                created_by AS "createdBy",
                created_at AS "createdAt"`,
-    [studentId, date, status, remarks || null, createdBy || null, campusId || null]
+    [studentId, date, finalStatus, remarks || null, createdBy || null, campusId || null]
   );
   return rows[0];
 };
@@ -118,11 +142,34 @@ export const listDaily = async ({ date, class: cls, section, q, campusId }) => {
 // Bulk upsert attendance for a date
 export const upsertDaily = async ({ date, records, createdBy, campusId }) => {
   // Expect records: [{ studentId, status, remarks? }]
+  let schoolStartTime = null;
+  try {
+    const profileSetting = await settingsService.getByKey('school.profile');
+    if (profileSetting && profileSetting.value) {
+      const profile = JSON.parse(profileSetting.value);
+      schoolStartTime = profile.schoolStartTime || null;
+    }
+  } catch (e) {
+    console.error('Error fetching school start time for bulk upsert:', e);
+  }
+
   await query('BEGIN');
   try {
     for (const r of records || []) {
       // Sanitize status to allowed values
-      const status = ['present', 'absent', 'late', 'leave'].includes(r.status) ? r.status : 'present';
+      let status = ['present', 'absent', 'late', 'leave'].includes(r.status) ? r.status : 'present';
+
+      // Auto-late logic
+      if (status === 'present' && schoolStartTime) {
+        const now = new Date();
+        const [startH, startM] = schoolStartTime.split(':').map(Number);
+        const currentH = now.getHours();
+        const currentM = now.getMinutes();
+        if (currentH > startH || (currentH === startH && currentM > startM)) {
+          status = 'late';
+        }
+      }
+
       await query(
         `INSERT INTO attendance_records (student_id, date, status, remarks, created_by, check_in_time, campus_id)
          VALUES ($1,$2,$3,$4,$5, CASE WHEN $3 IN ('present','late') THEN NOW()::time ELSE NULL END, $6)

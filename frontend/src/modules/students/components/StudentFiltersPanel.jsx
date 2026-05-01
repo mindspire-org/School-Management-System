@@ -30,6 +30,7 @@ import {
 } from 'react-icons/md';
 import { SearchIcon } from '@chakra-ui/icons';
 import Card from 'components/card/Card.js';
+import useClassOptions from '../../../hooks/useClassOptions';
 
 const StudentFiltersPanel = ({
   filterValues,
@@ -42,6 +43,9 @@ const StudentFiltersPanel = ({
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const bgButton = useColorModeValue('secondaryGray.300', 'whiteAlpha.100');
   const brandColor = useColorModeValue('brand.500', 'brand.400');
+  const { classOptions, sectionOptions } = useClassOptions({
+    selectedClass: (filterValues?.class && filterValues.class !== 'all') ? filterValues.class : null,
+  });
   
   // Handle individual filter changes
   const handleFilterChange = (field, value) => {
@@ -172,10 +176,9 @@ const StudentFiltersPanel = ({
               size="sm"
             >
               <option value="all">All Classes</option>
-              <option value="9">Class 9</option>
-              <option value="10">Class 10</option>
-              <option value="11">Class 11</option>
-              <option value="12">Class 12</option>
+              {classOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </Select>
           </GridItem>
           
@@ -187,10 +190,9 @@ const StudentFiltersPanel = ({
               size="sm"
             >
               <option value="all">All Sections</option>
-              <option value="A">Section A</option>
-              <option value="B">Section B</option>
-              <option value="C">Section C</option>
-              <option value="D">Section D</option>
+              {sectionOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </Select>
           </GridItem>
           

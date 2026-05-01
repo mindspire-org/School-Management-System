@@ -27,4 +27,22 @@ router.post('/alerts', authenticate, authorize('admin'), [body('message').isStri
 router.put('/alerts/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.updateAlert);
 router.delete('/alerts/:id', authenticate, authorize('admin'), [param('id').isInt()], validate, controller.deleteAlert);
 
+// Local WhatsApp Web sending (admin/superadmin/owner)
+router.post(
+  '/whatsapp-web/send',
+  authenticate,
+  authorize('admin', 'owner', 'superadmin'),
+  [body('to').isString().notEmpty(), body('text').isString().notEmpty()],
+  validate,
+  controller.whatsappWebSend
+);
+
+// Start WhatsApp Web session (launch for QR login)
+router.post(
+  '/whatsapp-web/start',
+  authenticate,
+  authorize('admin', 'owner', 'superadmin'),
+  controller.whatsappWebStart
+);
+
 export default router;

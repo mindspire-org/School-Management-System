@@ -1,7 +1,7 @@
 import { query } from '../config/db.js';
 import * as settings from './settings.service.js';
 
-const FIXED_ROLES = ['owner','admin','teacher','student','driver','parent'];
+const FIXED_ROLES = ['owner','admin','branch_admin','teacher','student','driver','parent'];
 const ALL_PERMS = [
   'students.view','students.edit','students.export','students.manage',
   'teachers.view','teachers.edit','teachers.export','teachers.manage',
@@ -132,6 +132,20 @@ export const listModuleAssignments = async () => {
     assignments[r] = { allowModules, allowSubroutes };
   }
   return { roles: FIXED_ROLES, assignments };
+};
+
+export const deleteRole = async (role) => {
+  if (!FIXED_ROLES.includes(role)) throw new Error('Invalid role');
+  if (role === 'owner') throw new Error('Cannot delete owner role');
+  // Check for active users with this role
+  const { rows } = await query('SELECT COUNT(*)::int AS cnt FROM users WHERE role = $1', [role]);
+  if (rows[0]?.cnt > 0) throw new Error(`Cannot delete: ${rows[0].cnt} user(s) still assigned to this role`);
+  // Deactivate and clear permissions / module access
+  await settings.setKey(`role.active.${role}`, 'false');
+  await settings.setKey(`perms.${role}`, '[]');
+  await settings.setKey(`modules.allow.${role}`, '[]');
+  await settings.setKey(`subroutes.allow.${role}`, '[]');
+  return { deleted: role };
 };
 
 export const setModulesForRole = async (role, data = {}) => {

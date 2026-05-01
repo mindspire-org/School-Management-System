@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -28,38 +28,170 @@ import {
   ModalBody,
   ModalFooter,
   useColorModeValue,
+  useToast,
 } from '@chakra-ui/react';
-import { MdRefresh, MdFileDownload, MdPrint, MdAdd, MdVisibility, MdEvent, MdSchedule, MdTimer } from 'react-icons/md';
+import { MdRefresh, MdFileDownload, MdPrint, MdAdd, MdVisibility, MdEdit, MdDelete, MdEvent, MdSchedule, MdTimer } from 'react-icons/md';
 import Card from '../../../components/card/Card';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
 import BarChart from '../../../components/charts/BarChart';
 import PieChart from '../../../components/charts/PieChart';
-
-const initialRequests = [
-  { id: 1, type: 'Sick', from: '2025-11-03', to: '2025-11-03', days: 1, status: 'Approved' },
-  { id: 2, type: 'Casual', from: '2025-11-12', to: '2025-11-13', days: 2, status: 'Pending' },
-  { id: 3, type: 'Annual', from: '2025-12-01', to: '2025-12-05', days: 5, status: 'Rejected' },
-];
+import { leaveApi } from '../../../services/moduleApis';
+import * as teachersApi from '../../../services/api/teachers';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function ApplyLeave() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const headerBg = useColorModeValue('white', 'gray.800');
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
+  const toast = useToast();
+  const { campusId } = useAuth();
 
   function toYMD(d) { const x = new Date(d.getTime() - d.getTimezoneOffset()*60000); return x.toISOString().slice(0,10); }
 
-  const [form, setForm] = useState({ type: 'Sick', from: toYMD(new Date()), to: toYMD(new Date()), reason: '' });
-  const [rows, setRows] = useState(initialRequests);
+  const [form, setForm] = useState({ type: 'Sick Leave', from: toYMD(new Date()), to: toYMD(new Date()), reason: '' });
+  const [rows, setRows] = useState([]);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [viewRow, setViewRow] = useState(null);
+  const [me, setMe] = useState(null);
+  const [editRow, setEditRow] = useState(null);
+  const {
+    isOpen: isEditOpen,
+    onOpen: openEdit,
+    onClose: closeEdit
+  } = useDisclosure();
+  const [editForm, setEditForm] = useState({ type: 'Sick Leave', from: toYMD(new Date()), to: toYMD(new Date()), reason: '' });
 
-  const submit = () => {
-    const from = new Date(form.from); const to = new Date(form.to);
-    const days = Math.max(1, Math.round((to - from) / 86400000) + 1);
-    const newRow = { id: Math.max(0, ...rows.map(r => r.id)) + 1, type: form.type, from: form.from, to: form.to, days, status: 'Pending' };
-    setRows(prev => [newRow, ...prev]);
-    setForm({ ...form, reason: '' });
+  useEffect(() => {
+    const loadMe = async () => {
+      try {
+        const profile = await teachersApi.me();
+        setMe(profile);
+      } catch (_) { setMe(null); }
+    };
+    loadMe();
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await leaveApi.list({ campusId });
+        const myId = me?.id;
+        const mine = Array.isArray(data) ? data.filter(l => String(l.employeeId) === String(myId)) : [];
+        const mapped = mine.map(l => {
+          const from = l.startDate ? toYMD(new Date(l.startDate)) : '';
+          const to = l.endDate ? toYMD(new Date(l.endDate)) : '';
+          const d1 = from ? new Date(from) : null;
+          const d2 = to ? new Date(to) : null;
+          const days = (d1 && d2) ? Math.max(1, Math.round((d2 - d1) / 86400000) + 1) : 1;
+          return { id: l.id, type: l.leaveType, from, to, days, status: l.status || 'Pending' };
+        });
+        setRows(mapped.sort((a,b)=> (new Date(b.from) - new Date(a.from))));
+      } catch (_) {
+        setRows([]);
+      }
+    };
+    if (campusId && me?.id) load();
+  }, [campusId, me?.id]);
+
+  const submit = async () => {
+    if (!me?.id) {
+      toast({ title: 'Profile not ready', description: 'Cannot identify your employee profile.', status: 'warning' });
+      return;
+    }
+    try {
+      const payload = {
+        employeeId: Number(me.id),
+        employeeName: me.name || 'Unknown',
+        leaveType: form.type,
+        startDate: new Date(`${form.from}T00:00:00.000Z`).toISOString(),
+        endDate: new Date(`${form.to}T00:00:00.000Z`).toISOString(),
+        reason: form.reason || '',
+        status: 'Pending',
+        campusId,
+      };
+      await leaveApi.create(payload);
+      toast({ title: 'Leave request submitted', description: 'Sent to Admin/Super Admin for approval.', status: 'success' });
+      setForm({ ...form, reason: '' });
+      // Reload
+      const data = await leaveApi.list({ campusId });
+      const mine = Array.isArray(data) ? data.filter(l => String(l.employeeId) === String(me.id)) : [];
+      const mapped = mine.map(l => {
+        const from = l.startDate ? toYMD(new Date(l.startDate)) : '';
+        const to = l.endDate ? toYMD(new Date(l.endDate)) : '';
+        const d1 = from ? new Date(from) : null;
+        const d2 = to ? new Date(to) : null;
+        const days = (d1 && d2) ? Math.max(1, Math.round((d2 - d1) / 86400000) + 1) : 1;
+        return { id: l.id, type: l.leaveType, from, to, days, status: l.status || 'Pending' };
+      });
+      setRows(mapped.sort((a,b)=> (new Date(b.from) - new Date(a.from))));
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'Failed to submit request';
+      toast({ title: 'Error', description: msg, status: 'error' });
+    }
+  };
+
+  const startEdit = (row) => {
+    setEditRow(row);
+    setEditForm({ type: row.type, from: row.from, to: row.to, reason: row.reason || '' });
+    openEdit();
+  };
+
+  const doUpdate = async () => {
+    if (!editRow) return;
+    try {
+      const payload = {
+        employeeId: Number(me.id),
+        employeeName: me.name || 'Unknown',
+        leaveType: editForm.type,
+        startDate: new Date(`${editForm.from}T00:00:00.000Z`).toISOString(),
+        endDate: new Date(`${editForm.to}T00:00:00.000Z`).toISOString(),
+        reason: editForm.reason || '',
+        campusId,
+      };
+      await leaveApi.update(editRow.id, payload);
+      toast({ title: 'Leave request updated', status: 'success' });
+      closeEdit();
+      // reload
+      const data = await leaveApi.list({ campusId });
+      const mine = Array.isArray(data) ? data.filter(l => String(l.employeeId) === String(me.id)) : [];
+      const mapped = mine.map(l => {
+        const from = l.startDate ? toYMD(new Date(l.startDate)) : '';
+        const to = l.endDate ? toYMD(new Date(l.endDate)) : '';
+        const d1 = from ? new Date(from) : null;
+        const d2 = to ? new Date(to) : null;
+        const days = (d1 && d2) ? Math.max(1, Math.round((d2 - d1) / 86400000) + 1) : 1;
+        return { id: l.id, type: l.leaveType, from, to, days, status: l.status || 'Pending', reason: l.reason || '' };
+      });
+      setRows(mapped.sort((a,b)=> (new Date(b.from) - new Date(a.from))));
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'Failed to update request';
+      toast({ title: 'Error', description: msg, status: 'error' });
+    }
+  };
+
+  const doDelete = async (row) => {
+    if (!row) return;
+    if (!window.confirm('Delete this leave request?')) return;
+    try {
+      await leaveApi.delete(row.id);
+      toast({ title: 'Leave request deleted', status: 'success' });
+      // reload
+      const data = await leaveApi.list({ campusId });
+      const mine = Array.isArray(data) ? data.filter(l => String(l.employeeId) === String(me.id)) : [];
+      const mapped = mine.map(l => {
+        const from = l.startDate ? toYMD(new Date(l.startDate)) : '';
+        const to = l.endDate ? toYMD(new Date(l.endDate)) : '';
+        const d1 = from ? new Date(from) : null;
+        const d2 = to ? new Date(to) : null;
+        const days = (d1 && d2) ? Math.max(1, Math.round((d2 - d1) / 86400000) + 1) : 1;
+        return { id: l.id, type: l.leaveType, from, to, days, status: l.status || 'Pending', reason: l.reason || '' };
+      });
+      setRows(mapped.sort((a,b)=> (new Date(b.from) - new Date(a.from))));
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'Failed to delete request';
+      toast({ title: 'Error', description: msg, status: 'error' });
+    }
   };
 
   const kpis = useMemo(() => ({
@@ -108,12 +240,18 @@ export default function ApplyLeave() {
         <VStack spacing={3} align='stretch'>
           <HStack spacing={3} flexWrap='wrap' rowGap={3}>
             <Select value={form.type} onChange={e=>setForm(s=>({...s,type:e.target.value}))} maxW='200px' size='sm'>
-              <option>Sick</option><option>Casual</option><option>Annual</option>
+              <option>Sick Leave</option>
+              <option>Marriage Leave</option>
+              <option>Urgent Leave</option>
+              <option>Short Leave</option>
+              <option>Emergency Leave</option>
+              <option>Casual Leave</option>
+              <option>Annual Leave</option>
             </Select>
             <Input type='date' value={form.from} onChange={e=>setForm(s=>({...s,from:e.target.value}))} size='sm' maxW='180px' />
             <Input type='date' value={form.to} onChange={e=>setForm(s=>({...s,to:e.target.value}))} size='sm' maxW='180px' />
             <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdAdd}/>} onClick={submit}>Submit</Button>
-            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>setForm({ type:'Sick', from: toYMD(new Date()), to: toYMD(new Date()), reason:'' })}>Reset</Button>
+            <Button size='sm' variant='outline' leftIcon={<Icon as={MdRefresh}/>} onClick={()=>setForm({ type:'Sick Leave', from: toYMD(new Date()), to: toYMD(new Date()), reason:'' })}>Reset</Button>
             <Button size='sm' variant='outline' leftIcon={<Icon as={MdPrint}/>} onClick={()=>window.print()}>Print</Button>
             <Button size='sm' colorScheme='blue' leftIcon={<Icon as={MdFileDownload}/>} onClick={exportCSV}>Export CSV</Button>
           </HStack>
@@ -142,8 +280,10 @@ export default function ApplyLeave() {
                 <Td>{r.days}</Td>
                 <Td><Badge colorScheme={r.status==='Approved'?'green':r.status==='Pending'?'orange':'red'}>{r.status}</Badge></Td>
                 <Td>
-                  <HStack justify='flex-end'>
+                  <HStack justify='flex-end' spacing={1}>
                     <IconButton aria-label='View' icon={<MdVisibility/>} size='sm' variant='ghost' onClick={()=>{ setViewRow(r); onOpen(); }} />
+                    <IconButton aria-label='Edit' icon={<MdEdit/>} size='sm' variant='ghost' isDisabled={r.status!=='Pending'} onClick={()=> startEdit(r)} />
+                    <IconButton aria-label='Delete' icon={<MdDelete/>} size='sm' variant='ghost' colorScheme='red' isDisabled={r.status!=='Pending'} onClick={()=> doDelete(r)} />
                   </HStack>
                 </Td>
               </Tr>
@@ -181,6 +321,37 @@ export default function ApplyLeave() {
           </ModalBody>
           <ModalFooter>
             <Button onClick={onClose}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isEditOpen} onClose={closeEdit} isCentered size='md'>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit Leave</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align='stretch' spacing={3}>
+              <Select value={editForm.type} onChange={e=>setEditForm(f=>({ ...f, type: e.target.value }))}>
+                <option>Sick Leave</option>
+                <option>Marriage Leave</option>
+                <option>Urgent Leave</option>
+                <option>Short Leave</option>
+                <option>Emergency Leave</option>
+                <option>Casual Leave</option>
+                <option>Annual Leave</option>
+                <option>Unpaid Leave</option>
+              </Select>
+              <HStack>
+                <Input type='date' value={editForm.from} onChange={e=>setEditForm(f=>({ ...f, from: e.target.value }))} />
+                <Input type='date' value={editForm.to} onChange={e=>setEditForm(f=>({ ...f, to: e.target.value }))} />
+              </HStack>
+              <Textarea placeholder='Reason' value={editForm.reason} onChange={e=>setEditForm(f=>({ ...f, reason: e.target.value }))} rows={3} />
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button mr={3} onClick={closeEdit}>Cancel</Button>
+            <Button colorScheme='blue' onClick={doUpdate}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

@@ -32,11 +32,27 @@ import {
   selectStudentFormData,
 } from '../../../../redux/features/students/studentSlice';
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  }
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+};
+
 function PersonalInfoForm() {
   const dispatch = useAppDispatch();
   const formData = useAppSelector(selectStudentFormData);
-  const personalInfo = formData.personal;
-  
+  const personalInfo = formData.personal || {};
+
+  const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
+  const clampDigits = (s, maxLen) => digitsOnly(s).slice(0, maxLen);
+
   // Local state for photo
   const [photoUrl, setPhotoUrl] = useState(personalInfo.photo || '');
   
@@ -173,7 +189,7 @@ function PersonalInfoForm() {
           <FormLabel>Date of Birth</FormLabel>
           <Input
             type="date"
-            value={personalInfo.dateOfBirth || ''}
+            value={toDateInputValue(personalInfo.dateOfBirth)}
             onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
           />
         </FormControl>
@@ -213,7 +229,6 @@ function PersonalInfoForm() {
             value={personalInfo.nationality || ''}
             onChange={(e) => handleInputChange('nationality', e.target.value)}
             placeholder="Enter nationality"
-            defaultValue="Pakistani"
           />
         </FormControl>
         
@@ -221,8 +236,10 @@ function PersonalInfoForm() {
           <FormLabel>CNIC/B-Form</FormLabel>
           <Input
             value={personalInfo.cnic || ''}
-            onChange={(e) => handleInputChange('cnic', e.target.value)}
+            onChange={(e) => handleInputChange('cnic', clampDigits(e.target.value, 13))}
             placeholder="00000-0000000-0"
+            inputMode="numeric"
+            maxLength={13}
           />
           <FormHelperText>
             Format: 12345-1234567-1
@@ -248,8 +265,10 @@ function PersonalInfoForm() {
             <Input
               type="tel"
               value={personalInfo.phone || ''}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
+              onChange={(e) => handleInputChange('phone', clampDigits(e.target.value, 11))}
               placeholder="300 1234567"
+              inputMode="numeric"
+              maxLength={11}
             />
           </InputGroup>
         </FormControl>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Text,
@@ -27,35 +27,67 @@ import {
 } from '@chakra-ui/react';
 import Card from '../../../components/card/Card';
 import { MdSchool, MdLibraryBooks, MdClass, MdDateRange } from 'react-icons/md';
-import { mockTeachers, mockTodayClasses } from '../../../utils/mockData';
 import BarChart from '../../../components/charts/BarChart';
 import LineChart from '../../../components/charts/LineChart';
 import MiniStatistics from '../../../components/card/MiniStatistics';
 import IconBox from '../../../components/icons/IconBox';
+import { useAuth } from '../../../contexts/AuthContext';
+import * as studentsApi from '../../../services/api/students';
 
 export default function ClassList() {
   const textSecondary = useColorModeValue('gray.600', 'gray.400');
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selected, setSelected] = useState(null);
 
-  // Derive student's primary class from today's classes mock
+  const { user } = useAuth();
+  const [student, setStudent] = useState(null);
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.list({ pageSize: 1 });
+        const me = Array.isArray(payload?.rows) && payload.rows.length ? payload.rows[0] : null;
+        setStudent(me);
+      } catch {
+        setStudent(null);
+      }
+
+      try {
+        if (user?.role !== 'student') return;
+        const payload = await studentsApi.listMySubjectTeachers();
+        setRows(Array.isArray(payload?.items) ? payload.items : []);
+      } catch {
+        setRows([]);
+      }
+    };
+    load();
+  }, [user?.role]);
+
   const myClass = useMemo(() => {
-    const counts = {};
-    (mockTodayClasses||[]).forEach(c=>{ counts[c.className] = (counts[c.className]||0)+1; });
-    const entry = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-    return entry ? entry[0] : '10A';
-  }, []);
+    const c = student?.class;
+    const s = student?.section;
+    if (!c) return '—';
+    return `${c}${s || ''}`;
+  }, [student?.class, student?.section]);
 
   const subjects = useMemo(() => {
-    // Derive subjects taught to this class from mock teachers
-    const list = mockTeachers
-      .filter(t => Array.isArray(t.classes) && t.classes.includes(myClass))
-      .map(t => ({ subject: t.subject, teacher: t.name }));
-    // Ensure uniqueness by subject
-    const map = new Map();
-    list.forEach(it => { if (!map.has(it.subject)) map.set(it.subject, it); });
-    return Array.from(map.values());
-  }, [myClass]);
+    const bySubject = new Map();
+    (rows || []).forEach((r) => {
+      const key = r.subjectName || '—';
+      const existing = bySubject.get(key);
+      const candidate = { subject: key, teacher: r.teacherName || '—', isPrimary: !!r.isPrimary };
+      if (!existing) {
+        bySubject.set(key, candidate);
+        return;
+      }
+      if (!existing.isPrimary && candidate.isPrimary) {
+        bySubject.set(key, candidate);
+      }
+    });
+    return Array.from(bySubject.values());
+  }, [rows]);
 
   const chartData = useMemo(() => ([{
     name: 'Weekly Periods',

@@ -5,6 +5,10 @@ import {
   Flex,
   Heading,
   Icon,
+  Input,
+  InputGroup,
+  FormControl,
+  FormLabel,
   Step,
   StepDescription,
   StepIcon,
@@ -23,6 +27,14 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  VStack,
 } from '@chakra-ui/react';
 import Card from 'components/card/Card.js';
 import { useNavigate } from 'react-router-dom';
@@ -50,6 +62,8 @@ function AddStudent() {
   const toast = useToast();
   const cancelRef = React.useRef();
   const [isLeaveAlertOpen, setIsLeaveAlertOpen] = React.useState(false);
+  const [credentialsModalOpen, setCredentialsModalOpen] = React.useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = React.useState(null);
 
   // Redux state
   const currentStep = useAppSelector(selectCurrentFormStep);
@@ -121,7 +135,7 @@ function AddStudent() {
     const hasFormData = Object.values(formData).some(
       section => Object.keys(section).length > 0
     );
-    
+
     if (hasFormData) {
       setIsLeaveAlertOpen(true);
     } else {
@@ -153,6 +167,7 @@ function AddStudent() {
       rollNumber: combinedData.rollNumber,
       class: combinedData.class,
       section: combinedData.section,
+      campusId: combinedData.campusId,
       rfidTag: combinedData.rfidTag,
       attendance: 0,
       feeStatus: 'paid',
@@ -199,7 +214,15 @@ function AddStudent() {
     sanitized.busAssigned = Boolean(sanitized.busAssigned);
 
     studentsApi.create(sanitized)
-      .then(() => {
+      .then((res) => {
+        const creds = res?.credentials;
+        if (creds && (creds.username || creds.password)) {
+          setGeneratedCredentials({
+            username: creds.username || '',
+            password: creds.password || '',
+          });
+          setCredentialsModalOpen(true);
+        }
         toast({
           title: 'Success',
           description: 'Student added successfully!',
@@ -208,8 +231,10 @@ function AddStudent() {
           isClosable: true,
           position: 'top',
         });
-        dispatch(clearFormData());
-        navigate('/admin/students/list');
+        if (!creds) {
+          dispatch(clearFormData());
+          navigate('/admin/students/list');
+        }
       })
       .catch((err) => {
         const baseMessage = (err && (err.data?.message || err.message)) || 'Failed to add student. Please try again.';
@@ -228,33 +253,42 @@ function AddStudent() {
       });
   };
 
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(String(text || ''));
+      toast({ title: 'Copied', status: 'success', duration: 1500, isClosable: true, position: 'top' });
+    } catch (_) {
+      toast({ title: 'Copy failed', status: 'error', duration: 2000, isClosable: true, position: 'top' });
+    }
+  };
+
   // Validate current step
   const validateCurrentStep = () => {
     // In a real app, you would have more detailed validation here
     // This is a simplified validation
-    
+
     switch (currentStep) {
       case 1: // Personal Information
         return formData.personal.name && formData.personal.gender && formData.personal.dateOfBirth;
-      
+
       case 2: // Academic Information
-        return formData.academic.class && formData.academic.section && formData.academic.admissionNumber;
-      
+        return formData.academic.class && formData.academic.section && formData.academic.admissionNumber && formData.academic.campusId;
+
       case 3: // Parent Information
         return formData.parent.father && formData.parent.father.name && formData.parent.father.phone;
-      
+
       case 4: // Transport Information
         // Transport is optional
         return true;
-      
+
       case 5: // Fee Information
         // Basic fee info is required
         return formData.fee.feePlan;
-      
+
       case 6: // Review
         // Review step doesn't need validation
         return true;
-      
+
       default:
         return false;
     }
@@ -295,7 +329,7 @@ function AddStudent() {
           </Heading>
           <Text color="gray.500" fontSize={{ base: 'sm', md: 'md' }}>Enter student information to register</Text>
         </Box>
-        
+
         <Button
           leftIcon={<MdArrowBack />}
           mt={{ base: 2, md: 0 }}
@@ -384,6 +418,44 @@ function AddStudent() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+
+      <Modal isOpen={credentialsModalOpen} onClose={() => setCredentialsModalOpen(false)} isCentered size='md'>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Student Login Created</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text mb={3} color="gray.500">
+              Share these credentials with the student. This password is shown only once.
+            </Text>
+            <VStack align='stretch' spacing={4}>
+              <FormControl>
+                <FormLabel>Username</FormLabel>
+                <InputGroup>
+                  <Input value={generatedCredentials?.username || ''} isReadOnly />
+                  <Button ml={2} onClick={() => copyText(generatedCredentials?.username || '')}>Copy</Button>
+                </InputGroup>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Temporary Password</FormLabel>
+                <InputGroup>
+                  <Input value={generatedCredentials?.password || ''} isReadOnly />
+                  <Button ml={2} onClick={() => copyText(generatedCredentials?.password || '')}>Copy</Button>
+                </InputGroup>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant='outline' mr={3} onClick={() => setCredentialsModalOpen(false)}>Close</Button>
+            <Button colorScheme='brand' onClick={() => {
+              setCredentialsModalOpen(false);
+              setGeneratedCredentials(null);
+              dispatch(clearFormData());
+              navigate('/admin/students/list');
+            }}>Done</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
